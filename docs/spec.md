@@ -1,117 +1,153 @@
-# Timbers — Development Ledger + Narrative Export (Draft Spec)
+# Timbers — Development Ledger + Narrative Export
 
-**Working name:** Timbers (CLI: `timbers`)
+**CLI:** `timbers`
 **Tagline:** A Git-native development ledger that captures *what/why/how* as structured records attached to history, and exports LLM-ready markdown for narratives.
+
+---
 
 ## 0. Positioning
 
 ### 0.1 One-sentence description
 
-Timbers is a Go CLI that turns your Git history into a durable, structured “development ledger” by harvesting objective facts from Git (commit ranges, changed files, diffstats, tags) and pairing them with concise human/agent-authored rationale (what/why/how, decisions, verification) stored as portable **Git notes** that sync to remotes, then exporting frontmatter-rich markdown packets (optionally with persona prompts) for changelogs, stakeholder updates, and narrative devlogs.
+Timbers is a Go CLI that turns your Git history into a durable, structured "development ledger" by harvesting objective facts from Git (commit ranges, changed files, diffstats, tags) and pairing them with concise human/agent-authored rationale (what/why/how) stored as portable **Git notes** that sync to remotes, then exporting frontmatter-rich markdown packets for changelogs, stakeholder updates, and narrative devlogs.
 
 ### 0.2 Paragraph description
 
-Timbers is for solo devs and small teams shipping with AI agents—where code volume is high, commits are frequent, and humans act more like architects/PMs than day-to-day implementers. Git alone is excellent at *what* changed but weak at preserving *why* and *how* in a way that’s readable to outsiders, and leaving piles of markdown in the repo tends to rot. Timbers keeps a clean, Git-native ledger: it automatically collects hard evidence from Git (commit sets, diffstat + path rollups, tags/releases, branch/merge context) and, when available, enriches that evidence with tracker context (Beads/Linear/etc.), while requiring the dev agent (or human) to author the high-signal meaning fields—what/why/how, decisions/tradeoffs, and verification—so the record stays accurate and intentional. From that single canonical source, you can generate internal dev-facing change trails, PM/manager summaries, customer-friendly release notes, and entertaining “dev diaries” in bespoke voices and personas.
+Timbers is for solo devs and small teams shipping with AI agents—where code volume is high, commits are frequent, and humans act more like architects/PMs than day-to-day implementers. Git alone is excellent at *what* changed but weak at preserving *why* and *how* in a way that's readable to outsiders. Timbers keeps a clean, Git-native ledger: it automatically collects hard evidence from Git (commit sets, diffstat + path rollups, tags/releases, branch/merge context) and pairs that with concise *what/why/how* summaries authored by the agent or human. From that single canonical source, you can generate internal dev-facing change trails, PM/manager summaries, customer-friendly release notes, and entertaining "dev diaries" in bespoke voices.
 
-### 0.3 30-second elevator pitch
+### 0.3 Agent DX Philosophy
 
-If you’re building with AI agents, you ship a lot of code fast—and the rationale evaporates. Timbers fixes that by creating a Git-native development ledger. **Table stakes:** it reads Git as the ground truth (commit ranges, messages and trailers, changed paths, diffstats, tags/releases, merge commits) and stores structured what/why/how entries as **Git notes** that are configured to **fetch/push to remotes**, so the ledger travels with the repo without adding noisy files. **Optional:** it can integrate deeply with Beads or other trackers like Linear (titles, status, relationships), reference ADRs/specs/plans when they exist, and export LLM-ready markdown packets with frontmatter and an optional prompt preamble to drive anything from strict business release notes to whimsical character-driven dev narratives. Agents author the meaning; Timbers automates evidence collection, syncing, querying, and export.
+Timbers learns from what makes [beads](https://github.com/steveyegge/beads) successful for agents:
+
+1. **Minimal ceremony** — `timbers log "what" --why "why" --how "how"` captures work in one command
+2. **Clear next action** — `timbers pending` shows undocumented commits; no guessing
+3. **Context injection** — `timbers prime` outputs workflow state for session start
+4. **JSON everywhere** — All commands support `--json` for structured parsing
+5. **Sensible defaults** — Anchor to HEAD, auto-detect ranges, minimal required fields
+6. **Git-native** — No server, no auth, travels with the repo
+
+**Core insight:** Agents need *velocity* over *completeness*. The happy path must be effortless; enrichment is optional.
+
+---
 
 ## 1. Objectives
 
 ### 1.1 Primary goals
 
-1. **Capture a durable, queryable record of development** that complements Git commit history.
-2. Record **What / Why / How** with tight discipline, optimized for *agent implementation and usage*.
-3. Keep the repository **clean of drifting docs**: the canonical ledger must not create long-lived noise in the working tree.
-4. Support **archaeology and observability**: reconstruct “why decisions were made” and “how we got here.”
-5. Export **markdown packets with frontmatter** and optional prompt preambles to feed downstream narrative generation.
+1. **Capture durable, queryable development records** that complement Git commit history
+2. **Minimize authoring friction** — quick-capture in one command, enrich later if desired
+3. **Keep the repository clean** — ledger lives in Git notes, not files that drift
+4. **Support archaeology** — reconstruct "why decisions were made" and "how we got here"
+5. **Export narrative-ready packets** — markdown with frontmatter for downstream LLM generation
 
 ### 1.2 Non-goals (MVP)
 
-* Timbers does **not** directly invoke an LLM to generate narratives (downstream operation).
-* Timbers does **not** attempt deep semantic analysis of code diffs beyond basic stats and path summaries.
-* Timbers does **not** aim to be a full issue tracker or project-management system.
-* Timbers does **not** require any tracker (Beads/Linear/etc.); however, **when a tracker is configured, it is treated as a first-class enrichment source** (not an afterthought), including stable IDs, titles/status, and (where available) relationships.
+* Timbers does **not** directly invoke an LLM to generate narratives
+* Timbers does **not** attempt deep semantic analysis of code diffs
+* Timbers does **not** aim to be an issue tracker (use beads/Linear/GitHub for that)
+* Timbers does **not** require any external tracker; integrations are optional enrichment
 
 ### 1.3 Design constraints
 
-* **Git is required.**
-* **Beads is optional** but tightly integrated when present.
-* Must be implementable as a **Go CLI** with deterministic behavior.
-* Must be **token-efficient** for agent workflows: the CLI must gather structured facts; the agent adds thoughtful rationale.
+* **Git is required**
+* **Trackers (Beads/Linear) are optional** — enrichment, not dependency
+* **Go CLI** with deterministic, reproducible behavior
+* **Token-efficient** — CLI gathers facts; agent provides meaning
 
 ---
 
 ## 2. Core Approach
 
-### 2.0 Evidence vs Meaning (anti-hallucination boundary)
+### 2.1 Evidence vs Meaning (anti-hallucination boundary)
 
 Timbers explicitly separates:
 
-* **Evidence (machine-collected, required):** Git-derived facts such as commit sets/ranges, diffstat, changed path rollups, branch/merge context, tags/releases, and any structured commit trailers.
-* **Meaning (agent/human-authored, required):** concise *What/Why/How* plus decisions/tradeoffs and verification notes.
-* **Context enrichment (optional, strongly integrated when enabled):** tracker data (Beads/Linear) and referenced artifacts (ADRs/specs/plans).
+* **Evidence (machine-collected, automatic):** Git-derived facts — commit sets/ranges, diffstat, changed path rollups, branch/merge context, tags/releases, commit trailers
+* **Meaning (agent/human-authored, required):** Concise *What/Why/How* — the rationale
+* **Enrichment (optional):** Tracker data (Beads/Linear), decisions, verification notes, ADR references
 
-The CLI must gather evidence deterministically; the agent must supply meaning thoughtfully and accurately.
+The CLI gathers evidence deterministically. The agent supplies meaning. Enrichment is opt-in.
 
-### 2.1 Canonical storage: Git notes
+### 2.2 The Primacy of "Why"
 
-### 2.1 Canonical storage: Git notes
+**The "why" is the most valuable field in the ledger.**
 
-Timbers stores canonical records in **Git notes** to avoid polluting the repo tree and to maintain strong linkage to Git history.
+Git already captures *what* changed (the diff). Commit messages often describe *how* (implementation details). But *why* — the reasoning, context, requirements, and decisions — lives in ephemeral places: Slack threads, meeting notes, spec documents, the agent's reasoning trace, the human's mental model. This knowledge evaporates after the session ends.
 
-* Canonical notes ref (default):
+**Timbers exists to capture "why" before it disappears.**
 
-  * `refs/notes/timbers`
-* Optional thin backlink ref:
+#### What makes a good "why"
 
-  * `refs/notes/timbers-link`
+| Level | Example | When to use |
+|-------|---------|-------------|
+| **Trivial** | "Routine maintenance" | Deps updates, formatting, typo fixes |
+| **Contextual** | "User reported auth failures on mobile" | Bug fixes with known trigger |
+| **Requirements-driven** | "PM requested rate limiting for API launch" | Feature work from stakeholder input |
+| **Technical reasoning** | "Existing approach caused N+1 queries under load" | Refactoring with performance motivation |
+| **Architectural** | "Chose middleware pattern to enforce auth at single point; considered decorator but rejected due to route sprawl" | Decisions with alternatives considered |
 
-**Rationale:** Git notes attach data to commits without changing commit IDs; they preserve clean trees and support archaeology.
+#### Enrichment from session context
 
-### 2.2 Event model
+When an agent (or human) authors a Timbers entry, they should:
 
-Timbers is an **event ledger**. Records are stored as structured JSON with a stable schema.
+1. **Extract** — Pull what/why/how signals from commit messages, PR descriptions, linked issues
+2. **Enrich** — Add context from the current session: requirements discussed, specs referenced, reasoning applied, tradeoffs considered
+3. **Synthesize** — Produce a concise summary that someone reading in 6 months will understand
 
-Event kinds:
+**The goal:** Snapshot the conceptual context that explains the mechanical changes.
 
-* `entry` — primary narrative unit (default: **per work batch**, e.g., bead close / merge / issue iteration / time window)
-* `commit_link` — optional thin pointer attached to each commit in a workset for fast reverse lookup
+#### No hallucination rule
 
-**Default unit (alignment with agentic dev):** Timbers optimizes for *batch-first authoring* (work-item close, merge, or iteration) rather than per-commit prose. Per-commit linkage is optional metadata.
+When running `timbers log` on historical commits (not the current session), do NOT fabricate context that wasn't available. Use only:
+- Commit messages and trailers
+- Linked issue/PR content (if accessible)
+- Code comments and documentation
 
-### 2.3 Anchor strategy
+If the "why" is genuinely unknown, say so: "Historical commit; original rationale not captured."
 
-Each `entry` is attached as a Git note to one **anchor commit**.
+### 2.3 Canonical storage: Git notes
 
-**Anchor selection (default):**
+Timbers stores records as **Git notes** attached to commits:
 
-* explicit `--anchor <sha>` OR
-* `HEAD` if not specified
+* **Notes ref:** `refs/notes/timbers`
+* **One entry per anchor commit** (simple, no merge complexity)
 
-Common patterns:
+**Why Git notes?**
+- Attach data to commits without changing commit IDs
+- Sync with repo via fetch/push
+- Clean working tree (no file clutter)
+- Support archaeology across history
 
-* anchor is the **bead close commit** (preferred)
-* anchor is a **merge commit** that lands a branch
-* anchor is a **release tag commit**
+### 2.4 Anchor strategy
 
-Optional: attach `commit_link` notes to all commits in the workset to point to the anchor entry.
+Each entry is attached as a Git note to one **anchor commit**.
+
+**Default:** `HEAD` (current commit)
+
+**Override:** `--anchor <sha>` when you want to attach to a specific commit (e.g., merge commit, release tag)
+
+**Simplicity principle:** Don't make agents think about anchors unless they need to.
 
 ---
 
 ## 3. Schema
 
-### 3.1 Schema overview
+### 3.1 Schema philosophy
 
-All documents stored in Git notes MUST be JSON and MUST validate against the schema.
+**Two tiers:**
+1. **Minimal entry** — Required fields only. Quick capture.
+2. **Full entry** — All optional enrichment fields. For thorough documentation.
 
-* Devlog schema: `timbers.devlog/v1`
+Agents can start minimal and enrich later via `timbers enrich`.
+
+### 3.2 Schema version
+
+* Schema: `timbers.devlog/v1`
 * Export schema: `timbers.export/v1`
 
-**Versioning rule:** breaking changes require new schema version; old versions remain readable.
+**Versioning:** Breaking changes require new schema version; old versions remain readable.
 
-### 3.2 Common envelope (required for all kinds)
+### 3.3 Minimal entry (quick capture)
 
 ```json
 {
@@ -120,31 +156,28 @@ All documents stored in Git notes MUST be JSON and MUST validate against the sch
   "id": "tb_2026-01-15T15:04:05Z_8f2c1a",
   "created_at": "2026-01-15T15:04:05Z",
   "updated_at": "2026-01-15T15:04:05Z",
-  "created_by": {
-    "actor": "human|agent",
-    "name": "Bob",
-    "tool": "timbers",
-    "tool_version": "0.1.0"
+
+  "workset": {
+    "anchor_commit": "8f2c1a9d7b0c...",
+    "commits": ["8f2c1a9d7b0c..."],
+    "diffstat": {"files": 3, "insertions": 45, "deletions": 12}
   },
-  "repo": {
-    "remote": "origin",
-    "default_branch": "main"
+
+  "summary": {
+    "what": "Fixed authentication bypass vulnerability",
+    "why": "User input wasn't being sanitized before JWT validation",
+    "how": "Added input validation middleware before auth handler"
   }
 }
 ```
 
-### 3.3 `entry` kind (canonical narrative record)
+**Required fields:**
+- `schema`, `kind`, `id`
+- `created_at`, `updated_at`
+- `workset.anchor_commit`, `workset.commits[]`
+- `summary.what`, `summary.why`, `summary.how`
 
-#### 3.3.1 Required fields
-
-* `schema`, `kind`, `id`
-* `created_at`, `updated_at`, `created_by`
-* `work_items[]` (may be empty)
-* `workset.anchor_commit`
-* `workset.commits[]` (>= 1)
-* `summary.what`, `summary.why`, `summary.how`
-
-#### 3.3.2 Full shape
+### 3.4 Full entry (with enrichment)
 
 ```json
 {
@@ -153,335 +186,557 @@ All documents stored in Git notes MUST be JSON and MUST validate against the sch
   "id": "tb_2026-01-15T15:04:05Z_8f2c1a",
   "created_at": "2026-01-15T15:04:05Z",
   "updated_at": "2026-01-15T15:04:05Z",
-  "created_by": {"actor":"agent","name":"TimbersAgent","tool":"timbers","tool_version":"0.1.0"},
-  
+
+  "created_by": {
+    "actor": "agent",
+    "name": "claude",
+    "tool": "timbers",
+    "tool_version": "0.1.0"
+  },
+
   "work_items": [
-    {"system":"beads","id":"B-1427","title":"Fix heightfield alignment","status":"closed"},
-    {"system":"linear","id":"LIN-382","title":"Terrain collider parity","status":"in_progress"}
+    {"system": "beads", "id": "bd-a1b2c3", "title": "Fix auth bypass", "status": "closed"}
   ],
 
   "workset": {
     "anchor_commit": "8f2c1a9d7b0c...",
-    "commits": ["8f2c1a9d7b0c...","c11d2a...","a4e9bd..."],
+    "commits": ["8f2c1a9d7b0c...", "c11d2a...", "a4e9bd..."],
     "range": "c11d2a..8f2c1a",
-    "changed_paths_top": ["src/engine/terrain", "docs/physics"],
+    "changed_paths_top": ["src/auth", "src/middleware"],
     "diffstat": {"files": 6, "insertions": 241, "deletions": 88}
   },
 
   "summary": {
-    "what": "...",
-    "why": "...",
-    "how": "..."
+    "what": "Fixed authentication bypass vulnerability",
+    "why": "User input wasn't being sanitized before JWT validation",
+    "how": "Added input validation middleware before auth handler"
   },
 
   "decisions": [
     {
-      "decision": "Use normalized grid orientation; apply single rotation at collider creation",
-      "alternatives": ["Rotate visual mesh instead", "Swap axes at generation only"],
-      "tradeoffs": "Keeps physics canonical; requires migration for existing terrains"
+      "decision": "Validate at middleware layer, not in handler",
+      "alternatives": ["Validate in handler", "Use decorator pattern"],
+      "rationale": "Middleware catches all routes; single point of enforcement"
     }
   ],
 
-  "quality": {
-    "risk": "low|medium|high|unknown",
-    "tests": [
-      {"kind":"unit|integration|e2e|manual","name":"...","status":"added|updated|existing|none"}
-    ],
-    "verification": ["..."]
+  "verification": {
+    "risk": "high",
+    "tests_added": ["auth_bypass_test.go"],
+    "manual_checks": ["Verified with malformed JWT tokens"]
   },
 
   "references": {
-    "adrs": ["ADR-0012"],
-    "docs": [
-      {"path":"docs/terrain/heightfield-notes.md","kind":"scratch|design|spec|readme","kept":false}
-    ],
-    "prs": [],
-    "issues": []
+    "adrs": ["ADR-0007"],
+    "docs": ["docs/security/auth.md"]
   },
 
-  "tags": ["terrain","physics"],
+  "tags": ["security", "auth"],
 
   "provenance": {
-    "inputs": {
-      "git_describe": "v0.9.1-14-g8f2c1a",
-      "branch": "feature/terrain-collider"
-    }
-  },
-
-  "links": {
-    "supersedes": [],
-    "related_entry_ids": []
+    "branch": "fix/auth-bypass",
+    "git_describe": "v1.2.3-5-g8f2c1a"
   }
 }
 ```
 
-#### 3.3.3 Notes on schema
+**Optional fields (all):**
+- `created_by` — Actor metadata
+- `work_items[]` — Linked tracker items
+- `workset.range`, `workset.changed_paths_top` — Extended evidence
+- `decisions[]` — Architectural choices made
+- `verification` — Risk assessment, tests, manual checks
+- `references` — ADRs, docs, PRs
+- `tags[]` — Searchable labels
+- `provenance` — Branch, git describe, etc.
 
-* `work_items` is the integration point for Beads/Linear/etc.
-* `decisions` is ADR-like, but lightweight; formal ADRs may be referenced under `references.adrs`.
-* `references.docs[].kept=false` indicates ephemeral docs; the system may optionally archive them externally later.
-* `links.supersedes` supports rebase/squash/cherry-pick migrations.
+---
 
-#### 3.3.4 ADR promotion policy (recommended)
+## 4. CLI Commands (Agent-Optimized)
 
-Timbers supports two complementary layers of decision recording:
+### 4.1 Design principles
 
-**A) Embedded decisions (default, always):**
+1. **One command for the common case** — `timbers log` does it all
+2. **JSON output everywhere** — `--json` on every command
+3. **Sensible defaults** — Minimal flags required
+4. **Composable** — Draft → enrich → write for complex workflows
 
-* Every `entry` SHOULD include `decisions[]` when any non-trivial tradeoff or approach choice was made.
-* These are the *high-frequency* “why” records tied directly to a work batch and its evidence.
+### 4.2 Quick capture: `timbers log`
 
-**B) Standalone ADRs (promote when architectural):**
-Create or update a standalone ADR and reference it via `references.adrs[]` when a decision:
+The primary command for agents. One-liner to record work.
 
-* sets a long-lived constraint or policy (“from now on we do X”),
-* affects multiple subsystems or broad direction,
-* has meaningful risk/cost or non-obvious tradeoffs,
-* is likely to be searched independently of a specific work batch,
-* should remain stable across refactors.
+```bash
+# Minimal (attaches to HEAD, auto-collects evidence)
+timbers log "Fixed auth bypass" --why "Input not sanitized" --how "Added validation"
 
-**Storage location (recommended default):**
+# With work item
+timbers log "Fixed auth bypass" --why "..." --how "..." --work-item beads:bd-a1b2c3
 
-* ADRs live as markdown in-repo (e.g., `docs/adr/ADR-0012-<slug>.md`) for reviewability and discoverability.
+# Custom range
+timbers log "Refactored auth" --why "..." --how "..." --range abc123..def456
 
-**Linkage rule:**
+# From last entry to HEAD (default when no range specified)
+timbers log "Sprint work" --why "..." --how "..."
 
-* If a standalone ADR exists, the `entry.decisions[]` SHOULD include a brief summary and the ADR ID MUST appear in `references.adrs[]`.
+# JSON output of what was written
+timbers log "..." --why "..." --how "..." --json
+```
 
-**MVP stance:**
+**Behavior:**
+1. Collects evidence from Git (commits since last entry, or `--range`)
+2. Creates minimal entry with what/why/how
+3. Attaches as Git note to HEAD (or `--anchor`)
+4. Prints confirmation (or JSON receipt with `--json`)
 
-* Timbers does not manage ADR authoring lifecycle beyond referencing.
+**Flags:**
+- `--why` (required unless `--auto` or `--minor`) — Why this work was done
+- `--how` (required unless `--auto` or `--minor`) — How it was accomplished
+- `--work-item <system:id>` — Link to tracker item
+- `--range <A..B>` — Explicit commit range
+- `--anchor <sha>` — Override anchor commit (default: HEAD)
+- `--tag <tag>` — Add searchable tag (repeatable)
+- `--json` — Output JSON receipt
+- `--push` — Push notes after write
+- `--auto` — Pre-fill from commit messages (see below)
+- `--minor` — Use minimal template for trivial changes
 
-**Future helper (non-MVP):**
+#### Auto-fill mode: `--auto`
 
-* `timbers adr draft --from-entry <id>` to scaffold an ADR markdown file from an `entry.decisions[]` item, preserving evidence links and rationale.
+Pre-fills what/why/how from commit messages, then prompts for enrichment:
 
-### 3.4 `commit_link` kind (optional)
+```bash
+timbers log --auto
+# Detected from commits:
+#   What: "Fix authentication bypass vulnerability"
+#   Why:  "Security audit finding CVE-2026-1234"
+#   How:  "Added input validation in auth middleware"
+#
+# Enrich the 'why' with session context? [Y/n/edit]
+# > Added after penetration test revealed JWT parsing flaw.
+#   Discussed mitigation options with security team; chose
+#   middleware approach for single enforcement point.
+```
 
-Thin note attached to each commit in the workset.
+**Important:** `--auto` is a *starting point*, not the final answer. The extracted why is often shallow (commit messages are terse). Agents and humans should enrich with session context when available.
 
-```json
-{
-  "schema": "timbers.devlog/v1",
-  "kind": "commit_link",
-  "id": "tbl_8f2c1a9d",
-  "created_at": "2026-01-15T15:04:05Z",
-  "beads": ["B-1427"],
-  "work_items": [{"system":"linear","id":"LIN-382"}],
-  "anchor_entry_id": "tb_2026-01-15T15:04:05Z_8f2c1a",
-  "tags": ["terrain","physics"]
-}
+For agents, `--auto` can be combined with explicit enrichment:
+```bash
+timbers log --auto --why-append "Implemented per security team recommendation after Q1 audit"
+```
+
+#### Minor mode: `--minor`
+
+For trivial changes where full what/why/how is overkill:
+
+```bash
+timbers log --minor "Updated dependencies"
+# Creates entry with:
+#   what: "Updated dependencies"
+#   why: "Routine maintenance"
+#   how: "Dependency update"
+
+timbers log --minor "Fixed typo in README"
+# Creates entry with:
+#   what: "Fixed typo in README"
+#   why: "Documentation quality"
+#   how: "Text correction"
+```
+
+Use `--minor` for: dependency updates, formatting fixes, typo corrections, trivial refactors. The entry is still recorded for completeness, but doesn't demand rich context that doesn't exist.
+
+### 4.3 Pending work: `timbers pending`
+
+Shows commits that don't have entries yet. The "what needs documenting?" command.
+
+```bash
+timbers pending
+# Commits since last entry (5):
+#   abc1234 Fix null pointer in auth handler
+#   def5678 Add rate limiting middleware
+#   ghi9012 Update dependencies
+#   jkl3456 Refactor token validation
+#   mno7890 Add integration tests
+#
+# Run: timbers log "..." --why "..." --how "..."
+
+timbers pending --json
+# Returns array of commit objects
+```
+
+### 4.4 Context injection: `timbers prime`
+
+Outputs workflow context for session start. Like `bd prime` for beads.
+
+```bash
+timbers prime
+# Timbers workflow context
+# ========================
+# Repo: timbers (github.com/steveyegge/timbers)
+# Branch: main
+#
+# Last 3 entries:
+#   tb_2026-01-15... "Fixed auth bypass" (3 commits)
+#   tb_2026-01-14... "Added rate limiting" (7 commits)
+#   tb_2026-01-13... "Initial auth system" (12 commits)
+#
+# Pending commits: 5 (since tb_2026-01-15...)
+#
+# Quick commands:
+#   timbers pending          # See undocumented commits
+#   timbers log "..." ...    # Record work
+#   timbers query --last 5   # Recent entries
+```
+
+### 4.5 Status: `timbers status`
+
+Repository and notes status.
+
+```bash
+timbers status
+# Repo: timbers
+# Branch: main @ abc1234
+# Notes ref: refs/notes/timbers (configured, synced)
+# Entries: 47 total
+# Pending: 5 commits since last entry
+
+timbers status --json
+```
+
+### 4.6 Interactive mode: `timbers log -i`
+
+For humans or when agents want guided input. Uses Charm's `huh` library.
+
+```bash
+timbers log -i
+# Prompts:
+#   What did you do? [text input]
+#   Why did you do it? [text input]
+#   How did you accomplish it? [text input]
+#   Link work item? [optional, autocomplete from trailers]
+#   Add tags? [optional, multi-select or custom]
+```
+
+### 4.7 Draft workflow: `timbers draft` / `timbers write`
+
+For complex entries requiring review/enrichment.
+
+```bash
+# Generate draft with auto-collected evidence
+timbers draft --json > entry.json
+
+# Or with explicit range
+timbers draft --range abc..def --json > entry.json
+
+# Edit entry.json to add meaning, decisions, etc.
+
+# Write to notes
+timbers write entry.json
+
+# Or pipe directly
+timbers draft --json | jq '.summary.what = "..."' | timbers write -
+```
+
+### 4.8 Enrich existing: `timbers enrich`
+
+Add optional fields to an existing entry.
+
+```bash
+# Add decision to most recent entry
+timbers enrich --last --decision "Used middleware pattern" \
+  --alternatives "Handler validation,Decorator" \
+  --rationale "Single enforcement point"
+
+# Add verification
+timbers enrich tb_2026-01-15... --risk high --tests-added "auth_test.go"
+
+# Add tags
+timbers enrich --last --tag security --tag auth
+```
+
+### 4.9 Query: `timbers query`
+
+Search and filter entries.
+
+```bash
+# Last N entries
+timbers query --last 10
+
+# By work item
+timbers query --work-item beads:bd-a1b2c3
+
+# By tag
+timbers query --tag security
+
+# By path prefix
+timbers query --path src/auth
+
+# By date range
+timbers query --since 2026-01-01 --until 2026-01-31
+
+# By commit range
+timbers query --range v1.0.0..v1.1.0
+
+# Output formats
+timbers query --last 5 --json     # JSON array
+timbers query --last 5 --md       # Markdown
+timbers query --last 5 --oneline  # Compact list
+```
+
+### 4.10 Export: `timbers export`
+
+Generate markdown files for narrative generation.
+
+```bash
+# Export range to directory
+timbers export --range v1.0.0..v1.1.0 --out ./release-notes/
+
+# With narrative preamble
+timbers export --range v1.0.0..v1.1.0 --out ./notes/ --preamble changelog
+
+# Bundle by week
+timbers export --since 2026-01-01 --bundle week --out ./devlog/
+```
+
+### 4.11 Narrative generation: `timbers narrate`
+
+Generate narratives from entries using an LLM. Completes the loop from ledger to publishable content.
+
+```bash
+# Generate changelog from recent entries
+timbers narrate --last 5 --style changelog
+
+# Release notes from a version range
+timbers narrate --range v1.0.0..v1.1.0 --style release-notes
+
+# Developer diary with personality
+timbers narrate --last 10 --style devlog --voice "tired engineer at 2am"
+
+# Stakeholder summary (non-technical)
+timbers narrate --since 2026-01-01 --style stakeholder
+
+# Output to file
+timbers narrate --last 5 --style changelog --out CHANGELOG.md
+
+# JSON output (for further processing)
+timbers narrate --last 3 --json
+```
+
+**Styles:**
+- `changelog` — Conventional changelog format, technical audience
+- `release-notes` — User-facing, feature-focused
+- `devlog` — Narrative developer diary, conversational
+- `stakeholder` — Executive summary, non-technical
+- `custom:<file>` — User-provided prompt template
+
+**Flags:**
+- `--style <name>` — Narrative style (required)
+- `--voice <description>` — Personality/tone modifier
+- `--last <n>` / `--range <A..B>` / `--since <date>` — Entry selection
+- `--out <file>` — Write to file (default: stdout)
+- `--model <name>` — LLM model (default: from config)
+- `--json` — Output structured JSON with narrative + metadata
+
+**Configuration:**
+
+```yaml
+# .timbers/config.yaml
+narrate:
+  provider: anthropic  # or openai, ollama
+  model: claude-sonnet-4-20250514
+  # API keys via environment: ANTHROPIC_API_KEY, OPENAI_API_KEY
+```
+
+**How it works:**
+1. Collects entries matching the filter
+2. Renders entries to structured prompt using style template
+3. Invokes LLM with prompt
+4. Returns narrative text
+
+The style templates include the entry evidence (commits, diffstat, paths) and meaning (what/why/how, decisions) so the LLM can synthesize appropriately.
+
+### 4.12 Batch mode: `timbers log --batch`
+
+For catch-up documentation when you have many undocumented commits:
+
+```bash
+timbers log --batch
+# Found 23 undocumented commits. Grouping by work item...
+#
+# Group 1: beads:bd-a1b2c3 (8 commits)
+#   What: [extracted from commits]
+#   Why: [enter or skip]
+#   How: [extracted from commits]
+#
+# Group 2: No work item (5 commits, same day)
+#   What: [extracted from commits]
+#   ...
+```
+
+**Grouping strategies:**
+- By work item trailer (if present)
+- By day (commits on same day → single entry)
+- By author (for multi-contributor repos)
+
+```bash
+# Batch with auto-fill (minimal interaction)
+timbers log --batch --auto
+
+# Batch all as minor (for historical cleanup)
+timbers log --batch --minor
+```
+
+### 4.13 Notes management: `timbers notes`
+
+Configure and sync notes refs.
+
+```bash
+# First-time setup
+timbers notes init
+
+# Push notes to remote
+timbers notes push
+
+# Fetch notes from remote
+timbers notes fetch
+
+# Check sync status
+timbers notes status
+```
+
+### 4.14 Skill generation: `timbers skill`
+
+Helps agents build a Timbers skill for their agentic environment.
+
+```bash
+timbers skill
+# Outputs structured content for building a Timbers skill:
+# - Core concepts (evidence vs meaning, primacy of why)
+# - Workflow patterns (log, pending, prime cycle)
+# - Command quick reference
+# - Agent execution contract highlights
+# - Integration patterns
+
+timbers skill --format markdown
+# Markdown-formatted output (default)
+
+timbers skill --format json
+# Structured JSON for programmatic consumption
+
+timbers skill --include-examples
+# Include worked examples of good/bad entries
+```
+
+**What it outputs:**
+
+The command emits content organized for skill creation, NOT a ready-made skill. The agent transforms this into their environment's skill format.
+
+```markdown
+# Timbers Skill Content
+
+## Core Concepts
+
+### Evidence vs Meaning
+- Evidence: Machine-collected Git facts (commits, diffstat, paths)
+- Meaning: Agent-authored rationale (what/why/how)
+- The CLI gathers evidence; you supply meaning
+
+### The Primacy of "Why"
+[Key points about enriching why from session context...]
+
+## Workflow Patterns
+
+### After completing work
+timbers log "what" --why "why (enriched!)" --how "how"
+
+### At session start
+timbers prime  # Understand ledger state
+
+### At session end
+timbers pending      # Check for undocumented work
+timbers notes push   # Sync to remote
+
+## Command Quick Reference
+[Table of commands and key flags...]
+
+## Agent Execution Contract
+[Key rules: enrich why, no fabrication, use pending...]
+
+## Integration Patterns
+[Beads workflow, work item linking...]
+```
+
+**Why this approach:**
+
+1. **Environment-agnostic** — Timbers doesn't know your skill format
+2. **Agent-driven** — You shape the skill for your context
+3. **Current** — Output reflects latest Timbers capabilities
+4. **Composable** — Include/exclude sections as needed
+
+**Usage pattern:**
+
+```bash
+# Agent reads skill-creator instructions from their environment
+# Agent runs timbers skill to get Timbers-specific content
+# Agent synthesizes into a skill file for their environment
+
+timbers skill --format json | agent-skill-creator --name timbers
+```
+
+### 4.15 Templates: `timbers log --template`
+
+Pre-filled patterns for common work types.
+
+```bash
+timbers log --template bugfix
+# Pre-fills: what="Fixed bug in X", prompts for X, why, how
+
+timbers log --template feature
+# Pre-fills: what="Added X feature", prompts for X, why, how
+
+timbers log --template refactor
+# Pre-fills: what="Refactored X", prompts for X, why, how
+
+timbers log --template chore
+# Pre-fills: what="Updated X", prompts for X, why, how
 ```
 
 ---
 
-## 4. Git Notes Transport and Merging
+## 5. Git Notes Transport
 
-### 4.1 Making notes move to remotes (required)
+### 5.1 Setup: `timbers notes init`
 
-Timbers MUST support first-run configuration that ensures notes are fetched and pushed.
+Configures notes to sync with remote:
 
-#### 4.1.1 Fetch configuration
+```bash
+git config --add remote.origin.fetch "+refs/notes/timbers:refs/notes/timbers"
+```
 
-Timbers should add fetch refspec(s) to `.git/config` for the chosen remote (default `origin`):
+Verifies push permissions and optionally enables auto-fetch.
 
-* `+refs/notes/timbers:refs/notes/timbers`
-* `+refs/notes/timbers-link:refs/notes/timbers-link` (if enabled)
+### 5.2 Push/Fetch
 
-This can be done via:
+```bash
+timbers notes push   # git push origin refs/notes/timbers
+timbers notes fetch  # git fetch origin refs/notes/timbers
+```
 
-* `git config --add remote.origin.fetch "+refs/notes/timbers:refs/notes/timbers"`
+### 5.3 Configuration
 
-Timbers should detect if already present.
+```yaml
+# .timbers/config.yaml (optional)
+notes:
+  remote: origin
+  ref: refs/notes/timbers
+  auto_push: false    # Push after every write
+  auto_fetch: true    # Fetch on status/query
+```
 
-#### 4.1.2 Push behavior
+### 5.4 Conflict handling
 
-Timbers should provide:
-
-* `timbers notes push` (push notes refs)
-* `timbers write --push-notes` (push after write)
-
-Default push target:
-
-* `git push origin refs/notes/timbers`
-* (and link ref if enabled)
-
-Config options:
-
-* `notes.remote` (default `origin`)
-* `notes.ref` (default `refs/notes/timbers`)
-* `notes.link_ref` (default `refs/notes/timbers-link`)
-* `notes.auto_push` (default `false`)
-* `notes.auto_fetch` (default `true`)
-
-### 4.2 Merge strategy (required)
-
-Notes can diverge across collaborators and branches.
-
-#### 4.2.1 Canonical merge model
-
-* Each anchor commit has at most **one Timbers note blob** in the canonical ref.
-* That blob may contain:
-
-  * a single `entry` (MVP), OR
-  * an object `{ "entries": [ ... ] }` (future)
-
-**MVP decision:** store **exactly one `entry` per anchor commit** to reduce complexity. If multiple entries are needed, create multiple anchors or store a bundle in the future.
-
-#### 4.2.2 Conflict detection
-
-When writing a note to a commit that already has a Timbers note:
-
-* `timbers write` MUST fail unless one of:
-
-  * `--merge` is provided
-  * `--replace` is provided
-
-#### 4.2.3 Merge semantics (`--merge`)
-
-If merging JSON documents:
-
-* Must merge by `id` (stable entry id)
-* Scalars:
-
-  * default: keep existing unless `--merge-prefer incoming`
-* Arrays:
-
-  * append unique by stable key:
-
-    * decisions: hash of `decision`
-    * tests: `kind+name`
-    * tags: exact string
-* Maintain `history[]` if enabled:
-
-  * record prior versions with timestamp and actor
-
-#### 4.2.4 Timeline/stream consistency
-
-Timbers should be able to reconstruct a chronological stream by:
-
-* sorting entries by `created_at` then `id`
-* using `workset.anchor_commit` ordering to map onto Git history when needed
-
-### 4.3 Rebase/squash/cherry-pick considerations (future but planned)
-
-Notes attach to commit IDs; rewritten history loses attachment.
-
-Planned commands:
-
-* `timbers relink --old-range A..B --new-range C..D`:
-
-  * match commits by patch-id or subject+diffstat heuristics
-  * copy notes to new commits
-  * add `links.supersedes` / `related_entry_ids`
-
----
-
-## 5. CLI UX (Agent-Optimized)
-
-### 5.1 Principles
-
-* CLI commands must produce **structured JSON** for the agent to consume.
-* CLI must gather all Git facts: commit lists, diffstat, changed path rollups, existing notes.
-* Agent supplies only “meaning fields”: What/Why/How, decisions, verification.
-
-### 5.2 Command set (MVP)
-
-#### 5.2.1 `timbers status --json`
-
-Outputs:
-
-* repo info, branch, head sha
-* configured notes refs + remote
-* whether notes refs are being fetched
-* last N commits and whether they have commit_link notes
-
-#### 5.2.2 `timbers draft --range <A..B> [--work-item <sys:id>] [--anchor <sha>] --json`
-
-Produces a draft `entry` JSON containing:
-
-* computed `workset` (commits, range, diffstat, changed_paths_top)
-* detected work items from commit trailers (if present)
-* loads existing Timbers note on anchor (if any) for patching
-
-#### 5.2.2a Default work-batch selection policy (MVP)
-
-Timbers SHOULD support multiple batch-selection strategies, chosen deterministically and surfaced in `provenance.inputs`:
-
-**A) Explicit range (highest priority):**
-
-* If `--range` is provided, use it exactly.
-
-**B) Work-item scoped (when `--work-item` provided):**
-
-* Prefer commits that reference the work-item in trailers (e.g., `Bead:` / `Work-Item:`).
-* If the configured tracker adapter can provide boundaries (e.g., bead opened/closed timestamps, issue lifecycle events), Timbers MAY further refine the range, but must always output the final commit list explicitly.
-* If no commits are discoverable via trailers, fall back to (C) with a warning field in draft output (e.g., `provenance.warnings`).
-
-**C) Since last entry (recommended default when neither range nor work-item is provided):**
-
-* Identify the most recent reachable anchor commit on the current branch that has a Timbers `entry` note in `refs/notes/timbers`.
-* Use the range `(last_anchor..HEAD)`.
-* If none exists, fall back to (D).
-
-**D) Last N commits (safe fallback):**
-
-* Default `N=10` unless configured.
-
-**Additional rules:**
-
-* Always exclude merge commits from the commits list unless `--include-merges` is set (because merges are often anchors, not content).
-* Always include `workset.anchor_commit` in `workset.commits`.
-* Always compute and emit `workset.commits[]` explicitly (no implicit ranges in the canonical record).
-
-#### 5.2.3 `timbers write --draft <path> [--anchor <sha>] [--attach-links] [--push-notes] [--merge|--replace]`
-
-* validates JSON
-* writes canonical note to anchor commit in `refs/notes/timbers`
-* optionally writes commit_link notes to each commit in workset
-* optionally pushes notes refs
-* prints receipt: entry id, anchor sha, note refs updated
-
-#### 5.2.4 `timbers query [filters...] --json|--md`
-
-Filters:
-
-* `--work-item beads:B-1427`
-* `--tag physics`
-* `--path-prefix src/engine/terrain`
-* `--range A..B`
-* `--since 2026-01-01 --until 2026-02-01`
-
-Outputs:
-
-* normalized stream of entries (JSON)
-* or a markdown report (MD)
-
-#### 5.2.5 `timbers export --range <A..B> --out <dir> [--bundle release|week|milestone] [--preamble <template>]`
-
-Produces:
-
-* one markdown file per entry (default)
-* optional bundle file(s)
-* index file
-
-#### 5.2.6 `timbers notes init [--remote origin] [--enable-links]`
-
-* sets fetch refspec(s)
-* verifies push permissions
-* optionally sets `notes.auto_fetch`
-
-### 5.3 Commit trailer enforcement (recommended)
-
-Optional hook generator:
-
-* `timbers hooks install`
-
-Commit-msg hook enforces minimal metadata:
-
-* `Work-Item:` or `Bead:` trailer is recommended (configurable)
-
-Rationale: ensures join keys even if notes are written later.
+* **MVP:** One entry per anchor commit. No merge complexity.
+* **On conflict:** `timbers write` fails with clear error; use `--replace` to overwrite.
+* **Future:** `--merge` flag for field-level merge semantics.
 
 ---
 
@@ -489,291 +744,381 @@ Rationale: ensures join keys even if notes are written later.
 
 ### 6.1 File naming
 
-Default:
+```
+YYYY-MM-DD__<entry-id-short>__<anchor-short>.md
+```
 
-* `YYYY-MM-DD__<entry-id>__<short-anchor>.md`
-* directory structure optional:
+Example: `2026-01-15__tb_8f2c1a__8f2c1a9.md`
 
-  * by year/month
-  * by work item
-
-### 6.2 Frontmatter (required)
-
-Example:
+### 6.2 Frontmatter
 
 ```yaml
 ---
 schema: timbers.export/v1
-kind: entry
 id: tb_2026-01-15T15:04:05Z_8f2c1a
 date: 2026-01-15
-repo: <repo-name>
-anchor_commit: 8f2c1a9d7b0c...
-commit_range: c11d2a..8f2c1a
+repo: timbers
+anchor_commit: 8f2c1a9d7b0c
+commit_count: 3
 work_items:
   - system: beads
-    id: B-1427
-  - system: linear
-    id: LIN-382
-tags: [terrain, physics]
-risk: medium
-paths_top: ["src/engine/terrain", "docs/physics"]
+    id: bd-a1b2c3
+tags: [security, auth]
+risk: high
 ---
 ```
 
-### 6.3 Body structure (stable headings)
+### 6.3 Body structure
 
-```md
-# Summary
+```markdown
+# Fixed authentication bypass vulnerability
 
-**What:** ...
+**What:** Fixed authentication bypass vulnerability
 
-**Why:** ...
+**Why:** User input wasn't being sanitized before JWT validation
 
-**How:** ...
+**How:** Added input validation middleware before auth handler
 
 ## Decisions
-- ...
+
+- **Used middleware pattern** instead of handler validation or decorator
+  - *Rationale:* Single enforcement point for all routes
 
 ## Verification
-- ...
+
+- Risk: high
+- Tests added: auth_bypass_test.go
+- Manual checks: Verified with malformed JWT tokens
+
+## Evidence
+
+- Commits: 3 (abc1234, def5678, ghi9012)
+- Files changed: 6 (+241/-88)
+- Paths: src/auth, src/middleware
 
 ## References
-- Anchor commit: ...
-- Commits: ...
-- Work items: ...
-- ADRs: ...
+
+- ADR-0007: Authentication architecture
 ```
 
-### 6.4 Optional prompt preamble
+### 6.4 Narrative preambles
 
-Export may include a preamble block for downstream narrative generation:
+Optional block for downstream LLM narrative generation:
 
-```md
+```markdown
 <!-- NARRATIVE_PROMPT
-Project context:
-- <big picture, constraints, terminology>
-
-Preferred style:
-- business | changelog | robotic | whimsical | character
-
-Persona (optional):
-- name: ...
-- motive: ...
-- setting: ...
-
-Output constraints:
-- length: ...
-- include: ...
-- exclude: ...
+Style: changelog
+Audience: developers
+Tone: professional
+Length: 2-3 paragraphs
 -->
 ```
 
-Preamble templates:
-
-* `business`
-* `changelog`
-* `robotic`
-* `whimsical`
-* `character:<file>` (user-supplied)
-* `project:<file>` (user-supplied)
+Templates: `changelog`, `release-notes`, `devlog`, `stakeholder`, `custom:<file>`
 
 ---
 
-## 7. Integrations
+## 7. Tracker Integrations (Optional)
 
-### 7.0 Integration philosophy
+### 7.1 Philosophy
 
-* **Git is the source of truth** for evidence and timeline.
-* **Trackers are optional, but first-class when enabled.** If a tracker adapter is configured, Timbers should:
+Trackers are **enrichment, not dependency**. Timbers works fully without any tracker configured.
 
-  * validate IDs,
-  * fetch/enrich titles and status where possible,
-  * optionally collect relationship/context fields (e.g., parent/child, dependencies),
-  * support issue-scoped accumulation over multiple passes.
+When enabled, trackers provide:
+- ID validation
+- Title/status hydration
+- Commit candidate suggestions (via trailers)
 
-### 7.1 Tracker adapters (Beads, Linear, others)
+### 7.2 Beads adapter
 
-Timbers models all trackers as `work_items` with a unified shape:
+Detect from commit trailers (`Bead: bd-xxx`) or `--work-item beads:bd-xxx`.
 
-* `system` (e.g., `beads`, `linear`, `github`)
-* `id` (stable tracker ID)
-* optional `title`, `status`, `url`, `relations` (where available)
+```bash
+# Auto-detect from recent commits
+timbers log "..." --why "..." --how "..."
+# Detects Bead: bd-a1b2c3 trailer, enriches work_items[]
 
-#### 7.1.0 Tracker adapter contract (execution-ready)
+# Explicit
+timbers log "..." --work-item beads:bd-a1b2c3 --why "..." --how "..."
+```
 
-When a tracker is enabled, Timbers MUST treat it as first-class enrichment. Implement adapters behind a stable internal interface so additional trackers can be added without modifying ledger semantics.
+### 7.3 Linear adapter
 
-**Adapter capabilities (MVP):**
+Detect from trailers (`Linear: LIN-xxx`) or `--work-item linear:LIN-xxx`.
 
-* **ValidateID(system, id) -> (normalizedID, ok, err)**
-* **HydrateWorkItem(system, id) -> WorkItem**
+### 7.4 Adapter interface
 
-  * Returns `title`, `status`, optional `url`, optional labels/tags.
-* **SuggestCommitCandidates(workItem) -> []CommitRef (optional)**
+```go
+type TrackerAdapter interface {
+    ValidateID(id string) (normalized string, ok bool, err error)
+    Hydrate(id string) (WorkItem, error)
+    SuggestCommits(id string) ([]string, error)  // Optional
+}
+```
 
-  * May be implemented as trailer-based heuristics only in MVP.
+### 7.5 Beads integration hooks
 
-**Optional capabilities (non-MVP but planned):**
+When beads is present, Timbers can integrate at natural documentation moments.
 
-* **GetRelations(workItem) -> Relations** (parent/child, dependencies)
-* **GetLifecycleBoundaries(workItem) -> {opened_at, closed_at}**
-* **Search(query) -> []WorkItem** (for NL-assisted archaeology)
+#### Post-close prompt
 
-**Offline + determinism requirements:**
+When you `bd close <id>`, that's the natural moment to document. Beads can trigger a Timbers prompt:
 
-* Adapters MUST support a deterministic mode:
+```bash
+bd close bd-a1b2c3
+# ✓ Closed bd-a1b2c3: Fix authentication bypass
+#
+# Document this work with Timbers?
+# Run: timbers log "Fixed auth bypass" --why "..." --how "..." --work-item beads:bd-a1b2c3
+```
 
-  * If network access is unavailable or disabled, Timbers must still function using:
+Configuration (in `.beads/config.yaml`):
+```yaml
+hooks:
+  post_close:
+    - timbers prompt --work-item beads:$ID
+```
 
-    * commit trailers,
-    * cached work-item snapshots (if present),
-    * user-provided flags.
-* When online enrichment is used, Timbers MUST record:
+#### Session-end reminder
 
-  * `provenance.inputs.tracker_enrichment=true`
-  * adapter version and fetch timestamp (in `provenance`)
+At session end, check for undocumented closed beads:
 
-**Caching:**
+```bash
+# In Claude Code hook or shell prompt
+bd list --status closed --since "1 hour ago" --json | \
+  timbers check-undocumented --work-items -
+# Warning: 2 closed beads have no Timbers entries
+#   bd-a1b2c3: Fix auth bypass
+#   bd-d4e5f6: Add rate limiting
+```
 
-* Timbers MAY maintain a local cache under `.timbers/cache/` (gitignored) keyed by `system:id` storing last known `title/status/url`.
-* Canonical ledger records must not depend on cache to be interpretable; cache only improves draft UX.
+#### Automatic work item detection
 
-#### 7.1.1 Beads (optional, first-class when enabled)
+When running `timbers log` without `--work-item`, Timbers checks recent commits for `Bead:` trailers and auto-links:
 
-* Detect Bead IDs from commit trailers (e.g., `Bead: B-1427`).
-* Support `timbers draft --work-item beads:B-1427`:
-
-  * enrich `work_items[]` (title/status) when accessible,
-  * prefer bead-scoped commit selection when bead data provides a boundary.
-* Future: adapter may read local Beads files or call a Beads CLI/API if present (implementation TBD).
-
-#### 7.1.2 Linear (optional, first-class when enabled)
-
-* Detect Linear IDs from commit trailers (e.g., `Work-Item: LIN-382`).
-* Support issue-scoped accumulation:
-
-  * `timbers draft --work-item linear:LIN-382 --since last`
-  * updates a single logical narrative entry over time (requires `links`/history strategy)
-* Future: Linear adapter can enrich title/status/labels and (optionally) relationships.
-
-#### 7.1.3 Other trackers (future)
-
-* GitHub Issues, Jira, etc. can be supported via the same adapter interface.
-
-### 7.2 Spec-driven dev tools and agent planning formats (optional)
-
-Goal: make Timbers compatible with workflows like Claude/Windsurf/Kilo planning files by **referencing** them, not owning them.
-
-Planned features:
-
-* Import references to spec artifacts:
-
-  * `references.docs[].kind = spec|plan`
-* Export a “planning packet”:
-
-  * `timbers export --format md --include planning`
-
-Out-of-scope for MVP: direct parsing of each tool’s proprietary formats.
-
-## 8. Quality, Reliability, and Testing
-
-### 8.1 Determinism
-
-* All commands that output JSON must be stable across runs given identical repo state.
-* IDs must be stable within an operation.
-
-### 8.2 Validation
-
-* Strict JSON schema validation on write.
-* Fail fast with actionable errors.
-
-### 8.3 Test plan (minimum)
-
-* Unit tests:
-
-  * schema validation
-  * merge semantics
-  * export formatting
-* Integration tests (temp git repos):
-
-  * init notes refs, write entry, push/fetch notes
-  * attach commit_links
-  * query by range/tag/path
-  * merge conflict simulation (two clones)
-* Future integration tests:
-
-  * rebase/squash relink workflows
+```bash
+timbers log "Completed auth work" --why "..." --how "..."
+# Detected work item from commits: beads:bd-a1b2c3
+# Linked automatically. Use --no-auto-link to disable.
+```
 
 ---
 
-## 9. Open Questions (must resolve for MVP finalization)
+## 8. Agent Execution Contract
 
-1. **One entry per anchor commit vs bundle-per-anchor**: MVP uses one entry per anchor. Is that acceptable, or do we need multiple entries on a single anchor immediately?
-2. **ID generation**: should `id` be time+shortsha (as shown) or UUID? (Shortsha is human-friendly but time/ordering assumptions must be clear.)
-3. **Commit range selection**: for `draft --range`, do we default to last N commits, since last entry, or since last tag?
-4. **Commit link notes**: do we enable by default? (Great for query speed, but doubles note writes.)
-5. **Auto-push notes**: default off to avoid surprises, but agents may want it on. Final default?
-6. **Work-item detection standard**: commit trailers keys (`Bead`, `Work-Item`, `Refs`)—finalize canonical names.
-7. **Handling private repos / multiple remotes**: do we support selecting remote per command?
-8. **Security/privacy for prompt preambles**: should export support redaction rules for secrets or internal terms?
+When implementing or using Timbers as an agent:
+
+1. **Use CLI, not Git parsing** — Call `timbers` commands, consume JSON output
+2. **Author accurate meaning** — What/why/how must reflect actual work, not fabrication
+3. **Enrich "why" from session context** — This is your primary value-add (see below)
+4. **Use `timbers pending`** — Know what needs documentation before writing
+5. **Start minimal, enrich if needed** — Quick capture first, add decisions/verification later
+6. **Never fabricate** — If unknown, omit optional fields rather than guess
+7. **Validate writes** — Check JSON receipt for success
+
+### Enriching "why" — The agent's key contribution
+
+As an agent, you have access to context that will be lost after the session:
+
+- **Requirements discussed** — What the user asked for and why
+- **Specs and docs referenced** — Design documents, ADRs, external resources consulted
+- **Reasoning applied** — Why you chose approach A over approach B
+- **Tradeoffs considered** — Performance vs. readability, simplicity vs. flexibility
+- **Constraints discovered** — Limitations encountered, workarounds applied
+- **User feedback incorporated** — Iterations based on review comments
+
+**Your job:** Synthesize this ephemeral context into a concise "why" that someone reading in 6 months will understand.
+
+**Example transformation:**
+
+| Source | Raw | Enriched "why" |
+|--------|-----|----------------|
+| Commit message | "fix auth bug" | "User reported JWT validation failures on mobile; root cause was missing audience claim check; chose strict validation per OWASP guidelines" |
+| PR description | "adds rate limiting" | "PM requested rate limiting before API launch to prevent abuse; implemented token bucket algorithm; chose 100 req/min based on expected load analysis" |
+| Session context | [agent reasoning] | "Refactored to middleware pattern after discovering handler-level auth was bypassed on 3 routes; consolidated to single enforcement point per security team recommendation" |
+
+### Recommended workflow
+
+```bash
+# At work completion — capture while context is fresh
+timbers log "What I did" \
+  --why "Why I did it (with session context!)" \
+  --how "How I did it"
+
+# For trivial changes
+timbers log --minor "Updated dependencies"
+
+# At session end
+timbers pending      # Any undocumented work?
+timbers notes push   # Sync to remote
+```
+
+### Historical documentation
+
+When documenting historical commits (not current session):
+
+```bash
+timbers log --range old..older --auto
+# Use --auto to extract from commits
+# Do NOT fabricate context you don't have
+# Acceptable: "Historical commit; original rationale not captured"
+```
 
 ---
 
-## 10. Future Considerations
+## 9. Quality & Testing
 
-* **Relink tool** for rewritten history (patch-id heuristics).
-* **Bundle and release artifacts**:
+### 9.1 Determinism
 
-  * release notes generation directly from Timbers entries + conventional commits.
-* **HTML site generation**:
+* All JSON output stable across runs given identical repo state
+* IDs are deterministic (timestamp + anchor short-sha)
 
-  * publishable dev diary.
-* **Cross-repo aggregation**:
+### 9.2 Validation
 
-  * multi-repo story for an org.
-* **External archive of ephemeral docs**:
+* Strict JSON schema validation on write
+* Fail fast with actionable error messages
 
-  * optional store (S3, GDrive, etc.) keyed by entry id.
-* **Pluggable integrations**:
+### 9.3 Test plan
 
-  * Beads CLI adapter, Linear API adapter, GitHub issues adapter.
+**Unit tests:**
+- Schema validation
+- Evidence collection (diffstat, paths)
+- Export formatting
 
----
-
-## 11. Proposed MVP Milestones
-
-### Milestone 1 — Ledger core
-
-* `notes init`
-* `draft` (range + anchor)
-* `write` (entry)
-* `notes push/fetch`
-
-### Milestone 2 — Query + export
-
-* `query` (range/tag/path/work-item)
-* `export` (md + frontmatter + optional preamble)
-* example preamble templates
-
-### Milestone 3 — Optional enhancements
-
-* `commit_link` notes
-* hooks installer
-* merge semantics + history retention
+**Integration tests (temp Git repos):**
+- `notes init` → `log` → `notes push/fetch`
+- `pending` detection
+- `query` filters
+- Conflict handling
 
 ---
 
-## 12. Agent Execution Contract (for coding agents)
+## 10. Resolved Design Decisions
 
-When implementing or using Timbers:
+Based on learnings from beads agent DX:
 
-1. **Do not infer** Git state via ad-hoc parsing; call `timbers` subcommands and consume JSON.
-2. The agent is responsible for authoring accurate **What/Why/How** and decisions based on evidence:
+| Question | Decision | Rationale |
+|----------|----------|-----------|
+| One entry per anchor vs bundle? | One entry | Simpler merge, clearer ownership |
+| ID format? | `tb_<timestamp>_<short-sha>` | Human-readable, sortable, unique |
+| Default range? | Since last entry | Most common case; explicit `--range` overrides |
+| Commit links? | Deferred to v2 | Doubles writes; query by range is sufficient |
+| Auto-push? | Off by default | Avoid surprises; explicit `--push` or `notes push` |
+| Trailer keys? | `Bead:`, `Linear:`, `Work-Item:` | Match existing conventions |
 
-   * commit subjects
-   * diffstat + changed paths
-   * relevant specs/ADRs
-   * work item context (Beads/Linear) when available
-3. The agent must never fabricate tests, decisions, or verification steps; if unknown, set to `unknown` or omit optional fields.
-4. All writes must be validated; on failure, agent must correct data and retry deterministically.
+---
+
+## 11. MVP Milestones
+
+### Milestone 1 — Agent DX Core
+
+**Goal:** An agent can document work in one command.
+
+- [ ] `timbers log` with --why, --how, --work-item, --range
+- [ ] `timbers log --auto` — pre-fill from commits
+- [ ] `timbers log --minor` — trivial change shorthand
+- [ ] `timbers pending` — show undocumented commits
+- [ ] `timbers prime` — context injection
+- [ ] `timbers status` — repo/notes state
+- [ ] `timbers notes init/push/fetch`
+- [ ] `timbers skill` — emit content for agent skill creation
+- [ ] Minimal entry schema
+- [ ] JSON output on all commands
+
+### Milestone 2 — Query, Export & Narrate
+
+**Goal:** Archaeology and narrative generation — complete the loop.
+
+- [ ] `timbers query` with filters
+- [ ] `timbers export` to markdown with frontmatter
+- [ ] `timbers narrate` — LLM-integrated narrative generation
+- [ ] Built-in styles: changelog, release-notes, devlog, stakeholder
+- [ ] Preamble templates for export
+
+### Milestone 3 — Enrichment & Polish
+
+**Goal:** Full schema support, better UX, batch workflows.
+
+- [ ] `timbers enrich` for adding decisions, verification
+- [ ] `timbers log -i` interactive mode (huh forms)
+- [ ] `timbers log --batch` for catch-up documentation
+- [ ] `timbers log --template` for common patterns
+- [ ] Full entry schema with all optional fields
+- [ ] Beads/Linear adapter enrichment
+- [ ] Beads post-close integration hooks
+
+### Milestone 4 — Advanced (Post-MVP)
+
+- [ ] `timbers relink` for rebased history
+- [ ] Merge semantics for concurrent edits
+- [ ] HTML site generation
+- [ ] Cross-repo aggregation
+- [ ] Custom narrate styles and voice training
+
+---
+
+## 12. Future Considerations
+
+* **Relink tool** — Migrate notes after rebase/squash via patch-id heuristics
+* **Release bundling** — Aggregate entries between tags for release notes
+* **HTML dev diary** — Publishable narrative site from entries
+* **Cross-repo** — Aggregate across org's repositories
+* **Voice training** — Fine-tune narrative style from examples
+* **MCP server** — Expose Timbers as MCP tools for broader agent integration
+
+---
+
+## Appendix A: Command Reference
+
+| Command | Purpose | Key Flags |
+|---------|---------|-----------|
+| `timbers log` | Quick capture entry | `--why`, `--how`, `--auto`, `--minor`, `--batch`, `--work-item`, `--range` |
+| `timbers pending` | Show undocumented commits | `--json`, `--count` |
+| `timbers prime` | Context injection | — |
+| `timbers status` | Repo/notes state | `--json` |
+| `timbers narrate` | Generate narrative via LLM | `--style`, `--voice`, `--last`, `--range`, `--out`, `--model` |
+| `timbers draft` | Generate draft JSON | `--range`, `--json` |
+| `timbers write` | Write entry from JSON | `--replace` |
+| `timbers enrich` | Add optional fields | `--decision`, `--risk`, `--tag`, `--last` |
+| `timbers query` | Search entries | `--last`, `--tag`, `--work-item`, `--range`, `--json`, `--md` |
+| `timbers export` | Generate markdown files | `--out`, `--preamble`, `--bundle` |
+| `timbers notes init` | Configure sync | `--remote` |
+| `timbers notes push` | Push to remote | — |
+| `timbers notes fetch` | Fetch from remote | — |
+| `timbers skill` | Emit content for building agent skill | `--format`, `--include-examples` |
+
+## Appendix B: Comparison with Beads
+
+| Aspect | Beads | Timbers |
+|--------|-------|---------|
+| Purpose | Issue tracking (what to do) | Development ledger (what was done) |
+| Storage | JSONL in `.beads/` | Git notes on commits |
+| Key command | `bd ready` | `timbers pending` |
+| Quick action | `bd create "..."` | `timbers log "..." --why --how` |
+| Context | `bd prime` | `timbers prime` |
+| Sync | `bd sync` | `timbers notes push` |
+| Schema | Issues with dependencies | Entries with evidence + meaning |
+| Output | Issue lists, graphs | Narratives via `timbers narrate` |
+
+**Complementary usage:** Beads tracks *what to do*; Timbers records *what was done and why*.
+
+**Integrated workflow:**
+```bash
+# Beads: Track work
+bd create "Fix auth bypass" --type bug
+bd update bd-xxx --claim
+
+# ... do the work ...
+
+# Beads: Close issue
+bd close bd-xxx
+
+# Timbers: Document why (with session context!)
+timbers log "Fixed auth bypass" \
+  --why "Security audit revealed JWT parsing flaw; chose middleware approach per team discussion" \
+  --how "Added validation in auth middleware" \
+  --work-item beads:bd-xxx
+
+# Timbers: Generate narrative
+timbers narrate --last 5 --style devlog
+```
