@@ -1,0 +1,10 @@
+# Copy to .envrc and run: direnv allow
+# cp .envrc.example .envrc && direnv allow
+
+# Mise integration (tool version management)
+if command -v mise &> /dev/null; then
+  eval "$(mise hook-env -s bash)"
+fi
+
+# Project-specific environment
+# export TIMBERS_DEBUG=1
