@@ -133,16 +133,35 @@ func parseCommitFields(commitStr string) (Commit, bool) {
 // Example: " 3 files changed, 45 insertions(+), 12 deletions(-)"
 var diffstatLineRegex = regexp.MustCompile(`(\d+)\s+files?\s+changed(?:,\s+(\d+)\s+insertions?\(\+\))?(?:,\s+(\d+)\s+deletions?\(-\))?`)
 
+// emptyTreeSHA is the SHA of git's empty tree object.
+// Used when diffing from a root commit (which has no parent).
+const emptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
 // GetDiffstat returns the change statistics for the given commit range.
 // The 'fromRef' ref is exclusive, 'toRef' is inclusive.
+// If fromRef doesn't exist (e.g., parent of root commit), uses empty tree.
 func GetDiffstat(fromRef, toRef string) (Diffstat, error) {
-	rangeSpec := fromRef + ".." + toRef
+	resolvedFrom := resolveRefOrEmptyTree(fromRef)
+	rangeSpec := resolvedFrom + ".." + toRef
 	out, err := Run("diff", "--stat", rangeSpec)
 	if err != nil {
 		return Diffstat{}, output.NewSystemErrorWithCause("failed to get diffstat for range "+rangeSpec, err)
 	}
 
 	return parseDiffstat(out), nil
+}
+
+// resolveRefOrEmptyTree resolves a ref, returning empty tree SHA if it doesn't exist.
+// This handles the case of "SHA^" for root commits.
+func resolveRefOrEmptyTree(ref string) string {
+	if ref == "" {
+		return emptyTreeSHA
+	}
+	_, err := Run("rev-parse", "--verify", "--quiet", ref)
+	if err != nil {
+		return emptyTreeSHA
+	}
+	return ref
 }
 
 // parseDiffstat extracts file, insertion, and deletion counts from git diff --stat output.

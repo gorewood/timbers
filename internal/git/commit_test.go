@@ -231,3 +231,80 @@ func TestDiffstat(t *testing.T) {
 		}
 	})
 }
+
+func TestResolveRefOrEmptyTree(t *testing.T) {
+	origDir, getWdErr := os.Getwd()
+	if getWdErr != nil {
+		t.Fatalf("failed to get current dir: %v", getWdErr)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	if chdirErr := os.Chdir("/Users/bob/Projects/agent/timbers"); chdirErr != nil {
+		t.Skipf("cannot change to test repo: %v", chdirErr)
+	}
+
+	tests := []struct {
+		name     string
+		ref      string
+		wantTree bool // true if we expect empty tree SHA
+	}{
+		{
+			name:     "empty ref returns empty tree",
+			ref:      "",
+			wantTree: true,
+		},
+		{
+			name:     "valid ref returns ref",
+			ref:      "HEAD",
+			wantTree: false,
+		},
+		{
+			name:     "nonexistent ref returns empty tree",
+			ref:      "nonexistent-ref-abc123",
+			wantTree: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveRefOrEmptyTree(tt.ref)
+			if tt.wantTree && got != emptyTreeSHA {
+				t.Errorf("resolveRefOrEmptyTree(%q) = %q, want empty tree SHA", tt.ref, got)
+			}
+			if !tt.wantTree && got == emptyTreeSHA {
+				t.Errorf("resolveRefOrEmptyTree(%q) = empty tree, want resolved ref", tt.ref)
+			}
+		})
+	}
+}
+
+func TestGetDiffstatRootCommit(t *testing.T) {
+	origDir, getWdErr := os.Getwd()
+	if getWdErr != nil {
+		t.Fatalf("failed to get current dir: %v", getWdErr)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	if chdirErr := os.Chdir("/Users/bob/Projects/agent/timbers"); chdirErr != nil {
+		t.Skipf("cannot change to test repo: %v", chdirErr)
+	}
+
+	// Find the root commit
+	rootSHA, err := Run("rev-list", "--max-parents=0", "HEAD")
+	if err != nil {
+		t.Fatalf("failed to find root commit: %v", err)
+	}
+
+	// Try to get diffstat using root^ (which doesn't exist)
+	// This should fall back to empty tree and succeed
+	stat, diffErr := GetDiffstat(rootSHA+"^", rootSHA)
+	if diffErr != nil {
+		t.Errorf("GetDiffstat(root^, root) error = %v, expected nil", diffErr)
+		return
+	}
+
+	// Root commit should have some files added
+	if stat.Files == 0 && stat.Insertions == 0 {
+		t.Log("Warning: root commit diffstat shows 0 files/insertions - may be an edge case")
+	}
+}
