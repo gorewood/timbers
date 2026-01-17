@@ -70,6 +70,7 @@ All commands support --json for structured output.`,
 
 	// Add subcommands
 	cmd.AddCommand(newStatusCmd())
+	cmd.AddCommand(newPendingCmd())
 
 	return cmd
 }
