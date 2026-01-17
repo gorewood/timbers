@@ -68,5 +68,8 @@ All commands support --json for structured output.`,
 	// Configure lipgloss for TTY detection
 	lipgloss.SetHasDarkBackground(true)
 
+	// Add subcommands
+	cmd.AddCommand(newStatusCmd())
+
 	return cmd
 }
