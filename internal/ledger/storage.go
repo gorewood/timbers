@@ -240,3 +240,32 @@ func (s *Storage) GetEntryByID(id string) (*Entry, error) {
 
 	return nil, output.NewUserError("entry not found: " + id)
 }
+
+// GetLastNEntries returns the last N entries sorted by created_at descending.
+// Returns entries up to N; if fewer than N exist, returns all entries.
+// Returns an empty slice if no entries exist.
+func (s *Storage) GetLastNEntries(count int) ([]*Entry, error) {
+	entries, err := s.ListEntries()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(entries) == 0 {
+		return []*Entry{}, nil
+	}
+
+	// Sort entries by CreatedAt descending (most recent first)
+	for i := range len(entries) - 1 {
+		for j := i + 1; j < len(entries); j++ {
+			if entries[j].CreatedAt.After(entries[i].CreatedAt) {
+				entries[i], entries[j] = entries[j], entries[i]
+			}
+		}
+	}
+
+	// Return last N entries
+	if count >= len(entries) {
+		return entries, nil
+	}
+	return entries[:count], nil
+}
