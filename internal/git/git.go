@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/steveyegge/timbers/internal/output"
+	"github.com/rbergman/timbers/internal/output"
 )
 
 // Run executes a git command with the given arguments.

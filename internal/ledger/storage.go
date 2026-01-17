@@ -4,8 +4,8 @@ package ledger
 import (
 	"errors"
 
-	"github.com/steveyegge/timbers/internal/git"
-	"github.com/steveyegge/timbers/internal/output"
+	"github.com/rbergman/timbers/internal/git"
+	"github.com/rbergman/timbers/internal/output"
 )
 
 // ErrNoEntries is returned when no ledger entries exist.

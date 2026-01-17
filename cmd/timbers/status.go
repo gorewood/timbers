@@ -4,10 +4,9 @@ package main
 import (
 	"path/filepath"
 
+	"github.com/rbergman/timbers/internal/git"
+	"github.com/rbergman/timbers/internal/output"
 	"github.com/spf13/cobra"
-
-	"github.com/steveyegge/timbers/internal/git"
-	"github.com/steveyegge/timbers/internal/output"
 )
 
 // statusResult holds the data for status output.

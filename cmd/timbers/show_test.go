@@ -8,10 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rbergman/timbers/internal/git"
+	"github.com/rbergman/timbers/internal/ledger"
 	"github.com/spf13/cobra"
-
-	"github.com/steveyegge/timbers/internal/git"
-	"github.com/steveyegge/timbers/internal/ledger"
 )
 
 // mockGitOpsForShow implements ledger.GitOps for testing show command.

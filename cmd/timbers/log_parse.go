@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/steveyegge/timbers/internal/ledger"
-	"github.com/steveyegge/timbers/internal/output"
+	"github.com/rbergman/timbers/internal/ledger"
+	"github.com/rbergman/timbers/internal/output"
 )
 
 // validateLogInput validates the input arguments and flags.

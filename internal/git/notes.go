@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/steveyegge/timbers/internal/output"
+	"github.com/rbergman/timbers/internal/output"
 )
 
 const notesRefName = "refs/notes/timbers"

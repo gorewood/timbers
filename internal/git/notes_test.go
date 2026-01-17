@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/steveyegge/timbers/internal/output"
+	"github.com/rbergman/timbers/internal/output"
 )
 
 // Helper to set up a test git repo with notes

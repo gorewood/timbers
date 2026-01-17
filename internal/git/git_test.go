@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/steveyegge/timbers/internal/output"
+	"github.com/rbergman/timbers/internal/output"
 )
 
 func TestRun(t *testing.T) {

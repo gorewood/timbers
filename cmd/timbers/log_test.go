@@ -7,11 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rbergman/timbers/internal/git"
+	"github.com/rbergman/timbers/internal/ledger"
+	"github.com/rbergman/timbers/internal/output"
 	"github.com/spf13/cobra"
-
-	"github.com/steveyegge/timbers/internal/git"
-	"github.com/steveyegge/timbers/internal/ledger"
-	"github.com/steveyegge/timbers/internal/output"
 )
 
 // mockGitOpsForLog implements ledger.GitOps for testing log command.

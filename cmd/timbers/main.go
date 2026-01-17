@@ -6,9 +6,8 @@ import (
 	"os"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/rbergman/timbers/internal/output"
 	"github.com/spf13/cobra"
-
-	"github.com/steveyegge/timbers/internal/output"
 )
 
 // version is set via ldflags at build time.
