@@ -75,6 +75,7 @@ All commands support --json for structured output.`,
 	cmd.AddCommand(newQueryCmd())
 	cmd.AddCommand(newExportCmd())
 	cmd.AddCommand(newPrimeCmd())
+	cmd.AddCommand(newSkillCmd())
 
 	return cmd
 }
