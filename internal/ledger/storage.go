@@ -223,3 +223,20 @@ func (s *Storage) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
 func (s *Storage) PushNotes(remote string) error {
 	return s.git.PushNotes(remote)
 }
+
+// GetEntryByID returns the entry with the given ID.
+// Returns a user error (exit code 1) if the entry is not found.
+func (s *Storage) GetEntryByID(id string) (*Entry, error) {
+	entries, err := s.ListEntries()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, entry := range entries {
+		if entry.ID == id {
+			return entry, nil
+		}
+	}
+
+	return nil, output.NewUserError("entry not found: " + id)
+}

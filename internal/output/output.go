@@ -131,6 +131,12 @@ func (p *Printer) writeJSON(data any) error {
 	return nil
 }
 
+// WriteJSON encodes any data as JSON and writes it.
+// Use this for outputting structs or other types that aren't maps.
+func (p *Printer) WriteJSON(data any) error {
+	return p.writeJSON(data)
+}
+
 // ErrorJSON returns JSON-formatted error bytes.
 // Format: {"error": "message", "code": N}
 func ErrorJSON(message string, code int) []byte {
