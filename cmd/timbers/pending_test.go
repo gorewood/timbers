@@ -56,6 +56,14 @@ func (m *mockGitOpsForPending) CommitsReachableFrom(sha string) ([]git.Commit, e
 	return m.reachableResult, m.reachableErr
 }
 
+func (m *mockGitOpsForPending) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
+	return git.Diffstat{}, nil
+}
+
+func (m *mockGitOpsForPending) PushNotes(remote string) error {
+	return nil
+}
+
 func TestPendingCommand(t *testing.T) {
 	tests := []struct {
 		name           string

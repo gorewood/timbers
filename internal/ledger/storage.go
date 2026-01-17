@@ -20,6 +20,8 @@ type GitOps interface {
 	HEAD() (string, error)
 	Log(fromRef, toRef string) ([]git.Commit, error)
 	CommitsReachableFrom(sha string) ([]git.Commit, error)
+	GetDiffstat(fromRef, toRef string) (git.Diffstat, error)
+	PushNotes(remote string) error
 }
 
 // realGitOps implements GitOps using the actual git package functions.
@@ -47,6 +49,14 @@ func (realGitOps) Log(fromRef, toRef string) ([]git.Commit, error) {
 
 func (realGitOps) CommitsReachableFrom(sha string) ([]git.Commit, error) {
 	return git.CommitsReachableFrom(sha)
+}
+
+func (realGitOps) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
+	return git.GetDiffstat(fromRef, toRef)
+}
+
+func (realGitOps) PushNotes(remote string) error {
+	return git.PushNotes(remote)
 }
 
 // Storage provides read/write access to ledger entries stored in git notes.
@@ -196,4 +206,20 @@ func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 	}
 
 	return commits, latest, nil
+}
+
+// LogRange returns commits in the given range (fromRef..toRef).
+// The 'fromRef' ref is exclusive, 'toRef' is inclusive.
+func (s *Storage) LogRange(fromRef, toRef string) ([]git.Commit, error) {
+	return s.git.Log(fromRef, toRef)
+}
+
+// GetDiffstat returns the change statistics for the given commit range.
+func (s *Storage) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
+	return s.git.GetDiffstat(fromRef, toRef)
+}
+
+// PushNotes pushes the notes ref to the given remote.
+func (s *Storage) PushNotes(remote string) error {
+	return s.git.PushNotes(remote)
 }

@@ -95,6 +95,14 @@ func (m *mockGitOps) CommitsReachableFrom(sha string) ([]git.Commit, error) {
 	return m.reachableFrom, nil
 }
 
+func (m *mockGitOps) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
+	return git.Diffstat{}, nil
+}
+
+func (m *mockGitOps) PushNotes(remote string) error {
+	return nil
+}
+
 // makeTestEntry creates a valid entry for testing.
 func makeTestEntry(anchor string, createdAt time.Time) *Entry {
 	return &Entry{
