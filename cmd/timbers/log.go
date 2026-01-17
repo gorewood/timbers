@@ -27,27 +27,32 @@ type logFlags struct {
 	minor     bool
 	dryRun    bool
 	push      bool
+	auto      bool
+	yes       bool
+	batch     bool
 }
 
 // newLogCmdInternal creates the log command with optional storage injection.
 // If storage is nil, a real storage is created when the command runs.
 func newLogCmdInternal(storage *ledger.Storage) *cobra.Command {
-	var (
-		whyFlag    string
-		howFlag    string
-		tags       []string
-		workItems  []string
-		rangeFlag  string
-		anchorFlag string
-		minorFlag  bool
-		dryRunFlag bool
-		pushFlag   bool
-	)
+	vars := newLogFlagVars()
 
 	cmd := &cobra.Command{
-		Use:   "log <what>",
+		Use:   "log [<what>]",
 		Short: "Record work as a ledger entry",
-		Long: `Record work as a development ledger entry with what/why/how summary.
+		Long:  logCmdLongHelp,
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runLog(cmd, storage, args, vars.toLogFlags())
+		},
+	}
+
+	registerLogFlags(cmd, vars)
+	return cmd
+}
+
+// logCmdLongHelp is the long help text for the log command.
+const logCmdLongHelp = `Record work as a development ledger entry with what/why/how summary.
 
 The log command captures what you did, why you did it, and how you did it.
 This creates a structured record attached to your git commits.
@@ -56,35 +61,10 @@ Examples:
   timbers log "Fixed auth bug" --why "Users couldn't login" --how "Added null check"
   timbers log "Updated deps" --minor
   timbers log "New feature" --why "User request" --how "New component" --tag feature
-  timbers log "Bug fix" --why "Issue #123" --how "Patched" --work-item jira:PROJ-456`,
-		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runLog(cmd, storage, args, logFlags{
-				why:       whyFlag,
-				how:       howFlag,
-				tags:      tags,
-				workItems: workItems,
-				rangeStr:  rangeFlag,
-				anchor:    anchorFlag,
-				minor:     minorFlag,
-				dryRun:    dryRunFlag,
-				push:      pushFlag,
-			})
-		},
-	}
-
-	cmd.Flags().StringVar(&whyFlag, "why", "", "Why this change was made (required unless --minor)")
-	cmd.Flags().StringVar(&howFlag, "how", "", "How this change was implemented (required unless --minor)")
-	cmd.Flags().StringArrayVar(&tags, "tag", nil, "Tags for categorization (repeatable)")
-	cmd.Flags().StringArrayVar(&workItems, "work-item", nil, "Work item reference as system:id (repeatable)")
-	cmd.Flags().StringVar(&rangeFlag, "range", "", "Explicit commit range (e.g., abc123..def456)")
-	cmd.Flags().StringVar(&anchorFlag, "anchor", "", "Override anchor commit (default: HEAD)")
-	cmd.Flags().BoolVar(&minorFlag, "minor", false, "Trivial change - makes why/how optional")
-	cmd.Flags().BoolVar(&dryRunFlag, "dry-run", false, "Show what would be written without writing")
-	cmd.Flags().BoolVar(&pushFlag, "push", false, "Push notes after writing")
-
-	return cmd
-}
+  timbers log "Bug fix" --why "Issue #123" --how "Patched" --work-item jira:PROJ-456
+  timbers log --auto              # Extract what/why/how from commit messages
+  timbers log --auto --yes        # Auto mode without confirmation
+  timbers log --batch             # Create entries for each work-item group or day`
 
 // logContext holds all data needed to create a log entry.
 type logContext struct {
@@ -103,6 +83,11 @@ func runLog(cmd *cobra.Command, storage *ledger.Storage, args []string, flags lo
 	storage, err := initLogStorage(storage, printer)
 	if err != nil {
 		return err
+	}
+
+	// Dispatch to batch mode if --batch is set
+	if flags.batch {
+		return runBatchLog(storage, flags, printer)
 	}
 
 	ctx, err := prepareLogContext(storage, args, flags, printer)
@@ -140,8 +125,9 @@ func prepareLogContext(
 	flags logFlags,
 	printer *output.Printer,
 ) (*logContext, error) {
-	what, err := validateLogInput(args, flags)
-	if err != nil {
+	// For auto mode, we need commits first to extract content
+	// So we validate basic input first, then get commits, then extract/validate content
+	if err := validateBasicInput(args, flags); err != nil {
 		printer.Error(err)
 		return nil, err
 	}
@@ -164,6 +150,13 @@ func prepareLogContext(
 		return nil, err
 	}
 
+	// Extract or validate what/why/how based on mode
+	what, updatedFlags, err := resolveLogContent(args, flags, commits)
+	if err != nil {
+		printer.Error(err)
+		return nil, err
+	}
+
 	anchor := determineAnchor(commits, flags.anchor)
 
 	diffstat, err := getDiffstatForRange(storage, fromRef, anchor, commits)
@@ -173,7 +166,7 @@ func prepareLogContext(
 
 	return &logContext{
 		what:      what,
-		flags:     flags,
+		flags:     updatedFlags,
 		commits:   commits,
 		anchor:    anchor,
 		diffstat:  diffstat,

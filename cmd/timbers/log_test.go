@@ -515,3 +515,432 @@ func TestValidateRangeFormat(t *testing.T) {
 func newLogCmdWithStorage(storage *ledger.Storage) *cobra.Command {
 	return newLogCmdInternal(storage)
 }
+
+func TestExtractAutoContent(t *testing.T) {
+	tests := []struct {
+		name     string
+		commits  []git.Commit
+		wantWhat string
+		wantWhy  string
+		wantHow  string
+	}{
+		{
+			name: "single commit without body",
+			commits: []git.Commit{
+				{Subject: "Fix bug in parser"},
+			},
+			wantWhat: "Fix bug in parser",
+			wantWhy:  "Auto-documented",
+			wantHow:  "Auto-documented",
+		},
+		{
+			name: "multiple commits without body",
+			commits: []git.Commit{
+				{Subject: "Add feature X"},
+				{Subject: "Fix tests"},
+				{Subject: "Update docs"},
+			},
+			wantWhat: "Add feature X; Fix tests; Update docs",
+			wantWhy:  "Auto-documented",
+			wantHow:  "Auto-documented",
+		},
+		{
+			name: "single commit with one-paragraph body",
+			commits: []git.Commit{
+				{
+					Subject: "Fix authentication bug",
+					Body:    "Users were unable to login due to null check missing.",
+				},
+			},
+			wantWhat: "Fix authentication bug",
+			wantWhy:  "Users were unable to login due to null check missing.",
+			wantHow:  "Auto-documented",
+		},
+		{
+			name: "single commit with multi-paragraph body",
+			commits: []git.Commit{
+				{
+					Subject: "Refactor database layer",
+					Body:    "The old implementation was too slow.\n\nAdded connection pooling and query caching.\nAlso optimized indexes.",
+				},
+			},
+			wantWhat: "Refactor database layer",
+			wantWhy:  "The old implementation was too slow.",
+			wantHow:  "Added connection pooling and query caching.\nAlso optimized indexes.",
+		},
+		{
+			name: "multiple commits, first has body",
+			commits: []git.Commit{
+				{
+					Subject: "Latest commit",
+					Body:    "This is why.\n\nThis is how.",
+				},
+				{
+					Subject: "Previous commit",
+					Body:    "Different body",
+				},
+			},
+			wantWhat: "Latest commit; Previous commit",
+			wantWhy:  "This is why.",
+			wantHow:  "This is how.",
+		},
+		{
+			name: "multiple commits, second has body",
+			commits: []git.Commit{
+				{Subject: "First commit"},
+				{
+					Subject: "Second commit",
+					Body:    "Body from second.\n\nHow from second.",
+				},
+			},
+			wantWhat: "First commit; Second commit",
+			wantWhy:  "Body from second.",
+			wantHow:  "How from second.",
+		},
+		{
+			name:     "no commits",
+			commits:  []git.Commit{},
+			wantWhat: "Auto-documented",
+			wantWhy:  "Auto-documented",
+			wantHow:  "Auto-documented",
+		},
+		{
+			name: "commit with empty subject",
+			commits: []git.Commit{
+				{Subject: "", Body: "Just a body"},
+			},
+			wantWhat: "Auto-documented",
+			wantWhy:  "Just a body",
+			wantHow:  "Auto-documented",
+		},
+		{
+			name: "body with multiple blank lines between paragraphs",
+			commits: []git.Commit{
+				{
+					Subject: "Feature X",
+					Body:    "First paragraph.\n\n\n\nSecond paragraph.",
+				},
+			},
+			wantWhat: "Feature X",
+			wantWhy:  "First paragraph.",
+			wantHow:  "Second paragraph.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			what, why, how := extractAutoContent(tt.commits)
+
+			if what != tt.wantWhat {
+				t.Errorf("what = %q, want %q", what, tt.wantWhat)
+			}
+			if why != tt.wantWhy {
+				t.Errorf("why = %q, want %q", why, tt.wantWhy)
+			}
+			if how != tt.wantHow {
+				t.Errorf("how = %q, want %q", how, tt.wantHow)
+			}
+		})
+	}
+}
+
+func TestLogCommandAutoMode(t *testing.T) {
+	tests := []struct {
+		name           string
+		mock           *mockGitOpsForLog
+		args           []string
+		jsonOutput     bool
+		wantErr        bool
+		wantContains   []string
+		wantNotContain []string
+		checkMock      func(t *testing.T, mock *mockGitOpsForLog)
+	}{
+		{
+			name: "auto mode - extracts from commit subjects",
+			mock: func() *mockGitOpsForLog {
+				mock := newMockGitOpsForLog()
+				mock.head = "abc123def456789"
+				mock.reachableResult = []git.Commit{
+					{SHA: "abc123def456789", Short: "abc123d", Subject: "Add feature X"},
+					{SHA: "def456789012345", Short: "def4567", Subject: "Fix tests"},
+				}
+				mock.diffstat = git.Diffstat{Files: 2, Insertions: 30, Deletions: 10}
+				return mock
+			}(),
+			args:         []string{"--auto"},
+			wantErr:      false,
+			wantContains: []string{"Created entry"},
+			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
+				if len(mock.writtenNotes) != 1 {
+					t.Errorf("expected 1 note written, got %d", len(mock.writtenNotes))
+				}
+				content := mock.writtenNotes["abc123def456789"]
+				if !strings.Contains(content, "Add feature X; Fix tests") {
+					t.Errorf("expected combined subjects in note, got: %s", content)
+				}
+				if !strings.Contains(content, "Auto-documented") {
+					t.Errorf("expected Auto-documented default in note, got: %s", content)
+				}
+			},
+		},
+		{
+			name: "auto mode - extracts why/how from body",
+			mock: func() *mockGitOpsForLog {
+				mock := newMockGitOpsForLog()
+				mock.head = "abc123def456789"
+				mock.reachableResult = []git.Commit{
+					{
+						SHA:     "abc123def456789",
+						Short:   "abc123d",
+						Subject: "Fix auth bug",
+						Body:    "Users couldn't login.\n\nAdded null check to auth handler.",
+					},
+				}
+				mock.diffstat = git.Diffstat{Files: 1, Insertions: 5, Deletions: 2}
+				return mock
+			}(),
+			args:         []string{"--auto"},
+			wantErr:      false,
+			wantContains: []string{"Created entry"},
+			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
+				content := mock.writtenNotes["abc123def456789"]
+				if !strings.Contains(content, "Fix auth bug") {
+					t.Errorf("expected subject as what, got: %s", content)
+				}
+				if !strings.Contains(content, "Users couldn't login.") {
+					t.Errorf("expected first paragraph as why, got: %s", content)
+				}
+				if !strings.Contains(content, "Added null check to auth handler.") {
+					t.Errorf("expected second paragraph as how, got: %s", content)
+				}
+			},
+		},
+		{
+			name: "auto mode with what override",
+			mock: func() *mockGitOpsForLog {
+				mock := newMockGitOpsForLog()
+				mock.head = "abc123def456789"
+				mock.reachableResult = []git.Commit{
+					{SHA: "abc123def456789", Short: "abc123d", Subject: "Original subject"},
+				}
+				mock.diffstat = git.Diffstat{Files: 1, Insertions: 5, Deletions: 2}
+				return mock
+			}(),
+			args:         []string{"Custom what", "--auto"},
+			wantErr:      false,
+			wantContains: []string{"Created entry"},
+			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
+				content := mock.writtenNotes["abc123def456789"]
+				if !strings.Contains(content, "Custom what") {
+					t.Errorf("expected custom what in note, got: %s", content)
+				}
+				if strings.Contains(content, "Original subject") {
+					t.Errorf("should not contain original subject when overridden, got: %s", content)
+				}
+			},
+		},
+		{
+			name: "auto mode with why/how override",
+			mock: func() *mockGitOpsForLog {
+				mock := newMockGitOpsForLog()
+				mock.head = "abc123def456789"
+				mock.reachableResult = []git.Commit{
+					{
+						SHA:     "abc123def456789",
+						Short:   "abc123d",
+						Subject: "Feature X",
+						Body:    "Original why.\n\nOriginal how.",
+					},
+				}
+				mock.diffstat = git.Diffstat{Files: 1, Insertions: 5, Deletions: 2}
+				return mock
+			}(),
+			args:         []string{"--auto", "--why", "Custom why", "--how", "Custom how"},
+			wantErr:      false,
+			wantContains: []string{"Created entry"},
+			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
+				content := mock.writtenNotes["abc123def456789"]
+				if !strings.Contains(content, "Custom why") {
+					t.Errorf("expected custom why in note, got: %s", content)
+				}
+				if !strings.Contains(content, "Custom how") {
+					t.Errorf("expected custom how in note, got: %s", content)
+				}
+			},
+		},
+		{
+			name: "auto mode with --yes flag",
+			mock: func() *mockGitOpsForLog {
+				mock := newMockGitOpsForLog()
+				mock.head = "abc123def456789"
+				mock.reachableResult = []git.Commit{
+					{SHA: "abc123def456789", Short: "abc123d", Subject: "Quick fix"},
+				}
+				mock.diffstat = git.Diffstat{Files: 1, Insertions: 2, Deletions: 1}
+				return mock
+			}(),
+			args:         []string{"--auto", "--yes"},
+			wantErr:      false,
+			wantContains: []string{"Created entry"},
+			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
+				if len(mock.writtenNotes) != 1 {
+					t.Errorf("expected 1 note written, got %d", len(mock.writtenNotes))
+				}
+			},
+		},
+		{
+			name: "auto mode with dry-run",
+			mock: func() *mockGitOpsForLog {
+				mock := newMockGitOpsForLog()
+				mock.head = "abc123def456789"
+				mock.reachableResult = []git.Commit{
+					{SHA: "abc123def456789", Short: "abc123d", Subject: "Preview this"},
+				}
+				mock.diffstat = git.Diffstat{Files: 1, Insertions: 5, Deletions: 2}
+				return mock
+			}(),
+			args:         []string{"--auto", "--dry-run"},
+			wantErr:      false,
+			wantContains: []string{"Dry run", "Preview this", "Auto-documented"},
+			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
+				if len(mock.writtenNotes) != 0 {
+					t.Errorf("expected no notes in dry-run mode, got %d", len(mock.writtenNotes))
+				}
+			},
+		},
+		{
+			name: "auto mode JSON output",
+			mock: func() *mockGitOpsForLog {
+				mock := newMockGitOpsForLog()
+				mock.head = "abc123def456789"
+				mock.reachableResult = []git.Commit{
+					{SHA: "abc123def456789", Short: "abc123d", Subject: "JSON test"},
+				}
+				mock.diffstat = git.Diffstat{Files: 1, Insertions: 5, Deletions: 2}
+				return mock
+			}(),
+			args:         []string{"--auto"},
+			jsonOutput:   true,
+			wantErr:      false,
+			wantContains: []string{`"status": "created"`, `"id":`},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset global flag
+			jsonFlag = tt.jsonOutput
+
+			// Create storage with mock
+			storage := ledger.NewStorage(tt.mock)
+
+			// Create command
+			cmd := newLogCmdWithStorage(storage)
+
+			// Set args
+			cmd.SetArgs(tt.args)
+
+			// Capture output
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+
+			// Execute
+			err := cmd.Execute()
+
+			// Check error expectation
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			output := buf.String()
+
+			// Check expected content
+			for _, want := range tt.wantContains {
+				if !strings.Contains(output, want) {
+					t.Errorf("output missing expected content %q\noutput: %s", want, output)
+				}
+			}
+
+			// Check content that should not appear
+			for _, notWant := range tt.wantNotContain {
+				if strings.Contains(output, notWant) {
+					t.Errorf("output contains unexpected content %q\noutput: %s", notWant, output)
+				}
+			}
+
+			// For JSON output, verify structure
+			if tt.jsonOutput && err == nil {
+				var result map[string]any
+				if jsonErr := json.Unmarshal([]byte(output), &result); jsonErr != nil {
+					t.Errorf("failed to parse JSON output: %v\noutput: %s", jsonErr, output)
+				}
+			}
+
+			// Run mock checks if provided
+			if tt.checkMock != nil && err == nil {
+				tt.checkMock(t, tt.mock)
+			}
+		})
+	}
+}
+
+func TestSplitIntoParagraphs(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []string
+	}{
+		{
+			name:  "single paragraph",
+			input: "Just one paragraph.",
+			want:  []string{"Just one paragraph."},
+		},
+		{
+			name:  "two paragraphs",
+			input: "First paragraph.\n\nSecond paragraph.",
+			want:  []string{"First paragraph.", "Second paragraph."},
+		},
+		{
+			name:  "multiple blank lines",
+			input: "First.\n\n\n\nSecond.",
+			want:  []string{"First.", "Second."},
+		},
+		{
+			name:  "multiline paragraph",
+			input: "Line one\nLine two\n\nSecond para.",
+			want:  []string{"Line one\nLine two", "Second para."},
+		},
+		{
+			name:  "trailing whitespace",
+			input: "First.\n\nSecond.\n\n",
+			want:  []string{"First.", "Second."},
+		},
+		{
+			name:  "empty input",
+			input: "",
+			want:  nil,
+		},
+		{
+			name:  "only whitespace",
+			input: "   \n\n   ",
+			want:  nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := splitIntoParagraphs(tt.input)
+			if len(got) != len(tt.want) {
+				t.Errorf("splitIntoParagraphs() returned %d paragraphs, want %d\ngot: %v", len(got), len(tt.want), got)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("paragraph[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
