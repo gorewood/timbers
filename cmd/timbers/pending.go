@@ -42,7 +42,15 @@ func newPendingCmdInternal(storage *ledger.Storage) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pending",
 		Short: "Show undocumented commits since last entry",
-		Long:  `Show commits that have not been documented since the last ledger entry.`,
+		Long: `Show commits that have not been documented since the last ledger entry.
+
+This command identifies work that needs to be documented by finding all commits
+made after the most recent ledger entry's anchor commit.
+
+Examples:
+  timbers pending              # List all undocumented commits
+  timbers pending --count      # Show only the count of pending commits
+  timbers pending --json       # Output pending commits as JSON`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runPending(cmd, storage, countOnly)
 		},

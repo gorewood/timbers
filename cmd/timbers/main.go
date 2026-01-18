@@ -67,16 +67,43 @@ All commands support --json for structured output.`,
 	// Configure lipgloss for TTY detection
 	lipgloss.SetHasDarkBackground(true)
 
-	// Add subcommands
-	cmd.AddCommand(newStatusCmd())
-	cmd.AddCommand(newPendingCmd())
-	cmd.AddCommand(newLogCmd())
-	cmd.AddCommand(newShowCmd())
-	cmd.AddCommand(newQueryCmd())
-	cmd.AddCommand(newExportCmd())
-	cmd.AddCommand(newPrimeCmd())
-	cmd.AddCommand(newSkillCmd())
-	cmd.AddCommand(newNotesCmd())
+	// Define command groups and add commands
+	addCommandGroups(cmd)
+	addCommands(cmd)
 
 	return cmd
+}
+
+// addCommandGroups defines the command groups for help output.
+func addCommandGroups(cmd *cobra.Command) {
+	cmd.AddGroup(&cobra.Group{ID: "core", Title: "Core Commands:"})
+	cmd.AddGroup(&cobra.Group{ID: "query", Title: "Query Commands:"})
+	cmd.AddGroup(&cobra.Group{ID: "sync", Title: "Sync Commands:"})
+	cmd.AddGroup(&cobra.Group{ID: "agent", Title: "Agent Commands:"})
+}
+
+// addCommands adds all subcommands with their group assignments.
+func addCommands(cmd *cobra.Command) {
+	// Core commands: log, pending, status
+	addGroupedCommand(cmd, newLogCmd(), "core")
+	addGroupedCommand(cmd, newPendingCmd(), "core")
+	addGroupedCommand(cmd, newStatusCmd(), "core")
+
+	// Query commands: show, query, export
+	addGroupedCommand(cmd, newShowCmd(), "query")
+	addGroupedCommand(cmd, newQueryCmd(), "query")
+	addGroupedCommand(cmd, newExportCmd(), "query")
+
+	// Sync commands: notes
+	addGroupedCommand(cmd, newNotesCmd(), "sync")
+
+	// Agent commands: prime, skill
+	addGroupedCommand(cmd, newPrimeCmd(), "agent")
+	addGroupedCommand(cmd, newSkillCmd(), "agent")
+}
+
+// addGroupedCommand adds a subcommand with a group assignment.
+func addGroupedCommand(parent *cobra.Command, child *cobra.Command, groupID string) {
+	child.GroupID = groupID
+	parent.AddCommand(child)
 }

@@ -24,8 +24,15 @@ func newStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show repository and notes state",
-		Long:  `Show the current state of the repository and timbers notes configuration.`,
-		RunE:  runStatus,
+		Long: `Show the current state of the repository and timbers notes configuration.
+
+Displays repository info (name, branch, HEAD), notes ref status, whether
+notes fetch is configured for the remote, and total entry count.
+
+Examples:
+  timbers status         # Show human-readable status
+  timbers status --json  # Output status as JSON for scripting`,
+		RunE: runStatus,
 	}
 	return cmd
 }

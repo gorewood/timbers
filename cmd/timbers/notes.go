@@ -12,7 +12,22 @@ func newNotesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "notes",
 		Short: "Manage timbers notes sync",
-		Long:  `Manage timbers notes synchronization with remote repositories.`,
+		Long: `Manage timbers notes synchronization with remote repositories.
+
+Timbers stores ledger entries in Git notes (refs/notes/timbers). These notes
+must be explicitly configured to sync with remotes.
+
+Subcommands:
+  init    Configure notes fetch for a remote
+  push    Push notes to a remote
+  fetch   Fetch notes from a remote
+  status  Show notes sync state
+
+Examples:
+  timbers notes init             # Configure notes fetch for origin
+  timbers notes push             # Push notes to origin
+  timbers notes fetch            # Fetch notes from origin
+  timbers notes status           # Show sync state`,
 	}
 
 	cmd.AddCommand(newNotesInitCmd())
@@ -30,7 +45,14 @@ func newNotesInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Configure notes fetch for a remote",
-		Long:  `Configure git to fetch timbers notes from a remote repository.`,
+		Long: `Configure git to fetch timbers notes from a remote repository.
+
+This adds a fetch refspec for refs/notes/timbers to your git config,
+enabling 'git fetch' to pull notes automatically.
+
+Examples:
+  timbers notes init                   # Configure for origin
+  timbers notes init --remote upstream # Configure for upstream`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runNotesInit(cmd, remote)
 		},
@@ -82,7 +104,14 @@ func newNotesPushCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "push",
 		Short: "Push notes to a remote",
-		Long:  `Push timbers notes to a remote repository.`,
+		Long: `Push timbers notes to a remote repository.
+
+Pushes refs/notes/timbers to the specified remote, making your ledger
+entries available to collaborators.
+
+Examples:
+  timbers notes push                   # Push to origin
+  timbers notes push --remote upstream # Push to upstream`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runNotesPush(cmd, remote)
 		},
@@ -127,7 +156,14 @@ func newNotesFetchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "fetch",
 		Short: "Fetch notes from a remote",
-		Long:  `Fetch timbers notes from a remote repository.`,
+		Long: `Fetch timbers notes from a remote repository.
+
+Fetches refs/notes/timbers from the specified remote, pulling in ledger
+entries created by collaborators.
+
+Examples:
+  timbers notes fetch                   # Fetch from origin
+  timbers notes fetch --remote upstream # Fetch from upstream`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runNotesFetch(cmd, remote)
 		},
@@ -172,7 +208,15 @@ func newNotesStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show notes sync state",
-		Long:  `Show the current state of timbers notes synchronization.`,
+		Long: `Show the current state of timbers notes synchronization.
+
+Displays whether the notes ref exists, if fetch is configured for the
+remote, and the current entry count.
+
+Examples:
+  timbers notes status                   # Check status for origin
+  timbers notes status --remote upstream # Check status for upstream
+  timbers notes status --json            # Output as JSON`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runNotesStatus(cmd, remote)
 		},
