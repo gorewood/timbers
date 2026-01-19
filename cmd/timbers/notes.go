@@ -2,6 +2,8 @@
 package main
 
 import (
+	"strconv"
+
 	"github.com/rbergman/timbers/internal/git"
 	"github.com/rbergman/timbers/internal/output"
 	"github.com/spf13/cobra"
@@ -45,15 +47,7 @@ func newNotesInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Configure notes fetch for a remote",
-		Long: `Configure git to fetch timbers notes from a remote repository.
-
-This adds a fetch refspec for refs/notes/timbers to your git config,
-enabling 'git fetch' to pull notes automatically.
-
-Examples:
-  timbers notes init                   # Configure for origin
-  timbers notes init --remote upstream # Configure for upstream
-  timbers notes init --dry-run         # Show what would be configured`,
+		Long:  `Configure git to fetch timbers notes from a remote. Adds a fetch refspec for refs/notes/timbers to your git config.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runNotesInit(cmd, remote, dryRun)
 		},
@@ -86,10 +80,12 @@ func runNotesInit(cmd *cobra.Command, remote string, dryRun bool) error {
 				"would_configure":    !wasConfigured,
 			})
 		}
+		printer.Section("Dry Run")
+		printer.KeyValue("Remote", remote)
 		if wasConfigured {
-			printer.Print("Dry run: Notes fetch already configured for remote '%s' (no changes needed)\n", remote)
+			printer.KeyValue("Status", "already configured (no changes needed)")
 		} else {
-			printer.Print("Dry run: Would configure notes fetch for remote '%s'\n", remote)
+			printer.KeyValue("Action", "would configure notes fetch")
 		}
 		return nil
 	}
@@ -109,11 +105,13 @@ func runNotesInit(cmd *cobra.Command, remote string, dryRun bool) error {
 	}
 
 	if wasConfigured {
-		printer.Print("Notes fetch already configured for remote '%s'\n", remote)
-	} else {
-		printer.Print("Configured notes fetch for remote '%s'\n", remote)
+		return printer.Success(map[string]any{
+			"message": "Notes fetch already configured for remote '" + remote + "'",
+		})
 	}
-	return nil
+	return printer.Success(map[string]any{
+		"message": "Configured notes fetch for remote '" + remote + "'",
+	})
 }
 
 // newNotesPushCmd creates the notes push subcommand.
@@ -124,15 +122,7 @@ func newNotesPushCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "push",
 		Short: "Push notes to a remote",
-		Long: `Push timbers notes to a remote repository.
-
-Pushes refs/notes/timbers to the specified remote, making your ledger
-entries available to collaborators.
-
-Examples:
-  timbers notes push                   # Push to origin
-  timbers notes push --remote upstream # Push to upstream
-  timbers notes push --dry-run         # Show what would be pushed`,
+		Long:  `Push timbers notes (refs/notes/timbers) to a remote, making ledger entries available to collaborators.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runNotesPush(cmd, remote, dryRun)
 		},
@@ -165,7 +155,10 @@ func runNotesPush(cmd *cobra.Command, remote string, dryRun bool) error {
 				"entry_count": entryCount,
 			})
 		}
-		printer.Print("Dry run: Would push %d entries to remote '%s'\n", entryCount, remote)
+		printer.Section("Dry Run")
+		printer.KeyValue("Remote", remote)
+		printer.KeyValue("Entries", strconv.Itoa(entryCount))
+		printer.KeyValue("Action", "would push notes")
 		return nil
 	}
 
@@ -182,8 +175,9 @@ func runNotesPush(cmd *cobra.Command, remote string, dryRun bool) error {
 		})
 	}
 
-	printer.Print("Pushed notes to remote '%s'\n", remote)
-	return nil
+	return printer.Success(map[string]any{
+		"message": "Pushed notes to remote '" + remote + "'",
+	})
 }
 
 // newNotesFetchCmd creates the notes fetch subcommand.
@@ -194,15 +188,7 @@ func newNotesFetchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "fetch",
 		Short: "Fetch notes from a remote",
-		Long: `Fetch timbers notes from a remote repository.
-
-Fetches refs/notes/timbers from the specified remote, pulling in ledger
-entries created by collaborators.
-
-Examples:
-  timbers notes fetch                   # Fetch from origin
-  timbers notes fetch --remote upstream # Fetch from upstream
-  timbers notes fetch --dry-run         # Show what would be fetched`,
+		Long:  `Fetch timbers notes (refs/notes/timbers) from a remote, pulling in ledger entries from collaborators.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runNotesFetch(cmd, remote, dryRun)
 		},
@@ -233,10 +219,13 @@ func runNotesFetch(cmd *cobra.Command, remote string, dryRun bool) error {
 				"configured": configured,
 			})
 		}
+		printer.Section("Dry Run")
+		printer.KeyValue("Remote", remote)
+		printer.KeyValue("Configured", formatBool(configured))
 		if configured {
-			printer.Print("Dry run: Would fetch notes from remote '%s'\n", remote)
+			printer.KeyValue("Action", "would fetch notes")
 		} else {
-			printer.Print("Dry run: Would fetch notes from remote '%s' (note: fetch not configured; run 'timbers notes init' first)\n", remote)
+			printer.KeyValue("Action", "would fetch notes (not configured; run 'timbers notes init' first)")
 		}
 		return nil
 	}
@@ -254,8 +243,9 @@ func runNotesFetch(cmd *cobra.Command, remote string, dryRun bool) error {
 		})
 	}
 
-	printer.Print("Fetched notes from remote '%s'\n", remote)
-	return nil
+	return printer.Success(map[string]any{
+		"message": "Fetched notes from remote '" + remote + "'",
+	})
 }
 
 // newNotesStatusCmd creates the notes status subcommand.
@@ -265,15 +255,7 @@ func newNotesStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show notes sync state",
-		Long: `Show the current state of timbers notes synchronization.
-
-Displays whether the notes ref exists, if fetch is configured for the
-remote, and the current entry count.
-
-Examples:
-  timbers notes status                   # Check status for origin
-  timbers notes status --remote upstream # Check status for upstream
-  timbers notes status --json            # Output as JSON`,
+		Long:  `Show timbers notes sync state: ref existence, fetch configuration, and entry count.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runNotesStatus(cmd, remote)
 		},
@@ -341,10 +323,9 @@ func gatherNotesStatus(remote string) (*notesStatusResult, error) {
 
 // printHumanNotesStatus outputs notes status in human-readable format.
 func printHumanNotesStatus(printer *output.Printer, status *notesStatusResult) {
-	printer.Println("Notes Sync Status")
-	printer.Println("-----------------")
-	printer.Print("  Remote:     %s\n", status.Remote)
-	printer.Print("  Ref exists: %s\n", formatBool(status.RefExists))
-	printer.Print("  Configured: %s\n", formatBool(status.Configured))
-	printer.Print("  Entries:    %d\n", status.EntryCount)
+	printer.Section("Notes Sync Status")
+	printer.KeyValue("Remote", status.Remote)
+	printer.KeyValue("Ref exists", formatBool(status.RefExists))
+	printer.KeyValue("Configured", formatBool(status.Configured))
+	printer.KeyValue("Entries", strconv.Itoa(status.EntryCount))
 }

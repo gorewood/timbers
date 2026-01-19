@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/rbergman/timbers/internal/git"
 	"github.com/rbergman/timbers/internal/output"
 	"github.com/spf13/cobra"
@@ -159,51 +160,52 @@ func outputDryRunJSON(printer *output.Printer, result *uninstallResult, includeB
 }
 
 func outputDryRunHuman(printer *output.Printer, result *uninstallResult, includeBinary bool) {
-	printer.Println("Dry run: Would perform the following actions:")
+	styles := uninstallStyles(printer.IsTTY())
+	printer.Println(styles.warning.Render("Dry run: Would perform the following actions:"))
 	printer.Println()
 
 	switch {
 	case !result.InRepo:
-		printer.Println("  (Not in a git repository - nothing to remove)")
+		printer.Println(styles.dim.Render("  (Not in a git repository - nothing to remove)"))
 	case !result.NotesRefRemoved && len(result.ConfigsRemoved) == 0:
-		printer.Println("  (No timbers data found in this repository)")
+		printer.Println(styles.dim.Render("  (No timbers data found in this repository)"))
 	default:
 		if result.NotesRefRemoved {
-			printer.Println("  Remove notes ref: refs/notes/timbers")
+			printer.Println(styles.bullet.Render("  - ") + "Remove notes ref: refs/notes/timbers")
 		}
 		for _, remote := range result.ConfigsRemoved {
-			printer.Print("  Remove notes config for remote: %s\n", remote)
+			printer.Println(styles.bullet.Render("  - ") + "Remove notes config for remote: " + remote)
 		}
 	}
 
 	if includeBinary {
-		printer.Print("  Remove binary: %s\n", result.BinaryPath)
+		printer.Println(styles.bullet.Render("  - ") + "Remove binary: " + result.BinaryPath)
 	}
 }
 
 // confirmUninstall prompts the user for confirmation.
 func confirmUninstall(cmd *cobra.Command, result *uninstallResult, includeBinary bool) bool {
 	printer := output.NewPrinter(cmd.OutOrStdout(), false, output.IsTTY(cmd.OutOrStdout()))
+	styles := uninstallStyles(printer.IsTTY())
 
-	printer.Println("This will remove:")
+	printer.Println(styles.warning.Render("This will permanently remove:"))
+	printer.Println()
 
 	if result.InRepo {
 		if result.NotesRefRemoved {
-			printer.Println("  Notes ref: refs/notes/timbers")
+			printer.Println(styles.bullet.Render("  - ") + "Notes ref: refs/notes/timbers")
 		}
-		if len(result.ConfigsRemoved) > 0 {
-			for _, remote := range result.ConfigsRemoved {
-				printer.Print("  Notes config for remote: %s\n", remote)
-			}
+		for _, remote := range result.ConfigsRemoved {
+			printer.Println(styles.bullet.Render("  - ") + "Notes config for remote: " + remote)
 		}
 	}
 
 	if includeBinary {
-		printer.Print("  Binary: %s\n", result.BinaryPath)
+		printer.Println(styles.bullet.Render("  - ") + "Binary: " + result.BinaryPath)
 	}
 
 	printer.Println()
-	printer.Print("Continue? [y/N]: ")
+	printer.Print("%s", styles.warning.Render("Continue? [y/N]: "))
 
 	reader := bufio.NewReader(cmd.InOrStdin())
 	response, err := reader.ReadString('\n')
@@ -256,37 +258,20 @@ func performUninstallOperations(result *uninstallResult, includeBinary bool) []s
 	return errors
 }
 
-func reportUninstallResult(printer *output.Printer, result *uninstallResult, includeBinary bool, errors []string) error {
-	if len(errors) > 0 {
-		return reportPartialUninstall(printer, result, includeBinary, errors)
-	}
-	return reportSuccessfulUninstall(printer, result, includeBinary)
-}
-
-func reportPartialUninstall(printer *output.Printer, result *uninstallResult, includeBinary bool, errors []string) error {
+func reportUninstallResult(printer *output.Printer, result *uninstallResult, includeBinary bool, errs []string) error {
 	if jsonFlag {
+		status := "ok"
+		if len(errs) > 0 {
+			status = "partial"
+		}
 		data := map[string]any{
-			"status":          "partial",
+			"status":          status,
 			"notes_removed":   result.NotesRefRemoved,
 			"configs_removed": result.ConfigsRemoved,
-			"errors":          errors,
-			"recovery_hint":   "Some components could not be removed. Check permissions and try again.",
 		}
-		if includeBinary {
-			data["binary_removed"] = result.BinaryRemoved
-		}
-		return printer.Success(data)
-	}
-	printer.Print("Warning: uninstall completed with errors: %s\n", strings.Join(errors, "; "))
-	return nil
-}
-
-func reportSuccessfulUninstall(printer *output.Printer, result *uninstallResult, includeBinary bool) error {
-	if jsonFlag {
-		data := map[string]any{
-			"status":          "ok",
-			"notes_removed":   result.NotesRefRemoved,
-			"configs_removed": result.ConfigsRemoved,
+		if len(errs) > 0 {
+			data["errors"] = errs
+			data["recovery_hint"] = "Some components could not be removed. Check permissions and try again."
 		}
 		if includeBinary {
 			data["binary_removed"] = result.BinaryRemoved
@@ -294,11 +279,16 @@ func reportSuccessfulUninstall(printer *output.Printer, result *uninstallResult,
 		return printer.Success(data)
 	}
 
+	styles := uninstallStyles(printer.IsTTY())
+	if len(errs) > 0 {
+		printer.Println(styles.warning.Render("Uninstall completed with errors: " + strings.Join(errs, "; ")))
+		return nil
+	}
+	msg := "Timbers removed from this repository."
 	if includeBinary {
-		printer.Println("Timbers uninstalled successfully (including binary).")
-	} else {
-		printer.Println("Timbers removed from this repository.")
+		msg = "Timbers uninstalled successfully (including binary)."
 	}
+	printer.Println(styles.success.Render(msg))
 	return nil
 }
 
@@ -330,4 +320,18 @@ func removeNotesConfig(remote string) error {
 	}
 
 	return nil
+}
+
+type uninstallStyleSet struct{ warning, success, dim, bullet lipgloss.Style }
+
+func uninstallStyles(isTTY bool) uninstallStyleSet {
+	if !isTTY {
+		return uninstallStyleSet{}
+	}
+	return uninstallStyleSet{
+		warning: lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
+		success: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
+		dim:     lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+		bullet:  lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
+	}
 }

@@ -215,7 +215,7 @@ func TestLogCommand(t *testing.T) {
 			}(),
 			args:         []string{"Test feature", "--why", "Testing", "--how", "Test code", "--dry-run"},
 			wantErr:      false,
-			wantContains: []string{"Dry run", "Test feature", "Testing", "Test code"},
+			wantContains: []string{"Dry Run Preview", "Test feature", "Testing", "Test code"},
 			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
 				if len(mock.writtenNotes) != 0 {
 					t.Errorf("expected no notes written in dry-run mode, got %d", len(mock.writtenNotes))
@@ -801,7 +801,7 @@ func TestLogCommandAutoMode(t *testing.T) {
 			}(),
 			args:         []string{"--auto", "--dry-run"},
 			wantErr:      false,
-			wantContains: []string{"Dry run", "Preview this", "Auto-documented"},
+			wantContains: []string{"Dry Run Preview", "Preview this", "Auto-documented"},
 			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
 				if len(mock.writtenNotes) != 0 {
 					t.Errorf("expected no notes in dry-run mode, got %d", len(mock.writtenNotes))

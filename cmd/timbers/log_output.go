@@ -2,6 +2,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -18,19 +19,14 @@ func outputDryRun(printer *output.Printer, entry *ledger.Entry) error {
 		})
 	}
 
-	printer.Println("Dry run - would create entry:")
-	printer.Println()
-	printer.Print("  ID:     %s\n", entry.ID)
-	printer.Print("  Anchor: %s\n", entry.Workset.AnchorCommit)
-	printer.Print("  What:   %s\n", entry.Summary.What)
-	printer.Print("  Why:    %s\n", entry.Summary.Why)
-	printer.Print("  How:    %s\n", entry.Summary.How)
+	printer.Section("Dry Run Preview")
+	printer.KeyValue("ID", entry.ID)
+	printer.KeyValue("Anchor", entry.Workset.AnchorCommit)
+	printer.KeyValue("What", entry.Summary.What)
+	printer.KeyValue("Why", entry.Summary.Why)
+	printer.KeyValue("How", entry.Summary.How)
 	outputDryRunOptionalFields(printer, entry)
-	printer.Print("  Files:  %d changed, +%d -%d\n",
-		entry.Workset.Diffstat.Files,
-		entry.Workset.Diffstat.Insertions,
-		entry.Workset.Diffstat.Deletions)
-	printer.Println()
+	printer.KeyValue("Files", formatDiffstat(entry.Workset.Diffstat))
 
 	return nil
 }
@@ -38,15 +34,23 @@ func outputDryRun(printer *output.Printer, entry *ledger.Entry) error {
 // outputDryRunOptionalFields outputs optional entry fields in dry-run mode.
 func outputDryRunOptionalFields(printer *output.Printer, entry *ledger.Entry) {
 	if len(entry.Tags) > 0 {
-		printer.Print("  Tags:   %s\n", strings.Join(entry.Tags, ", "))
+		printer.KeyValue("Tags", strings.Join(entry.Tags, ", "))
 	}
 	if len(entry.WorkItems) > 0 {
 		items := make([]string, len(entry.WorkItems))
 		for i, wi := range entry.WorkItems {
 			items[i] = wi.System + ":" + wi.ID
 		}
-		printer.Print("  Work:   %s\n", strings.Join(items, ", "))
+		printer.KeyValue("Work", strings.Join(items, ", "))
 	}
+}
+
+// formatDiffstat formats a diffstat as a human-readable string.
+func formatDiffstat(ds *ledger.Diffstat) string {
+	if ds == nil {
+		return "0 changed"
+	}
+	return fmt.Sprintf("%d changed, +%d -%d", ds.Files, ds.Insertions, ds.Deletions)
 }
 
 // outputLogSuccess outputs the success result.
@@ -66,8 +70,8 @@ func outputLogSuccess(printer *output.Printer, entry *ledger.Entry, pushedMsg st
 		})
 	}
 
-	printer.Print("Created entry %s%s\n", entry.ID, pushedMsg)
-	printer.Print("  %s\n", entry.Summary.What)
+	_ = printer.Success(map[string]any{"message": "Created entry " + entry.ID + pushedMsg})
+	printer.Println("  " + entry.Summary.What)
 
 	return nil
 }
