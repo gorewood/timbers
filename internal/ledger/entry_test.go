@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -426,6 +427,57 @@ func TestFromJSON_EmptyInput(t *testing.T) {
 	_, err := FromJSON([]byte{})
 	if err == nil {
 		t.Error("FromJSON() expected error for empty input")
+	}
+}
+
+func TestFromJSON_NotTimbersSchema(t *testing.T) {
+	tests := []struct {
+		name    string
+		json    string
+		wantErr error
+	}{
+		{
+			name:    "different schema prefix",
+			json:    `{"schema": "other.schema/v1", "kind": "entry", "id": "test"}`,
+			wantErr: ErrNotTimbersNote,
+		},
+		{
+			name:    "empty schema",
+			json:    `{"schema": "", "kind": "entry", "id": "test"}`,
+			wantErr: ErrNotTimbersNote,
+		},
+		{
+			name:    "missing schema field",
+			json:    `{"kind": "entry", "id": "test"}`,
+			wantErr: ErrNotTimbersNote,
+		},
+		{
+			name:    "valid timbers schema",
+			json:    `{"schema": "timbers.devlog/v1", "kind": "entry", "id": "test"}`,
+			wantErr: nil,
+		},
+		{
+			name:    "future timbers schema version",
+			json:    `{"schema": "timbers.devlog/v2", "kind": "entry", "id": "test"}`,
+			wantErr: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := FromJSON([]byte(tt.json))
+			if tt.wantErr != nil {
+				if err == nil {
+					t.Error("FromJSON() expected error, got nil")
+					return
+				}
+				if !errors.Is(err, tt.wantErr) {
+					t.Errorf("FromJSON() error = %v, want %v", err, tt.wantErr)
+				}
+			} else if err != nil {
+				t.Errorf("FromJSON() unexpected error = %v", err)
+			}
+		})
 	}
 }
 

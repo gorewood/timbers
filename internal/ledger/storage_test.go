@@ -573,8 +573,142 @@ func TestGetPendingCommits(t *testing.T) {
 	}
 }
 
+// --- ListEntriesWithStats Tests ---
+
+func TestListEntriesWithStats(t *testing.T) {
+	tests := []struct {
+		name        string
+		setupMock   func(*mockGitOps)
+		wantEntries int
+		wantStats   *ListStats
+		wantErr     bool
+	}{
+		{
+			name: "all valid timbers entries",
+			setupMock: func(mock *mockGitOps) {
+				e1 := makeTestEntry("commit1aaa", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+				e2 := makeTestEntry("commit2bbb", time.Date(2026, 1, 15, 11, 0, 0, 0, time.UTC))
+				d1, _ := e1.ToJSON()
+				d2, _ := e2.ToJSON()
+				mock.notes["commit1aaa"] = d1
+				mock.notes["commit2bbb"] = d2
+				mock.notedCommits = []string{"commit1aaa", "commit2bbb"}
+			},
+			wantEntries: 2,
+			wantStats:   &ListStats{Total: 2, Parsed: 2, Skipped: 0, NotTimbers: 0, ParseErrors: 0},
+			wantErr:     false,
+		},
+		{
+			name: "mixed timbers and non-timbers notes",
+			setupMock: func(mock *mockGitOps) {
+				// Valid timbers entry
+				e1 := makeTestEntry("timberscommit", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+				d1, _ := e1.ToJSON()
+				mock.notes["timberscommit"] = d1
+
+				// Non-timbers JSON note (different schema)
+				mock.notes["othertoolcommit"] = []byte(`{"schema": "othertool/v1", "type": "annotation"}`)
+
+				// Invalid JSON note
+				mock.notes["badjsoncommit"] = []byte(`not valid json`)
+
+				mock.notedCommits = []string{"timberscommit", "othertoolcommit", "badjsoncommit"}
+			},
+			wantEntries: 1,
+			wantStats:   &ListStats{Total: 3, Parsed: 1, Skipped: 2, NotTimbers: 1, ParseErrors: 1},
+			wantErr:     false,
+		},
+		{
+			name: "only non-timbers notes",
+			setupMock: func(mock *mockGitOps) {
+				mock.notes["other1"] = []byte(`{"schema": "beads/v1", "id": "bd-123"}`)
+				mock.notes["other2"] = []byte(`{"type": "review-comment"}`)
+				mock.notedCommits = []string{"other1", "other2"}
+			},
+			wantEntries: 0,
+			wantStats:   &ListStats{Total: 2, Parsed: 0, Skipped: 2, NotTimbers: 2, ParseErrors: 0},
+			wantErr:     false,
+		},
+		{
+			name: "empty notes",
+			setupMock: func(mock *mockGitOps) {
+				mock.notedCommits = []string{}
+			},
+			wantEntries: 0,
+			wantStats:   &ListStats{Total: 0, Parsed: 0, Skipped: 0, NotTimbers: 0, ParseErrors: 0},
+			wantErr:     false,
+		},
+		{
+			name: "list error propagates",
+			setupMock: func(mock *mockGitOps) {
+				mock.listNotesErr = output.NewSystemError("git notes list failed")
+			},
+			wantEntries: 0,
+			wantStats:   nil,
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := newMockGitOps()
+			tt.setupMock(mock)
+			store := NewStorage(mock)
+
+			entries, stats, err := store.ListEntriesWithStats()
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if len(entries) != tt.wantEntries {
+				t.Errorf("got %d entries, want %d", len(entries), tt.wantEntries)
+			}
+
+			if stats.Total != tt.wantStats.Total {
+				t.Errorf("stats.Total = %d, want %d", stats.Total, tt.wantStats.Total)
+			}
+			if stats.Parsed != tt.wantStats.Parsed {
+				t.Errorf("stats.Parsed = %d, want %d", stats.Parsed, tt.wantStats.Parsed)
+			}
+			if stats.Skipped != tt.wantStats.Skipped {
+				t.Errorf("stats.Skipped = %d, want %d", stats.Skipped, tt.wantStats.Skipped)
+			}
+			if stats.NotTimbers != tt.wantStats.NotTimbers {
+				t.Errorf("stats.NotTimbers = %d, want %d", stats.NotTimbers, tt.wantStats.NotTimbers)
+			}
+			if stats.ParseErrors != tt.wantStats.ParseErrors {
+				t.Errorf("stats.ParseErrors = %d, want %d", stats.ParseErrors, tt.wantStats.ParseErrors)
+			}
+		})
+	}
+}
+
+func TestReadEntry_NotTimbersNote(t *testing.T) {
+	mock := newMockGitOps()
+	// Add a note with a non-timbers schema
+	mock.notes["othercommit"] = []byte(`{"schema": "other.tool/v1", "type": "annotation"}`)
+
+	store := NewStorage(mock)
+
+	_, err := store.ReadEntry("othercommit")
+	if err == nil {
+		t.Error("expected error, got nil")
+		return
+	}
+
+	if !errors.Is(err, ErrNotTimbersNote) {
+		t.Errorf("expected ErrNotTimbersNote, got %v", err)
+	}
+}
+
 // Ensure our mock satisfies the interface (compile-time check).
 var _ GitOps = (*mockGitOps)(nil)
-
-// Suppress unused import warning.
-var _ = errors.New

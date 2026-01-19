@@ -12,6 +12,15 @@ import (
 // ErrNoEntries is returned when no ledger entries exist.
 var ErrNoEntries = errors.New("no ledger entries found")
 
+// ListStats contains statistics about listing entries.
+type ListStats struct {
+	Total       int // Total notes found
+	Parsed      int // Successfully parsed as timbers entries
+	Skipped     int // Skipped (not timbers notes or parse errors)
+	NotTimbers  int // Specifically: valid JSON but wrong schema
+	ParseErrors int // JSON parse failures
+}
+
 // GitOps defines the git operations required by Storage.
 // This allows injection of mock implementations for testing.
 type GitOps interface {
@@ -75,6 +84,7 @@ func NewStorage(ops GitOps) *Storage {
 
 // ReadEntry reads the entry attached to the given anchor commit.
 // Returns a user error (exit code 1) if the entry is not found.
+// Returns ErrNotTimbersNote if the note is valid JSON but not a timbers entry.
 // Returns a user error if the note content cannot be parsed as an Entry.
 func (s *Storage) ReadEntry(anchor string) (*Entry, error) {
 	data, err := s.git.ReadNote(anchor)
@@ -84,6 +94,10 @@ func (s *Storage) ReadEntry(anchor string) (*Entry, error) {
 
 	entry, err := FromJSON(data)
 	if err != nil {
+		// Preserve ErrNotTimbersNote for callers that need to distinguish
+		if errors.Is(err, ErrNotTimbersNote) {
+			return nil, err
+		}
 		return nil, output.NewUserError("failed to parse entry: " + err.Error())
 	}
 
@@ -94,22 +108,37 @@ func (s *Storage) ReadEntry(anchor string) (*Entry, error) {
 // Entries with parse errors are skipped (logged but not returned).
 // Returns an empty slice if no entries exist.
 func (s *Storage) ListEntries() ([]*Entry, error) {
+	entries, _, err := s.ListEntriesWithStats()
+	return entries, err
+}
+
+// ListEntriesWithStats returns all entries plus statistics about skipped notes.
+// This is useful for transparency when the notes namespace contains non-timbers data.
+func (s *Storage) ListEntriesWithStats() ([]*Entry, *ListStats, error) {
 	commits, err := s.git.ListNotedCommits()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
+	stats := &ListStats{Total: len(commits)}
 	var entries []*Entry
+
 	for _, commit := range commits {
-		entry, err := s.ReadEntry(commit)
-		if err != nil {
-			// Skip entries with parse errors
+		entry, readErr := s.ReadEntry(commit)
+		if readErr != nil {
+			stats.Skipped++
+			if errors.Is(readErr, ErrNotTimbersNote) {
+				stats.NotTimbers++
+			} else {
+				stats.ParseErrors++
+			}
 			continue
 		}
 		entries = append(entries, entry)
+		stats.Parsed++
 	}
 
-	return entries, nil
+	return entries, stats, nil
 }
 
 // GetLatestEntry returns the entry with the most recent created_at timestamp.

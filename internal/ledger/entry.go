@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+// ErrNotTimbersNote indicates the note is valid JSON but not a timbers entry.
+var ErrNotTimbersNote = errors.New("not a timbers note")
+
 // SchemaVersion is the current schema version for timbers entries.
 const SchemaVersion = "timbers.devlog/v1"
 
@@ -171,6 +174,7 @@ func (e *Entry) ToJSON() ([]byte, error) {
 }
 
 // FromJSON deserializes an entry from JSON.
+// Returns ErrNotTimbersNote if the JSON is valid but doesn't have the timbers schema.
 func FromJSON(data []byte) (*Entry, error) {
 	if len(data) == 0 {
 		return nil, errors.New("empty JSON data")
@@ -179,6 +183,11 @@ func FromJSON(data []byte) (*Entry, error) {
 	var entry Entry
 	if err := json.Unmarshal(data, &entry); err != nil {
 		return nil, fmt.Errorf("parsing entry JSON: %w", err)
+	}
+
+	// Validate this is a timbers note by checking schema prefix
+	if !strings.HasPrefix(entry.Schema, "timbers.devlog/") {
+		return nil, ErrNotTimbersNote
 	}
 
 	return &entry, nil

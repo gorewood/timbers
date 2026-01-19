@@ -2,10 +2,12 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"strconv"
 
 	"github.com/rbergman/timbers/internal/git"
+	"github.com/rbergman/timbers/internal/ledger"
 	"github.com/rbergman/timbers/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -18,7 +20,13 @@ type statusResult struct {
 	NotesRef        string `json:"notes_ref"`
 	NotesConfigured bool   `json:"notes_configured"`
 	EntryCount      int    `json:"entry_count"`
+	NotesTotal      int    `json:"notes_total,omitempty"`
+	NotesSkipped    int    `json:"notes_skipped,omitempty"`
+	NotTimbers      int    `json:"not_timbers,omitempty"`
+	ParseErrors     int    `json:"parse_errors,omitempty"`
 }
+
+var verboseFlag bool
 
 // newStatusCmd creates the status command.
 func newStatusCmd() *cobra.Command {
@@ -31,10 +39,12 @@ Displays repository info (name, branch, HEAD), notes ref status, whether
 notes fetch is configured for the remote, and total entry count.
 
 Examples:
-  timbers status         # Show human-readable status
-  timbers status --json  # Output status as JSON for scripting`,
+  timbers status            # Show human-readable status
+  timbers status --verbose  # Show detailed notes statistics
+  timbers status --json     # Output status as JSON for scripting`,
 		RunE: runStatus,
 	}
+	cmd.Flags().BoolVarP(&verboseFlag, "verbose", "v", false, "Show detailed notes statistics")
 	return cmd
 }
 
@@ -50,7 +60,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Gather status information
-	result, err := gatherStatus()
+	result, err := gatherStatus(verboseFlag)
 	if err != nil {
 		printer.Error(err)
 		return err
@@ -66,6 +76,13 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 			"notes_configured": result.NotesConfigured,
 			"entry_count":      result.EntryCount,
 		}
+		// Add verbose stats if present
+		if verboseFlag {
+			data["notes_total"] = result.NotesTotal
+			data["notes_skipped"] = result.NotesSkipped
+			data["not_timbers"] = result.NotTimbers
+			data["parse_errors"] = result.ParseErrors
+		}
 		// Add suggested commands based on state
 		var suggestions []string
 		if !result.NotesConfigured {
@@ -77,12 +94,12 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Human-readable output
-	printHumanStatus(printer, result)
+	printHumanStatus(printer, result, verboseFlag)
 	return nil
 }
 
 // gatherStatus collects all status information.
-func gatherStatus() (*statusResult, error) {
+func gatherStatus(verbose bool) (*statusResult, error) {
 	// Get repo root and extract name
 	root, err := git.RepoRoot()
 	if err != nil {
@@ -105,24 +122,40 @@ func gatherStatus() (*statusResult, error) {
 	// Check notes configuration
 	notesConfigured := git.NotesConfigured("origin")
 
-	// Count entries (commits with notes)
-	commits, err := git.ListNotedCommits()
-	if err != nil {
-		return nil, err
-	}
-
-	return &statusResult{
+	result := &statusResult{
 		Repo:            repoName,
 		Branch:          branch,
 		Head:            head,
 		NotesRef:        "refs/notes/timbers",
 		NotesConfigured: notesConfigured,
-		EntryCount:      len(commits),
-	}, nil
+	}
+
+	// Get entry count with stats if verbose
+	if verbose {
+		store := ledger.NewStorage(nil)
+		entries, stats, statsErr := store.ListEntriesWithStats()
+		if statsErr != nil {
+			return nil, statsErr
+		}
+		result.EntryCount = len(entries)
+		result.NotesTotal = stats.Total
+		result.NotesSkipped = stats.Skipped
+		result.NotTimbers = stats.NotTimbers
+		result.ParseErrors = stats.ParseErrors
+	} else {
+		// Simple count (commits with notes)
+		commits, listErr := git.ListNotedCommits()
+		if listErr != nil {
+			return nil, listErr
+		}
+		result.EntryCount = len(commits)
+	}
+
+	return result, nil
 }
 
 // printHumanStatus outputs status in human-readable format.
-func printHumanStatus(printer *output.Printer, status *statusResult) {
+func printHumanStatus(printer *output.Printer, status *statusResult, verbose bool) {
 	printer.Section("Repository")
 	printer.KeyValue("Repo", status.Repo)
 	printer.KeyValue("Branch", status.Branch)
@@ -131,7 +164,18 @@ func printHumanStatus(printer *output.Printer, status *statusResult) {
 	printer.Section("Timbers Notes")
 	printer.KeyValue("Ref", status.NotesRef)
 	printer.KeyValue("Configured", formatBool(status.NotesConfigured))
-	printer.KeyValue("Entries", strconv.Itoa(status.EntryCount))
+
+	if verbose {
+		printer.KeyValue("Notes Total", strconv.Itoa(status.NotesTotal))
+		printer.KeyValue("Entries", strconv.Itoa(status.EntryCount))
+		if status.NotesSkipped > 0 {
+			skippedStr := fmt.Sprintf("%d (%d not timbers, %d parse error)",
+				status.NotesSkipped, status.NotTimbers, status.ParseErrors)
+			printer.KeyValue("Skipped", skippedStr)
+		}
+	} else {
+		printer.KeyValue("Entries", strconv.Itoa(status.EntryCount))
+	}
 }
 
 // formatBool returns a human-readable boolean string.
