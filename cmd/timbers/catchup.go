@@ -24,6 +24,7 @@ type catchupFlags struct {
 	dryRun    bool
 	push      bool
 	tags      []string
+	groupBy   string
 }
 
 type catchupResult struct {
@@ -57,6 +58,8 @@ Examples:
   timbers catchup --model haiku --dry-run    # Preview without writing
   timbers catchup --model haiku --parallel 10
   timbers catchup --model haiku --limit 5    # Generate at most 5 entries
+  timbers catchup --model haiku --group-by day        # Group by day only
+  timbers catchup --model haiku --group-by work-item  # Group by work-item trailer
 
 Environment variables:
   ANTHROPIC_API_KEY  Required for Anthropic models (haiku, sonnet, opus)
@@ -75,6 +78,7 @@ Environment variables:
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Preview entries without writing")
 	cmd.Flags().BoolVar(&flags.push, "push", false, "Push notes after creating entries")
 	cmd.Flags().StringSliceVar(&flags.tags, "tag", nil, "Tags to add to all entries")
+	cmd.Flags().StringVarP(&flags.groupBy, "group-by", "g", "auto", "Grouping strategy: auto, day, work-item")
 
 	return cmd
 }
@@ -89,6 +93,12 @@ func validateCatchupFlags(flags catchupFlags) error {
 	}
 	if flags.limit < 0 {
 		return output.NewUserError("limit must be non-negative, got " + strconv.Itoa(flags.limit))
+	}
+	switch flags.groupBy {
+	case "auto", "day", "work-item":
+		// valid
+	default:
+		return output.NewUserError("group-by must be auto, day, or work-item; got " + flags.groupBy)
 	}
 	return nil
 }
@@ -120,7 +130,7 @@ func runCatchup(cmd *cobra.Command, flags catchupFlags) error {
 		return err
 	}
 
-	groups := groupCommits(commits)
+	groups := groupCommitsByStrategy(commits, GroupStrategy(flags.groupBy))
 	if len(groups) == 0 {
 		err := output.NewUserError("no groups found for processing")
 		printer.Error(err)
@@ -256,26 +266,12 @@ Rules: Be concise (<100 chars each). Use active voice. Infer reason if unclear.`
 
 func buildCatchupPrompt(group commitGroup) string {
 	var b strings.Builder
-	b.WriteString("Group: ")
-	b.WriteString(group.key)
-	b.WriteString("\nCommits: ")
-	b.WriteString(strconv.Itoa(len(group.commits)))
-	b.WriteString("\n\n")
-
-	for idx, commit := range group.commits {
-		b.WriteString("--- Commit ")
-		b.WriteString(strconv.Itoa(idx + 1))
-		b.WriteString(" ---\nSHA: ")
-		b.WriteString(commit.Short)
-		b.WriteString("\nDate: ")
-		b.WriteString(commit.Date.Format("2006-01-02 15:04"))
-		b.WriteString("\nSubject: ")
-		b.WriteString(commit.Subject)
-		b.WriteString("\n")
-		if commit.Body != "" {
-			b.WriteString("Body:\n")
-			b.WriteString(commit.Body)
-			b.WriteString("\n")
+	b.WriteString("Group: " + group.key + "\nCommits: " + strconv.Itoa(len(group.commits)) + "\n\n")
+	for idx, c := range group.commits {
+		b.WriteString("--- Commit " + strconv.Itoa(idx+1) + " ---\nSHA: " + c.Short)
+		b.WriteString("\nDate: " + c.Date.Format("2006-01-02 15:04") + "\nSubject: " + c.Subject + "\n")
+		if c.Body != "" {
+			b.WriteString("Body:\n" + c.Body + "\n")
 		}
 		b.WriteString("\n")
 	}
@@ -342,9 +338,8 @@ func outputCatchupResult(printer *output.Printer, entries []catchupEntryRef, fla
 		printer.Print("Created %d entries:\n\n", len(entries))
 	}
 	for _, e := range entries {
-		printer.Print("  %s [%s]\n", e.ID, e.GroupKey)
-		printer.Print("    What: %s\n    Why:  %s\n    How:  %s\n\n",
-			truncateString(e.What, 70), truncateString(e.Why, 70), truncateString(e.How, 70))
+		printer.Print("  %s [%s]\n    What: %s\n    Why:  %s\n    How:  %s\n\n",
+			e.ID, e.GroupKey, truncateString(e.What, 70), truncateString(e.Why, 70), truncateString(e.How, 70))
 	}
 	return nil
 }

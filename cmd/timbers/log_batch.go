@@ -78,16 +78,34 @@ func getBatchCommits(storage *ledger.Storage, flags logFlags) ([]git.Commit, err
 	return commits, err
 }
 
-// groupCommits groups commits by work-item trailer, falling back to day grouping.
-func groupCommits(commits []git.Commit) []commitGroup {
-	// First try to group by work-item trailer
-	trailerGroups := groupCommitsByTrailer(commits)
-	if len(trailerGroups) > 0 {
-		return trailerGroups
-	}
+// GroupStrategy defines how commits are grouped: auto, day, or work-item.
+type GroupStrategy string
 
-	// Fall back to grouping by day
-	return groupCommitsByDay(commits)
+const (
+	GroupStrategyAuto     GroupStrategy = "auto"      // work-item first, fallback to day
+	GroupStrategyDay      GroupStrategy = "day"       // group by YYYY-MM-DD
+	GroupStrategyWorkItem GroupStrategy = "work-item" // group by Work-item trailer
+)
+
+// groupCommits groups commits using auto strategy (work-item first, fallback to day).
+func groupCommits(commits []git.Commit) []commitGroup {
+	return groupCommitsByStrategy(commits, GroupStrategyAuto)
+}
+
+// groupCommitsByStrategy groups commits using the specified strategy.
+func groupCommitsByStrategy(commits []git.Commit, strategy GroupStrategy) []commitGroup {
+	switch strategy {
+	case GroupStrategyDay:
+		return groupCommitsByDay(commits)
+	case GroupStrategyWorkItem:
+		return groupCommitsByTrailer(commits)
+	case GroupStrategyAuto:
+		if groups := groupCommitsByTrailer(commits); len(groups) > 0 {
+			return groups
+		}
+		return groupCommitsByDay(commits)
+	}
+	return nil // unreachable with valid strategy
 }
 
 // groupCommitsByTrailer groups commits by Work-item trailer found in commit body.
@@ -119,7 +137,6 @@ func groupCommitsByTrailer(commits []git.Commit) []commitGroup {
 }
 
 // extractWorkItemTrailer extracts the Work-item trailer value from a commit body.
-// Returns empty string if no trailer found.
 func extractWorkItemTrailer(body string) string {
 	for line := range strings.SplitSeq(body, "\n") {
 		line = strings.TrimSpace(line)
@@ -143,23 +160,13 @@ func groupCommitsByDay(commits []git.Commit) []commitGroup {
 	return mapToSortedGroups(groups)
 }
 
-// mapToSortedGroups converts a map of groups to a sorted slice.
-// Groups are sorted by key in reverse order (most recent/highest first).
+// mapToSortedGroups converts a map of groups to a sorted slice (newest/highest keys first).
 func mapToSortedGroups(groups map[string][]git.Commit) []commitGroup {
 	result := make([]commitGroup, 0, len(groups))
-
 	for key, groupCommits := range groups {
-		result = append(result, commitGroup{
-			key:     key,
-			commits: groupCommits,
-		})
+		result = append(result, commitGroup{key: key, commits: groupCommits})
 	}
-
-	// Sort by key in reverse order (so newest dates or alphabetically last items come first)
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].key > result[j].key
-	})
-
+	sort.Slice(result, func(i, j int) bool { return result[i].key > result[j].key })
 	return result
 }
 
