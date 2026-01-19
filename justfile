@@ -99,6 +99,22 @@ watch:
     watchexec -e go -- just build
 
 # =============================================================================
+# REPORTING
+# =============================================================================
+
+# Generate a report using timbers prompt + claude
+# Usage: just prompt changelog --since 7d
+#        just prompt exec-summary --last 10
+# Model defaults to haiku; override with: just prompt-model sonnet changelog --since 7d
+prompt +args:
+    @claude -p --model haiku "$(go run ./cmd/timbers prompt {{args}})"
+
+# Generate a report with specific model
+# Usage: just prompt-model sonnet devblog-opensource --last 20
+prompt-model model +args:
+    @claude -p --model {{model}} "$(go run ./cmd/timbers prompt {{args}})"
+
+# =============================================================================
 # CLEANUP
 # =============================================================================
 
