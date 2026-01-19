@@ -2,6 +2,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 
 	"github.com/rbergman/timbers/internal/git"
@@ -9,6 +10,32 @@ import (
 	"github.com/rbergman/timbers/internal/output"
 	"github.com/spf13/cobra"
 )
+
+// defaultWorkflowContent is the default workflow instructions for agent onboarding.
+// This can be overridden by placing a .timbers/PRIME.md file in the repo root.
+const defaultWorkflowContent = `# Session Close Protocol
+- [ ] timbers pending (check for undocumented work)
+- [ ] timbers log "what" --why "why" --how "how" (document work)
+- [ ] timbers notes push (sync to remote)
+
+# Core Rules
+- Document work with what/why/how before session end
+- Use ` + "`timbers pending`" + ` to check for undocumented commits
+- Run ` + "`timbers notes push`" + ` to sync ledger to remote
+
+# Essential Commands
+### Recording Work
+- ` + "`timbers log \"what\" --why \"why\" --how \"how\"`" + ` - Record development work
+- ` + "`timbers pending`" + ` - Show undocumented commits
+
+### Querying
+- ` + "`timbers query --last 5`" + ` - Recent entries
+- ` + "`timbers show <id>`" + ` - Single entry details
+
+### Sync
+- ` + "`timbers notes push`" + ` - Push notes to remote
+- ` + "`timbers notes fetch`" + ` - Fetch notes from remote
+`
 
 // primeResult holds the data for prime output.
 type primeResult struct {
@@ -20,6 +47,7 @@ type primeResult struct {
 	EntryCount      int          `json:"entry_count"`
 	Pending         primePending `json:"pending"`
 	RecentEntries   []primeEntry `json:"recent_entries"`
+	Workflow        string       `json:"workflow"`
 }
 
 // primePending holds pending commit information.
@@ -44,6 +72,7 @@ func newPrimeCmd() *cobra.Command {
 // If storage is nil, a real storage is created when the command runs.
 func newPrimeCmdInternal(storage *ledger.Storage) *cobra.Command {
 	var lastFlag int
+	var exportFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "prime",
@@ -53,16 +82,25 @@ func newPrimeCmdInternal(storage *ledger.Storage) *cobra.Command {
 This command gathers repository info, recent ledger entries, and pending
 commits to give agents and developers a quick overview of the current state.
 
+Workflow instructions are included to guide agents through the session close
+protocol. These can be customized by creating .timbers/PRIME.md in the repo root.
+
 Examples:
   timbers prime              # Show session context with last 3 entries
   timbers prime --last 5     # Show session context with last 5 entries
-  timbers prime --json       # Output structured context as JSON`,
+  timbers prime --json       # Output structured context as JSON
+  timbers prime --export     # Output default workflow content for customization`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if exportFlag {
+				cmd.Print(defaultWorkflowContent)
+				return nil
+			}
 			return runPrime(cmd, storage, lastFlag)
 		},
 	}
 
 	cmd.Flags().IntVar(&lastFlag, "last", 3, "Number of recent entries to show")
+	cmd.Flags().BoolVar(&exportFlag, "export", false, "Output default workflow content for customization")
 
 	return cmd
 }
@@ -141,6 +179,9 @@ func gatherPrimeContext(storage *ledger.Storage, lastN int) (*primeResult, error
 		return nil, err
 	}
 
+	// Get workflow content (from override file or default)
+	workflow := loadWorkflowContent(root)
+
 	// Build result
 	result := &primeResult{
 		Repo:            repoName,
@@ -151,9 +192,20 @@ func gatherPrimeContext(storage *ledger.Storage, lastN int) (*primeResult, error
 		EntryCount:      len(allEntries),
 		Pending:         buildPrimePending(pendingCommits),
 		RecentEntries:   buildPrimeEntries(recentEntries),
+		Workflow:        workflow,
 	}
 
 	return result, nil
+}
+
+// loadWorkflowContent loads workflow content from .timbers/PRIME.md or returns default.
+func loadWorkflowContent(repoRoot string) string {
+	overridePath := filepath.Join(repoRoot, ".timbers", "PRIME.md")
+	data, err := os.ReadFile(overridePath)
+	if err != nil {
+		return defaultWorkflowContent
+	}
+	return string(data)
 }
 
 // buildPrimePending constructs the pending section from commits.
@@ -237,14 +289,6 @@ func outputPrimeHuman(printer *output.Printer, result *primeResult) {
 	}
 	printer.Println()
 
-	// Suggested commands
-	printer.Println("Suggested Commands")
-	printer.Println("------------------")
-	if result.Pending.Count > 0 {
-		printer.Println("  timbers pending          # See undocumented commits")
-		printer.Println("  timbers log \"...\" ...    # Document current work")
-	} else {
-		printer.Println("  timbers log \"...\" ...    # Document new work")
-	}
-	printer.Println("  timbers query --last 5   # Review recent entries")
+	// Workflow instructions
+	printer.Println(result.Workflow)
 }

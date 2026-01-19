@@ -77,7 +77,7 @@ func TestPrimeCommand(t *testing.T) {
 		wantErr        bool
 	}{
 		{
-			name: "no entries - shows pending commits",
+			name: "no entries - shows pending commits and workflow",
 			mock: &mockGitOpsForPrime{
 				head:  "abc123def456",
 				notes: map[string][]byte{},
@@ -87,7 +87,7 @@ func TestPrimeCommand(t *testing.T) {
 				},
 			},
 			lastN:        3,
-			wantContains: []string{"Timbers Session Context", "2 undocumented", "(no entries)", "timbers pending"},
+			wantContains: []string{"Timbers Session Context", "2 undocumented", "(no entries)", "Session Close Protocol", "Core Rules"},
 		},
 		{
 			name: "has entries and pending",
@@ -101,8 +101,11 @@ func TestPrimeCommand(t *testing.T) {
 					{SHA: "abc123def456", Short: "abc123d", Subject: "New commit"},
 				},
 			},
-			lastN:        3,
-			wantContains: []string{"Timbers Session Context", "Entries: 2", "1 undocumented commit", "Fixed bug", "Added feature"},
+			lastN: 3,
+			wantContains: []string{
+				"Timbers Session Context", "Entries: 2", "1 undocumented commit",
+				"Fixed bug", "Added feature", "Essential Commands",
+			},
 		},
 		{
 			name: "no pending commits",
@@ -113,9 +116,8 @@ func TestPrimeCommand(t *testing.T) {
 				},
 				commits: []git.Commit{},
 			},
-			lastN:          3,
-			wantContains:   []string{"all work documented", "Latest work"},
-			wantNotContain: []string{"timbers pending"},
+			lastN:        3,
+			wantContains: []string{"all work documented", "Latest work", "Session Close Protocol"},
 		},
 		{
 			name: "respects lastN flag",
@@ -133,7 +135,7 @@ func TestPrimeCommand(t *testing.T) {
 			wantNotContain: []string{"Middle", "Oldest"},
 		},
 		{
-			name: "json output - structured format",
+			name: "json output - structured format with workflow",
 			mock: &mockGitOpsForPrime{
 				head: "abc123def456",
 				notes: map[string][]byte{
@@ -145,7 +147,7 @@ func TestPrimeCommand(t *testing.T) {
 			},
 			lastN:        3,
 			jsonOutput:   true,
-			wantContains: []string{`"entry_count": 1`, `"pending":`, `"count": 1`, `"recent_entries":`},
+			wantContains: []string{`"entry_count": 1`, `"pending":`, `"count": 1`, `"recent_entries":`, `"workflow":`},
 		},
 		{
 			name: "json output - no entries",
@@ -158,7 +160,7 @@ func TestPrimeCommand(t *testing.T) {
 			},
 			lastN:        3,
 			jsonOutput:   true,
-			wantContains: []string{`"entry_count": 0`, `"recent_entries": []`},
+			wantContains: []string{`"entry_count": 0`, `"recent_entries": []`, `"workflow":`},
 		},
 	}
 
@@ -217,7 +219,10 @@ func TestPrimeCommand(t *testing.T) {
 					t.Errorf("failed to parse JSON output: %v\noutput: %s", parseErr, output)
 				}
 				// Verify required fields exist
-				requiredFields := []string{"repo", "branch", "head", "notes_ref", "notes_configured", "entry_count", "pending", "recent_entries"}
+				requiredFields := []string{
+					"repo", "branch", "head", "notes_ref", "notes_configured",
+					"entry_count", "pending", "recent_entries", "workflow",
+				}
 				for _, field := range requiredFields {
 					if _, ok := result[field]; !ok {
 						t.Errorf("JSON missing required field %q", field)
@@ -268,6 +273,7 @@ func TestPrimeResultJSON(t *testing.T) {
 		RecentEntries: []primeEntry{
 			{ID: "tb_2026-01-15T10:00:00Z_abc123", What: "Test entry", CreatedAt: "2026-01-15T10:00:00Z"},
 		},
+		Workflow: "# Test Workflow",
 	}
 
 	data, err := json.Marshal(result)
@@ -308,5 +314,51 @@ func TestPrimeResultJSON(t *testing.T) {
 	}
 	if len(recentEntries) != 1 {
 		t.Errorf("recent_entries length = %v, want 1", len(recentEntries))
+	}
+
+	workflow, ok := unmarshaled["workflow"].(string)
+	if !ok {
+		t.Fatalf("workflow is not a string")
+	}
+	if workflow != "# Test Workflow" {
+		t.Errorf("workflow = %v, want # Test Workflow", workflow)
+	}
+}
+
+func TestPrimeExportFlag(t *testing.T) {
+	cmd := newPrimeCmdInternal(nil)
+
+	// Set export flag
+	if err := cmd.Flags().Set("export", "true"); err != nil {
+		t.Fatalf("failed to set export flag: %v", err)
+	}
+
+	// Capture output
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	// Execute
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify it contains default workflow content
+	expectedParts := []string{
+		"Session Close Protocol",
+		"Core Rules",
+		"Essential Commands",
+		"timbers pending",
+		"timbers log",
+		"timbers notes push",
+	}
+
+	for _, want := range expectedParts {
+		if !strings.Contains(output, want) {
+			t.Errorf("export output missing expected content %q", want)
+		}
 	}
 }
