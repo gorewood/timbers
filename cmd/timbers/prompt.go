@@ -31,11 +31,13 @@ Templates are resolved in order:
   2. ~/.config/timbers/templates/<name>.md (user global)
   3. Built-in templates
 
+The -p flag makes Claude print to stdout and exit (vs interactive mode).
+
 Examples:
-  timbers prompt changelog --since 7d | claude
-  timbers prompt exec-summary --last 5 | llm
-  timbers prompt pr-description --range main..HEAD | claude
-  timbers prompt devblog-gamedev --last 10 --append "Focus on physics" | claude
+  timbers prompt changelog --since 7d | claude -p
+  timbers prompt exec-summary --last 5 | claude -p --model haiku
+  timbers prompt pr-description --range main..HEAD | claude -p
+  timbers prompt devblog-gamedev --last 10 --append "Focus on physics" | claude -p
 
   timbers prompt --list                    # List available templates
   timbers prompt changelog --show          # Show template content`,

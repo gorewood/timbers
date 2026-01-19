@@ -320,18 +320,27 @@ Built-in templates:
 
 ### Generate Reports
 
+The `-p` (print) flag makes Claude output to stdout and exit, rather than opening an interactive session:
+
 ```bash
 # Generate a changelog from last week's work
-timbers prompt changelog --since 7d | claude
+timbers prompt changelog --since 7d | claude -p
 
 # PR description for current branch
-timbers prompt pr-description --range main..HEAD | llm
+timbers prompt pr-description --range main..HEAD | claude -p
 
 # Executive summary of last 10 entries
-timbers prompt exec-summary --last 10 | claude
+timbers prompt exec-summary --last 10 | claude -p
 
 # Blog post with custom focus
-timbers prompt devblog-opensource --last 20 --append "Focus on the new plugin system" | claude
+timbers prompt devblog-opensource --last 20 --append "Focus on the new plugin system" | claude -p
+```
+
+**Shortcut with just:** If you're developing timbers itself, use the just recipes:
+
+```bash
+just prompt changelog --since 7d           # Uses haiku model by default
+just prompt-model sonnet devblog --last 20 # Specify a different model
 ```
 
 ### Preview Templates
@@ -367,7 +376,7 @@ EOF
 Then use it:
 
 ```bash
-timbers prompt weekly-standup --since 7d | claude
+timbers prompt weekly-standup --since 7d | claude -p
 ```
 
 Template resolution order:
@@ -410,7 +419,7 @@ timbers query --tags "auth,security"
 
 ```bash
 # Monthly changelog
-timbers prompt changelog --since 30d | claude > CHANGELOG-january.md
+timbers prompt changelog --since 30d | claude -p > CHANGELOG-january.md
 
 # Architecture decision records
 timbers query --tags architecture --json | \
@@ -440,7 +449,7 @@ timbers log "Debugged flaky test in CI" \
 
 # Weekly review
 timbers query --since 7d
-timbers prompt exec-summary --since 7d | claude
+timbers prompt exec-summary --since 7d | claude -p
 ```
 
 ---
@@ -532,7 +541,7 @@ Example: `tb_2026-01-15T10:30:00Z_abc123`
 
 1. **Start documenting** — Begin with `timbers log` after your next piece of work
 2. **Set up agent workflow** — Add `timbers prime` to your agent's session start
-3. **Explore templates** — Try `timbers prompt changelog --since 7d | claude`
+3. **Explore templates** — Try `timbers prompt changelog --since 7d | claude -p`
 4. **Customize** — Create `.timbers/PRIME.md` or custom templates for your project
 
 The goal is simple: capture *why* before it disappears.

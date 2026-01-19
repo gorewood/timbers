@@ -26,7 +26,7 @@ timbers log "Fixed auth bypass" \
 timbers pending
 
 # Generate reports from your ledger
-timbers prompt changelog --since 7d | claude
+timbers prompt changelog --since 7d | claude -p
 ```
 
 Each entry captures:
@@ -57,7 +57,7 @@ timbers query --last 10
 timbers query --since 7d --tags security
 
 # Generate LLM-ready reports
-timbers prompt changelog --since 7d | claude
+timbers prompt changelog --since 7d | claude -p
 timbers prompt pr-description --range main..HEAD | llm
 ```
 
@@ -92,7 +92,7 @@ All commands support `--json`. Write operations support `--dry-run`.
 
 When agents write code, humans need to stay in the loop without reading every line. Timbers enables:
 
-1. **Executive summaries**: `timbers prompt exec-summary --since 7d | claude` — understand a week of agent work in 5 bullets
+1. **Executive summaries**: `timbers prompt exec-summary --since 7d | claude -p` — understand a week of agent work in 5 bullets
 2. **Queryable decisions**: Find all security-related changes, all work on a feature, all decisions by a particular agent session
 3. **Onboarding acceleration**: New team members understand not just *what* the code does, but *why* it's shaped that way
 4. **Audit trail**: Track the reasoning behind changes for compliance, post-mortems, or when "the agent did something weird"
