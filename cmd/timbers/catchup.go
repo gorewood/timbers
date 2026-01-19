@@ -20,6 +20,7 @@ type catchupFlags struct {
 	batchSize int
 	rangeStr  string
 	parallel  int
+	limit     int
 	dryRun    bool
 	push      bool
 	tags      []string
@@ -55,6 +56,7 @@ Examples:
   timbers catchup --model haiku              # Catch up with default model
   timbers catchup --model haiku --dry-run    # Preview without writing
   timbers catchup --model haiku --parallel 10
+  timbers catchup --model haiku --limit 5    # Generate at most 5 entries
 
 Environment variables:
   ANTHROPIC_API_KEY  Required for Anthropic models (haiku, sonnet, opus)
@@ -69,6 +71,7 @@ Environment variables:
 	cmd.Flags().IntVar(&flags.batchSize, "batch-size", 20, "Max commits per LLM call")
 	cmd.Flags().StringVar(&flags.rangeStr, "range", "", "Specific commit range (A..B)")
 	cmd.Flags().IntVar(&flags.parallel, "parallel", 5, "Concurrent LLM calls")
+	cmd.Flags().IntVarP(&flags.limit, "limit", "l", 0, "Maximum entries to generate (0 = unlimited)")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Preview entries without writing")
 	cmd.Flags().BoolVar(&flags.push, "push", false, "Push notes after creating entries")
 	cmd.Flags().StringSliceVar(&flags.tags, "tag", nil, "Tags to add to all entries")
@@ -83,6 +86,9 @@ func validateCatchupFlags(flags catchupFlags) error {
 	}
 	if flags.batchSize <= 0 {
 		return output.NewUserError("batch-size must be positive, got " + strconv.Itoa(flags.batchSize))
+	}
+	if flags.limit < 0 {
+		return output.NewUserError("limit must be non-negative, got " + strconv.Itoa(flags.limit))
 	}
 	return nil
 }
@@ -119,6 +125,11 @@ func runCatchup(cmd *cobra.Command, flags catchupFlags) error {
 		err := output.NewUserError("no groups found for processing")
 		printer.Error(err)
 		return err
+	}
+
+	// Apply limit if specified (limits number of entries/groups, not commits)
+	if flags.limit > 0 && len(groups) > flags.limit {
+		groups = groups[:flags.limit]
 	}
 
 	client, err := llm.New(flags.model, llm.Provider(flags.provider))
