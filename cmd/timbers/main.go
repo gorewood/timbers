@@ -80,6 +80,7 @@ func addCommandGroups(cmd *cobra.Command) {
 	cmd.AddGroup(&cobra.Group{ID: "query", Title: "Query Commands:"})
 	cmd.AddGroup(&cobra.Group{ID: "sync", Title: "Sync Commands:"})
 	cmd.AddGroup(&cobra.Group{ID: "agent", Title: "Agent Commands:"})
+	cmd.AddGroup(&cobra.Group{ID: "admin", Title: "Admin Commands:"})
 }
 
 // addCommands adds all subcommands with their group assignments.
@@ -101,6 +102,9 @@ func addCommands(cmd *cobra.Command) {
 	addGroupedCommand(cmd, newPrimeCmd(), "agent")
 	addGroupedCommand(cmd, newSkillCmd(), "agent")
 	addGroupedCommand(cmd, newPromptCmd(), "agent")
+
+	// Admin commands: uninstall
+	addGroupedCommand(cmd, newUninstallCmd(), "admin")
 }
 
 // addGroupedCommand adds a subcommand with a group assignment.
