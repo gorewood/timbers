@@ -106,6 +106,30 @@ if jsonFlag {
 | 2 | System error (git failed, I/O error) |
 | 3 | Conflict (entry exists, state mismatch) |
 
+## Commit Message Format
+
+Use the `Work-item` trailer to link commits to features or issues:
+
+```
+feat: add feature description
+
+Detailed explanation of the change.
+
+Work-item: beads:timbers-psc.4
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+```
+
+**Trailer format**: `Work-item: <system>:<id>`
+
+Examples:
+- `Work-item: beads:timbers-q1o.3` - Beads issue tracker
+- `Work-item: jira:PROJ-123` - Jira ticket
+- `Work-item: gh:owner/repo#42` - GitHub issue
+
+**How catchup uses it**: `timbers log --batch` groups pending commits by Work-item trailer instead of by day. This enables feature-based documentation where all commits for a single work item become one ledger entry, regardless of when they were made.
+
+Commits without trailers fall into an "untracked" group when other commits have trailers, or are grouped by day if no trailers exist.
+
 ## Conventions
 
 - All errors handled explicitly (no `_ = err`)

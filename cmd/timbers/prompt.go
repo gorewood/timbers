@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"time"
 
 	"github.com/rbergman/timbers/internal/git"
 	"github.com/rbergman/timbers/internal/ledger"
+	"github.com/rbergman/timbers/internal/llm"
 	"github.com/rbergman/timbers/internal/output"
 	"github.com/rbergman/timbers/internal/prompt"
 	"github.com/spf13/cobra"
@@ -20,6 +22,8 @@ func newPromptCmd() *cobra.Command {
 	var appendFlag string
 	var listFlag bool
 	var showFlag bool
+	var modelFlag string
+	var providerFlag string
 
 	cmd := &cobra.Command{
 		Use:   "prompt <template>",
@@ -31,19 +35,21 @@ Templates are resolved in order:
   2. ~/.config/timbers/templates/<name>.md (user global)
   3. Built-in templates
 
-The -p flag makes Claude print to stdout and exit (vs interactive mode).
+By default, outputs the rendered prompt for piping to external tools.
+Use --model to execute via the built-in LLM client directly.
 
 Examples:
-  timbers prompt changelog --since 7d | claude -p
-  timbers prompt exec-summary --last 5 | claude -p --model haiku
-  timbers prompt pr-description --range main..HEAD | claude -p
-  timbers prompt devblog-gamedev --last 10 --append "Focus on physics" | claude -p
+  timbers prompt changelog --since 7d                    # Output for piping
+  timbers prompt changelog --since 7d | claude -p        # Pipe to Claude CLI
+  timbers prompt changelog --since 7d --model haiku      # Built-in LLM execution
+  timbers prompt exec-summary --last 5 --model sonnet    # Use specific model
+  timbers prompt pr-description --range main..HEAD --model gemini-flash
 
   timbers prompt --list                    # List available templates
   timbers prompt changelog --show          # Show template content`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runPrompt(cmd, args, lastFlag, sinceFlag, rangeFlag, appendFlag, listFlag, showFlag)
+			return runPrompt(cmd, args, lastFlag, sinceFlag, rangeFlag, appendFlag, listFlag, showFlag, modelFlag, providerFlag)
 		},
 	}
 
@@ -53,12 +59,19 @@ Examples:
 	cmd.Flags().StringVar(&appendFlag, "append", "", "Append extra instructions to the prompt")
 	cmd.Flags().BoolVar(&listFlag, "list", false, "List available templates")
 	cmd.Flags().BoolVar(&showFlag, "show", false, "Show template content without rendering")
+	cmd.Flags().StringVarP(&modelFlag, "model", "m", "", "Model name for built-in LLM execution (e.g., haiku, sonnet, gemini-flash)")
+	cmd.Flags().StringVarP(&providerFlag, "provider", "p", "", "Provider (anthropic, openai, google, local) - inferred if omitted")
 
 	return cmd
 }
 
 // runPrompt executes the prompt command.
-func runPrompt(cmd *cobra.Command, args []string, lastFlag, sinceFlag, rangeFlag, appendFlag string, listFlag, showFlag bool) error {
+func runPrompt(
+	cmd *cobra.Command, args []string,
+	lastFlag, sinceFlag, rangeFlag, appendFlag string,
+	listFlag, showFlag bool,
+	modelFlag, providerFlag string,
+) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
 
 	// Handle --list
@@ -87,12 +100,12 @@ func runPrompt(cmd *cobra.Command, args []string, lastFlag, sinceFlag, rangeFlag
 		return runPromptShow(printer, tmpl)
 	}
 
-	return runPromptRender(printer, tmpl, templateName, lastFlag, sinceFlag, rangeFlag, appendFlag)
+	return runPromptRender(printer, tmpl, templateName, lastFlag, sinceFlag, rangeFlag, appendFlag, modelFlag, providerFlag)
 }
 
 // runPromptRender renders the template with entries and outputs the result.
 func runPromptRender(
-	printer *output.Printer, tmpl *prompt.Template, templateName, lastFlag, sinceFlag, rangeFlag, appendFlag string,
+	printer *output.Printer, tmpl *prompt.Template, templateName, lastFlag, sinceFlag, rangeFlag, appendFlag, modelFlag, providerFlag string,
 ) error {
 	// Validate entry selection flags
 	if lastFlag == "" && sinceFlag == "" && rangeFlag == "" {
@@ -108,17 +121,22 @@ func runPromptRender(
 	}
 
 	// Build render context
-	ctx := buildRenderContext(entries, appendFlag)
+	renderCtx := buildRenderContext(entries, appendFlag)
 
 	// Render template
-	rendered, err := prompt.Render(tmpl, ctx)
+	rendered, err := prompt.Render(tmpl, renderCtx)
 	if err != nil {
 		sysErr := output.NewSystemError(fmt.Sprintf("failed to render template: %v", err))
 		printer.Error(sysErr)
 		return sysErr
 	}
 
-	// Output
+	// If --model is specified, pipe through LLM client
+	if modelFlag != "" {
+		return runPromptWithLLM(printer, rendered, templateName, tmpl, entries, modelFlag, providerFlag)
+	}
+
+	// Default: output rendered prompt
 	if jsonFlag {
 		return printer.Success(map[string]any{
 			"template":      templateName,
@@ -130,6 +148,52 @@ func runPromptRender(
 	}
 
 	printer.Print("%s\n", rendered)
+	return nil
+}
+
+// runPromptWithLLM sends the rendered prompt to an LLM and outputs the response.
+func runPromptWithLLM(
+	printer *output.Printer, rendered, templateName string,
+	tmpl *prompt.Template, entries []*ledger.Entry,
+	modelFlag, providerFlag string,
+) error {
+	// Create LLM client
+	client, err := llm.New(modelFlag, llm.Provider(providerFlag))
+	if err != nil {
+		userErr := output.NewUserError(err.Error())
+		printer.Error(userErr)
+		return userErr
+	}
+
+	// Build request
+	req := llm.Request{
+		Prompt: rendered,
+	}
+
+	// Execute with timeout (2 minutes default, same as generate command)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	resp, err := client.Complete(ctx, req)
+	if err != nil {
+		sysErr := output.NewSystemErrorWithCause("LLM request failed", err)
+		printer.Error(sysErr)
+		return sysErr
+	}
+
+	// Output result
+	if jsonFlag {
+		return printer.Success(map[string]any{
+			"template":      templateName,
+			"template_path": tmpl.Source,
+			"prompt":        rendered,
+			"entry_count":   len(entries),
+			"model":         resp.Model,
+			"response":      resp.Content,
+		})
+	}
+
+	printer.Print("%s\n", resp.Content)
 	return nil
 }
 
