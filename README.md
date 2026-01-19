@@ -57,8 +57,9 @@ timbers query --last 10
 timbers query --since 7d --tags security
 
 # Generate LLM-ready reports
-timbers prompt changelog --since 7d | claude -p
-timbers prompt pr-description --range main..HEAD | llm
+timbers prompt changelog --since 7d | claude -p          # Pipe to external LLM
+timbers prompt changelog --since 7d --model local        # Built-in (local LLM)
+timbers prompt pr-description --last 5 --model haiku     # Built-in (cloud)
 ```
 
 ## Commands
@@ -73,7 +74,7 @@ timbers prompt pr-description --range main..HEAD | llm
 - `export` - Export as JSON or Markdown
 
 **Reporting**
-- `prompt` - Render templates for LLM piping (changelog, pr-description, exec-summary, etc.)
+- `prompt` - Render templates for LLM piping, or execute directly with `--model`
 
 **Sync**
 - `notes init|push|fetch|status` - Manage Git notes sync
@@ -92,7 +93,7 @@ All commands support `--json`. Write operations support `--dry-run`.
 
 When agents write code, humans need to stay in the loop without reading every line. Timbers enables:
 
-1. **Executive summaries**: `timbers prompt exec-summary --since 7d | claude -p` — understand a week of agent work in 5 bullets
+1. **Executive summaries**: `timbers prompt exec-summary --since 7d --model local` — understand a week of agent work in 5 bullets
 2. **Queryable decisions**: Find all security-related changes, all work on a feature, all decisions by a particular agent session
 3. **Onboarding acceleration**: New team members understand not just *what* the code does, but *why* it's shaped that way
 4. **Audit trail**: Track the reasoning behind changes for compliance, post-mortems, or when "the agent did something weird"
@@ -125,6 +126,16 @@ Humans rarely need to run `timbers log` directly—agents keep the ledger curren
 - `pending` for clear "what needs attention" signal
 - Structured errors with recovery hints
 - Exit codes: 0=success, 1=user error, 2=system error
+
+## Model Recommendations
+
+For most Timbers tasks—changelog generation, summaries, catchup—**local or inexpensive models work well**. The prompts are straightforward extraction and summarization tasks that don't require frontier reasoning.
+
+**Recommended defaults:**
+- `local` — Free, private, fast. Use LM Studio or Ollama with any capable model (Llama, Qwen, etc.)
+- `haiku` / `flash` / `nano` — Cheap cloud options (~$0.25/M tokens). Excellent for batch operations.
+
+Reserve expensive models (sonnet, opus, gpt-5) for complex analysis or when quality isn't meeting expectations.
 
 ## Documentation
 

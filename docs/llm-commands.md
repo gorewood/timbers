@@ -9,7 +9,7 @@ Timbers provides four commands for LLM integration, forming a pipeline from raw 
 | Command | Purpose | Output |
 |---------|---------|--------|
 | `export` | Raw data extraction | JSON/Markdown |
-| `prompt` | Template rendering with entries | Text for LLM piping |
+| `prompt` | Template rendering with entries | Text for piping OR LLM response (with --model) |
 | `generate` | Ad-hoc LLM completion primitive | LLM response text |
 | `catchup` | Auto-generate entries from undocumented commits | Ledger entries |
 
@@ -50,7 +50,7 @@ timbers export --last 10 --out ./exports/
 
 ## 2. Prompt — Template Rendering
 
-Render templates with ledger entries for LLM consumption. This is the primary interface for generating LLM prompts from your development history.
+Render templates with ledger entries for LLM consumption. By default, outputs text for piping to external LLMs. Use `--model` for built-in LLM execution.
 
 ```bash
 # Pipe to external LLM
@@ -67,6 +67,11 @@ timbers prompt --list
 
 # Show template content
 timbers prompt changelog --show
+
+# Built-in LLM execution (no piping needed)
+timbers prompt changelog --since 7d --model local
+timbers prompt exec-summary --last 10 --model haiku
+timbers prompt devblog-gamedev --last 20 --model flash --append "Focus on physics"
 ```
 
 **Flags:**
@@ -76,6 +81,8 @@ timbers prompt changelog --show
 - `--append <text>` — Append extra instructions to the prompt
 - `--list` — List available templates
 - `--show` — Show template content without rendering
+- `-m, --model <name>` — Execute with built-in LLM instead of outputting text
+- `-p, --provider <name>` — Provider override (anthropic, openai, google, local)
 - `--json` — Structured JSON output (includes rendered prompt and entries)
 
 ### Available Templates
@@ -238,9 +245,31 @@ timbers pending  # Should show fewer/no pending commits
 
 ---
 
+## Model Recommendations
+
+**Local or cheap models are adequate for most Timbers tasks.** The prompts involve straightforward summarization and extraction—no complex reasoning required.
+
+### Recommended Defaults
+
+| Tier | Models | Cost | Best For |
+|------|--------|------|----------|
+| Free | `local` | $0 | Daily use, privacy-sensitive, offline |
+| Cheap | `haiku`, `flash`, `nano` | ~$0.25/M tokens | Batch operations, CI/CD |
+| Premium | `sonnet`, `pro`, `mini` | ~$3-15/M tokens | When quality matters |
+
+### Practical Guidance
+
+- **Start with `local`**: If you have LM Studio or Ollama running, local models handle Timbers tasks well
+- **Use cheap cloud for batch**: `catchup` with 100+ commits? Use `haiku` or `flash` for speed and low cost
+- **Reserve premium for polish**: Only escalate to sonnet/opus if output quality isn't meeting expectations
+
+**Cost example:** Generating 50 changelog entries with haiku costs ~$0.02. Local is free.
+
+---
+
 ## Flag Consistency
 
-These flags work consistently across `generate` and `catchup`:
+These flags work consistently across `prompt`, `generate`, and `catchup`:
 
 | Flag | Short | Description |
 |------|-------|-------------|
@@ -266,7 +295,18 @@ timbers prompt exec-summary --last 5 | openai-cli
 timbers prompt pr-description --range main..HEAD | my-llm-tool
 ```
 
-### Pattern 2: Built-in LLM via Generate
+### Pattern 2: Built-in LLM Execution
+
+Use `--model` for simpler one-liner execution:
+
+```bash
+# Direct execution (recommended for most use cases)
+timbers prompt changelog --since 7d --model local
+timbers prompt exec-summary --last 5 --model haiku
+timbers prompt pr-description --range main..HEAD --model flash
+```
+
+### Pattern 3: Built-in LLM via Generate
 
 Chain export or prompt output through generate:
 
@@ -278,7 +318,7 @@ timbers prompt changelog --since 7d | timbers generate --model haiku
 timbers export --last 3 --format md | timbers generate "Summarize these changes" --model sonnet
 ```
 
-### Pattern 3: Automated Backfill
+### Pattern 4: Automated Backfill
 
 Catch up on undocumented history:
 
@@ -290,7 +330,7 @@ timbers catchup --model haiku             # Execute
 timbers notes push                        # Sync to remote
 ```
 
-### Pattern 4: CI/CD Integration
+### Pattern 5: CI/CD Integration
 
 ```bash
 # In release workflow

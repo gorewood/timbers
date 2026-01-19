@@ -318,6 +318,19 @@ Built-in templates:
 - `devblog-opensource` — Open source project blog post
 - `devblog-startup` — Startup/product blog post
 
+### Built-in LLM Execution
+
+Instead of piping to external tools, use `--model` for direct LLM execution:
+
+```bash
+# Built-in execution (no piping needed)
+timbers prompt changelog --since 7d --model local         # Local LLM
+timbers prompt exec-summary --last 10 --model haiku       # Cloud (Anthropic)
+timbers prompt pr-description --range main..HEAD --model flash  # Cloud (Google)
+```
+
+This is equivalent to piping but simpler for quick use.
+
 ### Generate Reports
 
 The `-p` (print) flag makes Claude output to stdout and exit, rather than opening an interactive session:
@@ -334,6 +347,10 @@ timbers prompt exec-summary --last 10 | claude -p
 
 # Blog post with custom focus
 timbers prompt devblog-opensource --last 20 --append "Focus on the new plugin system" | claude -p
+
+# Or use built-in LLM execution (simpler, no piping)
+timbers prompt changelog --since 7d --model local
+timbers prompt exec-summary --last 10 --model haiku
 ```
 
 **Shortcut with just:** If you're developing timbers itself, use the just recipes:
@@ -384,6 +401,18 @@ Template resolution order:
 2. `~/.config/timbers/templates/<name>.md` (user global)
 3. Built-in templates
 
+### Model Recommendations
+
+**Local or cheap models are adequate for most tasks.** Timbers prompts are straightforward—summarization, extraction, formatting—and don't need frontier reasoning.
+
+| Use Case | Recommended Model |
+|----------|-------------------|
+| Daily use | `local` (free, private, fast) |
+| Batch backfill | `haiku`, `flash`, `nano` (cheap cloud) |
+| High-quality output | `sonnet`, `pro` (when local isn't good enough) |
+
+**Cost perspective:** Processing 100 entries with haiku costs ~$0.01-0.05. Local is free.
+
 ---
 
 ## Part 7: Common Human Uses
@@ -418,8 +447,8 @@ timbers query --tags "auth,security"
 ### Generating Documentation
 
 ```bash
-# Monthly changelog
-timbers prompt changelog --since 30d | claude -p > CHANGELOG-january.md
+# Monthly changelog (built-in LLM)
+timbers prompt changelog --since 30d --model local > CHANGELOG-january.md
 
 # Architecture decision records
 timbers query --tags architecture --json | \
@@ -487,6 +516,7 @@ This removes:
 | `timbers query --last N` | View recent entries |
 | `timbers prime` | Session context for agents |
 | `timbers notes push` | Sync to remote |
+| `timbers prompt <template> --model local` | Generate report with built-in LLM |
 
 ### Flags Available Everywhere
 
