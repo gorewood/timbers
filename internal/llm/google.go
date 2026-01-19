@@ -3,9 +3,10 @@ package llm
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/rbergman/timbers/internal/output"
 )
 
 // Google Gemini API types.
@@ -82,15 +83,15 @@ func (c *Client) buildGoogleRequest(req Request) googleRequest {
 func parseGoogleResponse(respBody []byte, model string) (*Response, error) {
 	var result googleResponse
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return nil, output.NewSystemErrorWithCause("failed to parse response", err)
 	}
 
 	if result.Error != nil {
-		return nil, fmt.Errorf("API error: %s", result.Error.Message)
+		return nil, output.NewSystemError("API error: " + result.Error.Message)
 	}
 
 	if len(result.Candidates) == 0 || len(result.Candidates[0].Content.Parts) == 0 {
-		return nil, errors.New("empty response from API")
+		return nil, output.NewSystemError("empty response from API")
 	}
 
 	var content strings.Builder

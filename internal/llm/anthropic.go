@@ -3,9 +3,9 @@ package llm
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"strings"
+
+	"github.com/rbergman/timbers/internal/output"
 )
 
 // Anthropic API types.
@@ -55,15 +55,15 @@ func (c *Client) completeAnthropic(ctx context.Context, req Request) (*Response,
 
 	var result anthropicResponse
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return nil, output.NewSystemErrorWithCause("failed to parse response", err)
 	}
 
 	if result.Error != nil {
-		return nil, fmt.Errorf("API error: %s", result.Error.Message)
+		return nil, output.NewSystemError("API error: " + result.Error.Message)
 	}
 
 	if len(result.Content) == 0 {
-		return nil, errors.New("empty response from API")
+		return nil, output.NewSystemError("empty response from API")
 	}
 
 	var content strings.Builder
@@ -71,6 +71,10 @@ func (c *Client) completeAnthropic(ctx context.Context, req Request) (*Response,
 		if block.Type == "text" {
 			content.WriteString(block.Text)
 		}
+	}
+
+	if content.Len() == 0 {
+		return nil, output.NewSystemError("response contained no text content")
 	}
 
 	return &Response{Content: content.String(), Model: c.model}, nil

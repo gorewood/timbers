@@ -76,8 +76,25 @@ Environment variables:
 	return cmd
 }
 
+// validateCatchupFlags validates the LLM-related flags.
+func validateCatchupFlags(flags catchupFlags) error {
+	if flags.parallel <= 0 {
+		return output.NewUserError("parallel must be positive, got " + strconv.Itoa(flags.parallel))
+	}
+	if flags.batchSize <= 0 {
+		return output.NewUserError("batch-size must be positive, got " + strconv.Itoa(flags.batchSize))
+	}
+	return nil
+}
+
 func runCatchup(cmd *cobra.Command, flags catchupFlags) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+
+	// Validate flags before any other work
+	if err := validateCatchupFlags(flags); err != nil {
+		printer.Error(err)
+		return err
+	}
 
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")

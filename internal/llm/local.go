@@ -3,8 +3,8 @@ package llm
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
+
+	"github.com/rbergman/timbers/internal/output"
 )
 
 // Local LLM server API types (OpenAI-compatible format).
@@ -71,15 +71,15 @@ func (c *Client) buildLocalRequest(req Request) localRequest {
 func parseLocalResponse(respBody []byte, model string) (*Response, error) {
 	var result localResponse
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return nil, output.NewSystemErrorWithCause("failed to parse response", err)
 	}
 
 	if result.Error != nil {
-		return nil, fmt.Errorf("API error: %s", result.Error.Message)
+		return nil, output.NewSystemError("API error: " + result.Error.Message)
 	}
 
 	if len(result.Choices) == 0 {
-		return nil, errors.New("empty response from API")
+		return nil, output.NewSystemError("empty response from API")
 	}
 
 	responseModel := model

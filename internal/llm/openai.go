@@ -3,8 +3,8 @@ package llm
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
+
+	"github.com/rbergman/timbers/internal/output"
 )
 
 // OpenAI API types.
@@ -55,15 +55,15 @@ func (c *Client) completeOpenAI(ctx context.Context, req Request) (*Response, er
 
 	var result openaiResponse
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return nil, output.NewSystemErrorWithCause("failed to parse response", err)
 	}
 
 	if result.Error != nil {
-		return nil, fmt.Errorf("API error: %s", result.Error.Message)
+		return nil, output.NewSystemError("API error: " + result.Error.Message)
 	}
 
 	if len(result.Choices) == 0 {
-		return nil, errors.New("empty response from API")
+		return nil, output.NewSystemError("empty response from API")
 	}
 
 	return &Response{Content: result.Choices[0].Message.Content, Model: c.model}, nil

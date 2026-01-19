@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -81,9 +82,39 @@ Environment variables:
 	return cmd
 }
 
+// validateGenerateFlags validates the LLM-related flags.
+func validateGenerateFlags(flags generateFlags) error {
+	if flags.temperature < 0 || flags.temperature > 2 {
+		return output.NewUserError("temperature must be between 0 and 2, got " + formatFloat(flags.temperature))
+	}
+	if flags.timeout <= 0 {
+		return output.NewUserError("timeout must be positive, got " + formatInt(flags.timeout))
+	}
+	if flags.maxTokens < 0 {
+		return output.NewUserError("max-tokens must be non-negative, got " + formatInt(flags.maxTokens))
+	}
+	return nil
+}
+
+// formatFloat formats a float64 for error messages.
+func formatFloat(f float64) string {
+	return strconv.FormatFloat(f, 'f', -1, 64)
+}
+
+// formatInt formats an int for error messages.
+func formatInt(i int) string {
+	return strconv.Itoa(i)
+}
+
 // runGenerate executes the generate command.
 func runGenerate(cmd *cobra.Command, args []string, flags generateFlags) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+
+	// Validate flags before any other work
+	if err := validateGenerateFlags(flags); err != nil {
+		printer.Error(err)
+		return err
+	}
 
 	// Build prompt from args and/or stdin
 	promptText, err := buildPromptFromSources(cmd, args, flags.input)

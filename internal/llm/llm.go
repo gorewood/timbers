@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/rbergman/timbers/internal/output"
 )
 
 // Provider represents an LLM provider.
@@ -38,12 +40,18 @@ type Response struct {
 	Model   string // Model used
 }
 
+// HTTPDoer defines the HTTP operations required by Client.
+// This allows injection of test doubles for testing.
+type HTTPDoer interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
 // Client is a provider-agnostic LLM client.
 type Client struct {
 	provider   Provider
 	model      string
 	apiKey     string
-	httpClient *http.Client
+	httpClient HTTPDoer
 }
 
 // New creates a new LLM client for the given model.
@@ -88,7 +96,7 @@ func (c *Client) Complete(ctx context.Context, req Request) (*Response, error) {
 	case ProviderLocal:
 		return c.completeLocal(ctx, req)
 	default:
-		return nil, fmt.Errorf("unsupported provider: %s", c.provider)
+		return nil, output.NewUserError(fmt.Sprintf("unsupported provider: %s", c.provider))
 	}
 }
 
@@ -194,7 +202,7 @@ var envVarForProvider = map[Provider]string{
 func getAPIKey(provider Provider) (string, error) {
 	envVar, ok := envVarForProvider[provider]
 	if !ok {
-		return "", fmt.Errorf("unsupported provider: %s", provider)
+		return "", output.NewUserError(fmt.Sprintf("unsupported provider: %s", provider))
 	}
 
 	// Local provider doesn't require an API key
@@ -204,7 +212,7 @@ func getAPIKey(provider Provider) (string, error) {
 
 	key := os.Getenv(envVar)
 	if key == "" {
-		return "", fmt.Errorf("%s environment variable not set", envVar)
+		return "", output.NewUserError(envVar + " environment variable not set")
 	}
 	return key, nil
 }
@@ -222,12 +230,12 @@ func LocalServerURL() string {
 func (c *Client) doRequest(ctx context.Context, url string, body any, headers map[string]string) ([]byte, error) {
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, output.NewSystemErrorWithCause("failed to marshal request", err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, output.NewSystemErrorWithCause("failed to create request", err)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -237,17 +245,22 @@ func (c *Client) doRequest(ctx context.Context, url string, body any, headers ma
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, output.NewSystemErrorWithCause("request failed", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, output.NewSystemErrorWithCause("failed to read response", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
+		// Truncate error body to prevent sensitive data leakage and memory issues
+		errBody := string(respBody)
+		if len(errBody) > 500 {
+			errBody = errBody[:500]
+		}
+		return nil, output.NewSystemError(fmt.Sprintf("API error (status %d): %s", resp.StatusCode, errBody))
 	}
 
 	return respBody, nil
