@@ -97,9 +97,10 @@ func addCommands(cmd *cobra.Command) {
 	// Sync commands: notes
 	addGroupedCommand(cmd, newNotesCmd(), "sync")
 
-	// Agent commands: prime, skill
+	// Agent commands: prime, skill, prompt
 	addGroupedCommand(cmd, newPrimeCmd(), "agent")
 	addGroupedCommand(cmd, newSkillCmd(), "agent")
+	addGroupedCommand(cmd, newPromptCmd(), "agent")
 }
 
 // addGroupedCommand adds a subcommand with a group assignment.
