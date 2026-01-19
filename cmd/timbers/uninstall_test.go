@@ -42,15 +42,58 @@ func TestUninstallDryRunJSON(t *testing.T) {
 			t.Fatalf("failed to parse JSON output: %v\nOutput: %s", err, buf.String())
 		}
 
-		// Check required fields
+		// Check required fields (without --binary, binary_path should not be present)
 		if result["status"] != "dry_run" {
 			t.Errorf("status = %v, want dry_run", result["status"])
 		}
-		if result["would_remove"] != true {
-			t.Errorf("would_remove = %v, want true", result["would_remove"])
+		if _, ok := result["binary_path"]; ok {
+			t.Error("binary_path should not be present without --binary flag")
+		}
+		if result["in_repo"] != true {
+			t.Errorf("in_repo = %v, want true", result["in_repo"])
+		}
+	})
+}
+
+func TestUninstallDryRunJSONWithBinary(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Initialize a git repo
+	runGit(t, tempDir, "init")
+	runGit(t, tempDir, "config", "user.email", "test@test.com")
+	runGit(t, tempDir, "config", "user.name", "Test User")
+
+	// Create a file and commit
+	testFile := filepath.Join(tempDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test content"), 0600); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	runGit(t, tempDir, "add", "test.txt")
+	runGit(t, tempDir, "commit", "-m", "Initial commit")
+
+	runInDir(t, tempDir, func() {
+		var buf bytes.Buffer
+
+		cmd := newRootCmd()
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"uninstall", "--dry-run", "--binary", "--json"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command failed: %v", err)
+		}
+
+		var result map[string]any
+		if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+			t.Fatalf("failed to parse JSON output: %v\nOutput: %s", err, buf.String())
+		}
+
+		// With --binary, binary_path should be present
+		if result["status"] != "dry_run" {
+			t.Errorf("status = %v, want dry_run", result["status"])
 		}
 		if _, ok := result["binary_path"]; !ok {
-			t.Error("missing binary_path field")
+			t.Error("missing binary_path field with --binary flag")
 		}
 		if result["in_repo"] != true {
 			t.Errorf("in_repo = %v, want true", result["in_repo"])
@@ -81,6 +124,46 @@ func TestUninstallDryRunHuman(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 		cmd.SetArgs([]string{"uninstall", "--dry-run"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command failed: %v", err)
+		}
+
+		output := buf.String()
+
+		// Without --binary, should not mention binary removal
+		if !strings.Contains(output, "Dry run") {
+			t.Errorf("output missing 'Dry run'\nOutput: %s", output)
+		}
+		if strings.Contains(output, "Remove binary") {
+			t.Errorf("output should not contain 'Remove binary' without --binary flag\nOutput: %s", output)
+		}
+	})
+}
+
+func TestUninstallDryRunHumanWithBinary(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Initialize a git repo
+	runGit(t, tempDir, "init")
+	runGit(t, tempDir, "config", "user.email", "test@test.com")
+	runGit(t, tempDir, "config", "user.name", "Test User")
+
+	// Create a file and commit
+	testFile := filepath.Join(tempDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test content"), 0600); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	runGit(t, tempDir, "add", "test.txt")
+	runGit(t, tempDir, "commit", "-m", "Initial commit")
+
+	runInDir(t, tempDir, func() {
+		var buf bytes.Buffer
+
+		cmd := newRootCmd()
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"uninstall", "--dry-run", "--binary"})
 
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("command failed: %v", err)

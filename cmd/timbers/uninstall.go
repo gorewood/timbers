@@ -24,72 +24,78 @@ type uninstallResult struct {
 func newUninstallCmd() *cobra.Command {
 	var dryRun bool
 	var force bool
+	var removeBinary bool
 
 	cmd := &cobra.Command{
 		Use:   "uninstall",
-		Short: "Remove timbers from the system",
-		Long: `Remove timbers binary, git notes, and git config from the system.
+		Short: "Remove timbers from the current repository",
+		Long: `Remove timbers git notes and config from the current repository.
 
-This command performs a clean removal of timbers:
-  - Removes the timbers binary
-  - Removes git notes refs (refs/notes/timbers) from the current repo
+This command performs a clean removal of timbers from a repo:
+  - Removes git notes refs (refs/notes/timbers)
   - Removes git config for timbers notes fetch/push
 
+Use --binary to also remove the timbers binary itself.
+
 Examples:
-  timbers uninstall              # Uninstall with confirmation prompts
+  timbers uninstall              # Remove from repo with confirmation
   timbers uninstall --dry-run    # Show what would be removed
   timbers uninstall --force      # Skip confirmation prompts
+  timbers uninstall --binary     # Also remove the binary
   timbers uninstall --json       # Output as JSON`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runUninstall(cmd, dryRun, force)
+			return runUninstall(cmd, dryRun, force, removeBinary)
 		},
 	}
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be removed without doing it")
 	cmd.Flags().BoolVar(&force, "force", false, "Skip confirmation prompts")
+	cmd.Flags().BoolVar(&removeBinary, "binary", false, "Also remove the timbers binary")
 
 	return cmd
 }
 
 // runUninstall executes the uninstall command.
-func runUninstall(cmd *cobra.Command, dryRun bool, force bool) error {
+func runUninstall(cmd *cobra.Command, dryRun bool, force bool, removeBinary bool) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
 
 	// Gather what would be removed
-	result, err := gatherUninstallInfo()
+	result, err := gatherUninstallInfo(removeBinary)
 	if err != nil {
 		printer.Error(err)
 		return err
 	}
 
 	if dryRun {
-		return outputDryRunUninstall(printer, result)
+		return outputDryRunUninstall(printer, result, removeBinary)
 	}
 
 	// Confirm unless --force
 	if !force && !jsonFlag {
-		if !confirmUninstall(cmd, result) {
+		if !confirmUninstall(cmd, result, removeBinary) {
 			printer.Println("Uninstall cancelled.")
 			return nil
 		}
 	}
 
 	// Perform uninstall
-	return executeUninstall(printer, result)
+	return executeUninstall(printer, result, removeBinary)
 }
 
 // gatherUninstallInfo collects information about what would be removed.
-func gatherUninstallInfo() (*uninstallResult, error) {
+func gatherUninstallInfo(includeBinary bool) (*uninstallResult, error) {
 	result := &uninstallResult{
 		ConfigsRemoved: []string{},
 	}
 
-	// Get binary path
-	execPath, err := os.Executable()
-	if err != nil {
-		return nil, output.NewSystemErrorWithCause("failed to determine binary location", err)
+	// Get binary path if requested
+	if includeBinary {
+		execPath, err := os.Executable()
+		if err != nil {
+			return nil, output.NewSystemErrorWithCause("failed to determine binary location", err)
+		}
+		result.BinaryPath = execPath
 	}
-	result.BinaryPath = execPath
 
 	// Check if we're in a git repo
 	result.InRepo = git.IsRepo()
@@ -131,44 +137,55 @@ func findNotesConfigs() []string {
 }
 
 // outputDryRunUninstall outputs what would be removed in dry-run mode.
-func outputDryRunUninstall(printer *output.Printer, result *uninstallResult) error {
+func outputDryRunUninstall(printer *output.Printer, result *uninstallResult, includeBinary bool) error {
 	if jsonFlag {
-		return printer.Success(map[string]any{
-			"status":            "dry_run",
-			"binary_path":       result.BinaryPath,
-			"would_remove":      true,
-			"notes_ref_exists":  result.NotesRefRemoved,
-			"configs_to_remove": result.ConfigsRemoved,
-			"in_repo":           result.InRepo,
-		})
+		return outputDryRunJSON(printer, result, includeBinary)
 	}
-
-	printer.Println("Dry run: Would perform the following actions:")
-	printer.Println()
-	printer.Print("  Remove binary: %s\n", result.BinaryPath)
-
-	if result.InRepo {
-		if result.NotesRefRemoved {
-			printer.Println("  Remove notes ref: refs/notes/timbers")
-		}
-		if len(result.ConfigsRemoved) > 0 {
-			for _, remote := range result.ConfigsRemoved {
-				printer.Print("  Remove notes config for remote: %s\n", remote)
-			}
-		}
-	} else {
-		printer.Println("  (Not in a git repository - skipping notes cleanup)")
-	}
-
+	outputDryRunHuman(printer, result, includeBinary)
 	return nil
 }
 
+func outputDryRunJSON(printer *output.Printer, result *uninstallResult, includeBinary bool) error {
+	data := map[string]any{
+		"status":            "dry_run",
+		"notes_ref_exists":  result.NotesRefRemoved,
+		"configs_to_remove": result.ConfigsRemoved,
+		"in_repo":           result.InRepo,
+	}
+	if includeBinary {
+		data["binary_path"] = result.BinaryPath
+	}
+	return printer.Success(data)
+}
+
+func outputDryRunHuman(printer *output.Printer, result *uninstallResult, includeBinary bool) {
+	printer.Println("Dry run: Would perform the following actions:")
+	printer.Println()
+
+	switch {
+	case !result.InRepo:
+		printer.Println("  (Not in a git repository - nothing to remove)")
+	case !result.NotesRefRemoved && len(result.ConfigsRemoved) == 0:
+		printer.Println("  (No timbers data found in this repository)")
+	default:
+		if result.NotesRefRemoved {
+			printer.Println("  Remove notes ref: refs/notes/timbers")
+		}
+		for _, remote := range result.ConfigsRemoved {
+			printer.Print("  Remove notes config for remote: %s\n", remote)
+		}
+	}
+
+	if includeBinary {
+		printer.Print("  Remove binary: %s\n", result.BinaryPath)
+	}
+}
+
 // confirmUninstall prompts the user for confirmation.
-func confirmUninstall(cmd *cobra.Command, result *uninstallResult) bool {
+func confirmUninstall(cmd *cobra.Command, result *uninstallResult, includeBinary bool) bool {
 	printer := output.NewPrinter(cmd.OutOrStdout(), false, output.IsTTY(cmd.OutOrStdout()))
 
 	printer.Println("This will remove:")
-	printer.Print("  Binary: %s\n", result.BinaryPath)
 
 	if result.InRepo {
 		if result.NotesRefRemoved {
@@ -179,6 +196,10 @@ func confirmUninstall(cmd *cobra.Command, result *uninstallResult) bool {
 				printer.Print("  Notes config for remote: %s\n", remote)
 			}
 		}
+	}
+
+	if includeBinary {
+		printer.Print("  Binary: %s\n", result.BinaryPath)
 	}
 
 	printer.Println()
@@ -195,7 +216,12 @@ func confirmUninstall(cmd *cobra.Command, result *uninstallResult) bool {
 }
 
 // executeUninstall performs the actual uninstall operations.
-func executeUninstall(printer *output.Printer, result *uninstallResult) error {
+func executeUninstall(printer *output.Printer, result *uninstallResult, includeBinary bool) error {
+	errors := performUninstallOperations(result, includeBinary)
+	return reportUninstallResult(printer, result, includeBinary, errors)
+}
+
+func performUninstallOperations(result *uninstallResult, includeBinary bool) []string {
 	var errors []string
 
 	// Remove notes ref if in a repo
@@ -217,41 +243,62 @@ func executeUninstall(printer *output.Printer, result *uninstallResult) error {
 	}
 	result.ConfigsRemoved = removedConfigs
 
-	// Remove binary
-	if err := os.Remove(result.BinaryPath); err != nil {
-		errors = append(errors, "binary: "+err.Error())
-		result.BinaryRemoved = false
-	} else {
-		result.BinaryRemoved = true
-	}
-
-	// Report results
-	if len(errors) > 0 {
-		errMsg := "uninstall completed with errors: " + strings.Join(errors, "; ")
-		if jsonFlag {
-			return printer.Success(map[string]any{
-				"status":          "partial",
-				"binary_removed":  result.BinaryRemoved,
-				"notes_removed":   result.NotesRefRemoved,
-				"configs_removed": result.ConfigsRemoved,
-				"errors":          errors,
-				"recovery_hint":   "Some components could not be removed. Check permissions and try again.",
-			})
+	// Remove binary if requested
+	if includeBinary {
+		if err := os.Remove(result.BinaryPath); err != nil {
+			errors = append(errors, "binary: "+err.Error())
+			result.BinaryRemoved = false
+		} else {
+			result.BinaryRemoved = true
 		}
-		printer.Print("Warning: %s\n", errMsg)
-		return nil
 	}
 
+	return errors
+}
+
+func reportUninstallResult(printer *output.Printer, result *uninstallResult, includeBinary bool, errors []string) error {
+	if len(errors) > 0 {
+		return reportPartialUninstall(printer, result, includeBinary, errors)
+	}
+	return reportSuccessfulUninstall(printer, result, includeBinary)
+}
+
+func reportPartialUninstall(printer *output.Printer, result *uninstallResult, includeBinary bool, errors []string) error {
 	if jsonFlag {
-		return printer.Success(map[string]any{
-			"status":          "ok",
-			"binary_removed":  result.BinaryRemoved,
+		data := map[string]any{
+			"status":          "partial",
 			"notes_removed":   result.NotesRefRemoved,
 			"configs_removed": result.ConfigsRemoved,
-		})
+			"errors":          errors,
+			"recovery_hint":   "Some components could not be removed. Check permissions and try again.",
+		}
+		if includeBinary {
+			data["binary_removed"] = result.BinaryRemoved
+		}
+		return printer.Success(data)
+	}
+	printer.Print("Warning: uninstall completed with errors: %s\n", strings.Join(errors, "; "))
+	return nil
+}
+
+func reportSuccessfulUninstall(printer *output.Printer, result *uninstallResult, includeBinary bool) error {
+	if jsonFlag {
+		data := map[string]any{
+			"status":          "ok",
+			"notes_removed":   result.NotesRefRemoved,
+			"configs_removed": result.ConfigsRemoved,
+		}
+		if includeBinary {
+			data["binary_removed"] = result.BinaryRemoved
+		}
+		return printer.Success(data)
 	}
 
-	printer.Println("Timbers uninstalled successfully.")
+	if includeBinary {
+		printer.Println("Timbers uninstalled successfully (including binary).")
+	} else {
+		printer.Println("Timbers removed from this repository.")
+	}
 	return nil
 }
 
