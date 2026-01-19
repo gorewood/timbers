@@ -1,6 +1,6 @@
 module github.com/rbergman/timbers
 
-go 1.25
+go 1.25.3
 
 tool (
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint

@@ -98,10 +98,12 @@ func addCommands(cmd *cobra.Command) {
 	// Sync commands: notes
 	addGroupedCommand(cmd, newNotesCmd(), "sync")
 
-	// Agent commands: prime, skill, prompt
+	// Agent commands: prime, skill, prompt, generate, catchup
 	addGroupedCommand(cmd, newPrimeCmd(), "agent")
 	addGroupedCommand(cmd, newSkillCmd(), "agent")
 	addGroupedCommand(cmd, newPromptCmd(), "agent")
+	addGroupedCommand(cmd, newGenerateCmd(), "agent")
+	addGroupedCommand(cmd, newCatchupCmd(), "agent")
 
 	// Admin commands: uninstall
 	addGroupedCommand(cmd, newUninstallCmd(), "admin")
