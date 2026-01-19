@@ -92,7 +92,7 @@ func TestShowCommand(t *testing.T) {
 			wantContains: []string{"entry not found"},
 		},
 		{
-			name: "show --last - found",
+			name: "show --latest - found",
 			mock: &mockGitOpsForShow{
 				notes: map[string][]byte{
 					"anchor123456": testEntry,
@@ -102,7 +102,7 @@ func TestShowCommand(t *testing.T) {
 			wantContains: []string{testEntryID, "Test entry"},
 		},
 		{
-			name: "show --last - no entries",
+			name: "show --latest - no entries",
 			mock: &mockGitOpsForShow{
 				notes: map[string][]byte{},
 			},
@@ -111,15 +111,15 @@ func TestShowCommand(t *testing.T) {
 			wantContains: []string{"no entries found"},
 		},
 		{
-			name: "no ID and no --last flag",
+			name: "no ID and no --latest flag",
 			mock: &mockGitOpsForShow{
 				notes: map[string][]byte{},
 			},
 			wantErr:      true,
-			wantContains: []string{"specify an entry ID or use --last"},
+			wantContains: []string{"specify an entry ID or use --latest"},
 		},
 		{
-			name: "both ID and --last flag",
+			name: "both ID and --latest flag",
 			mock: &mockGitOpsForShow{
 				notes: map[string][]byte{
 					"anchor123456": testEntry,
@@ -128,7 +128,7 @@ func TestShowCommand(t *testing.T) {
 			args:         []string{testEntryID},
 			lastFlag:     true,
 			wantErr:      true,
-			wantContains: []string{"cannot use both ID argument and --last flag"},
+			wantContains: []string{"cannot use both ID argument and --latest flag"},
 		},
 		{
 			name: "show --json - structured output",
@@ -142,7 +142,7 @@ func TestShowCommand(t *testing.T) {
 			wantContains: []string{`"id"`, `"summary"`, `"what"`, `"why"`, `"how"`},
 		},
 		{
-			name: "show --last --json",
+			name: "show --latest --json",
 			mock: &mockGitOpsForShow{
 				notes: map[string][]byte{
 					"anchor123456": testEntry,
@@ -167,7 +167,7 @@ func TestShowCommand(t *testing.T) {
 
 			// Set flags
 			if tt.lastFlag {
-				if err := cmd.Flags().Set("last", "true"); err != nil {
+				if err := cmd.Flags().Set("latest", "true"); err != nil {
 					t.Fatalf("failed to set last flag: %v", err)
 				}
 			}
@@ -259,7 +259,7 @@ func TestShowWithTags(t *testing.T) {
 	})
 
 	cmd := newShowCmdWithStorage(storage)
-	if err := cmd.Flags().Set("last", "true"); err != nil {
+	if err := cmd.Flags().Set("latest", "true"); err != nil {
 		t.Fatalf("failed to set last flag: %v", err)
 	}
 

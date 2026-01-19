@@ -88,7 +88,7 @@ func TestExportCommand(t *testing.T) {
 			outFlag:      "",
 			notes:        map[string][]byte{},
 			wantErr:      true,
-			wantContains: []string{"specify --last N or --range A..B"},
+			wantContains: []string{"specify --last N, --since"},
 		},
 		{
 			name:         "--last with zero",

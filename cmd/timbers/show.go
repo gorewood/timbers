@@ -18,7 +18,7 @@ func newShowCmd() *cobra.Command {
 // newShowCmdInternal creates the show command with optional storage injection.
 // If storage is nil, a real storage is created when the command runs.
 func newShowCmdInternal(storage *ledger.Storage) *cobra.Command {
-	var lastFlag bool
+	var latestFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "show [<id>]",
@@ -27,31 +27,31 @@ func newShowCmdInternal(storage *ledger.Storage) *cobra.Command {
 
 Examples:
   timbers show tb_2026-01-15T15:04:05Z_8f2c1a  # Show specific entry
-  timbers show --last                          # Show most recent entry
-  timbers show --last --json                   # Show as JSON`,
+  timbers show --latest                        # Show most recent entry
+  timbers show --latest --json                 # Show as JSON`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runShow(cmd, storage, args, lastFlag)
+			return runShow(cmd, storage, args, latestFlag)
 		},
 	}
 
-	cmd.Flags().BoolVar(&lastFlag, "last", false, "Show the most recent entry")
+	cmd.Flags().BoolVar(&latestFlag, "latest", false, "Show the most recent entry")
 
 	return cmd
 }
 
 // runShow executes the show command.
-func runShow(cmd *cobra.Command, storage *ledger.Storage, args []string, lastFlag bool) error {
+func runShow(cmd *cobra.Command, storage *ledger.Storage, args []string, latestFlag bool) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
 
 	// Validate arguments
-	if len(args) == 0 && !lastFlag {
-		err := output.NewUserError("specify an entry ID or use --last")
+	if len(args) == 0 && !latestFlag {
+		err := output.NewUserError("specify an entry ID or use --latest")
 		printer.Error(err)
 		return err
 	}
-	if len(args) > 0 && lastFlag {
-		err := output.NewUserError("cannot use both ID argument and --last flag")
+	if len(args) > 0 && latestFlag {
+		err := output.NewUserError("cannot use both ID argument and --latest flag")
 		printer.Error(err)
 		return err
 	}
@@ -69,7 +69,7 @@ func runShow(cmd *cobra.Command, storage *ledger.Storage, args []string, lastFla
 	}
 
 	// Get the entry
-	entry, err := getShowEntry(storage, args, lastFlag)
+	entry, err := getShowEntry(storage, args, latestFlag)
 	if err != nil {
 		printer.Error(err)
 		return err
@@ -85,8 +85,8 @@ func runShow(cmd *cobra.Command, storage *ledger.Storage, args []string, lastFla
 }
 
 // getShowEntry retrieves the entry based on arguments.
-func getShowEntry(storage *ledger.Storage, args []string, lastFlag bool) (*ledger.Entry, error) {
-	if lastFlag {
+func getShowEntry(storage *ledger.Storage, args []string, latestFlag bool) (*ledger.Entry, error) {
+	if latestFlag {
 		entry, err := storage.GetLatestEntry()
 		if err != nil {
 			if errors.Is(err, ledger.ErrNoEntries) {

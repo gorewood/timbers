@@ -135,6 +135,13 @@ func outputPendingJSON(printer *output.Printer, result *pendingResult) error {
 		data["last_entry"] = result.LastEntry
 	}
 
+	// Add suggested commands based on state
+	if result.Count > 0 {
+		data["suggested_commands"] = []string{
+			"timbers log \"<what>\" --why \"<why>\" --how \"<how>\"",
+		}
+	}
+
 	return printer.Success(data)
 }
 

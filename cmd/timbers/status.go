@@ -57,14 +57,22 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 
 	// Output based on mode
 	if jsonFlag {
-		return printer.Success(map[string]any{
+		data := map[string]any{
 			"repo":             result.Repo,
 			"branch":           result.Branch,
 			"head":             result.Head,
 			"notes_ref":        result.NotesRef,
 			"notes_configured": result.NotesConfigured,
 			"entry_count":      result.EntryCount,
-		})
+		}
+		// Add suggested commands based on state
+		var suggestions []string
+		if !result.NotesConfigured {
+			suggestions = append(suggestions, "timbers notes init")
+		}
+		suggestions = append(suggestions, "timbers pending")
+		data["suggested_commands"] = suggestions
+		return printer.Success(data)
 	}
 
 	// Human-readable output

@@ -3,6 +3,7 @@ package ledger
 
 import (
 	"errors"
+	"sort"
 
 	"github.com/rbergman/timbers/internal/git"
 	"github.com/rbergman/timbers/internal/output"
@@ -148,7 +149,7 @@ func (s *Storage) WriteEntry(entry *Entry, force bool) error {
 		_, err := s.git.ReadNote(entry.Workset.AnchorCommit)
 		if err == nil {
 			// Note exists
-			return output.NewConflictError("entry already exists for commit: " + entry.Workset.AnchorCommit)
+			return output.NewConflictError("entry already exists for commit " + entry.Workset.AnchorCommit)
 		}
 		// Only proceed if error is "not found"
 		var exitErr *output.ExitError
@@ -255,13 +256,9 @@ func (s *Storage) GetLastNEntries(count int) ([]*Entry, error) {
 	}
 
 	// Sort entries by CreatedAt descending (most recent first)
-	for i := range len(entries) - 1 {
-		for j := i + 1; j < len(entries); j++ {
-			if entries[j].CreatedAt.After(entries[i].CreatedAt) {
-				entries[i], entries[j] = entries[j], entries[i]
-			}
-		}
-	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[j].CreatedAt.Before(entries[i].CreatedAt)
+	})
 
 	// Return last N entries
 	if count >= len(entries) {

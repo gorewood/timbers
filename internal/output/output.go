@@ -77,13 +77,13 @@ func (p *Printer) Success(data map[string]any) error {
 
 	// Human-readable output
 	if msg, ok := data["message"].(string); ok {
-		_, _ = fmt.Fprintln(p.w, p.styles.Success.Render(msg))
+		mustWrite(fmt.Fprintln(p.w, p.styles.Success.Render(msg)))
 		return nil
 	}
 
 	// Pretty-print the data
 	for key, val := range data {
-		_, _ = fmt.Fprintf(p.w, "%s: %v\n", p.styles.Bold.Render(key), val)
+		mustWrite(fmt.Fprintf(p.w, "%s: %v\n", p.styles.Bold.Render(key), val))
 	}
 	return nil
 }
@@ -102,23 +102,23 @@ func (p *Printer) Error(err error) {
 	}
 
 	if p.json {
-		_, _ = p.w.Write(ErrorJSON(exitErr.Message, exitErr.Code))
-		_, _ = fmt.Fprintln(p.w)
+		mustWrite(p.w.Write(ErrorJSON(exitErr.Message, exitErr.Code)))
+		mustWrite(fmt.Fprintln(p.w))
 		return
 	}
 
 	// Human-readable error
-	_, _ = fmt.Fprintf(p.w, "%s: %s\n", p.styles.Error.Render("Error"), exitErr.Message)
+	mustWrite(fmt.Fprintf(p.w, "%s: %s\n", p.styles.Error.Render("Error"), exitErr.Message))
 }
 
 // Print formats and writes to the output without a newline.
 func (p *Printer) Print(format string, args ...any) {
-	_, _ = fmt.Fprintf(p.w, format, args...)
+	mustWrite(fmt.Fprintf(p.w, format, args...))
 }
 
 // Println writes a line to the output.
 func (p *Printer) Println(args ...any) {
-	_, _ = fmt.Fprintln(p.w, args...)
+	mustWrite(fmt.Fprintln(p.w, args...))
 }
 
 // writeJSON encodes data as JSON and writes it.
@@ -160,4 +160,13 @@ func IsTTY(writer io.Writer) bool {
 		return false
 	}
 	return (stat.Mode() & os.ModeCharDevice) != 0
+}
+
+// mustWrite panics if a write operation fails.
+// Use this to wrap write operations that should never fail
+// (e.g., writing to stdout/stderr or buffers).
+func mustWrite(_ int, err error) {
+	if err != nil {
+		panic(fmt.Sprintf("write failed: %v", err))
+	}
 }

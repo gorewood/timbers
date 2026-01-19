@@ -34,13 +34,13 @@ Examples:
 	cmd.AddCommand(newNotesPushCmd())
 	cmd.AddCommand(newNotesFetchCmd())
 	cmd.AddCommand(newNotesStatusCmd())
-
 	return cmd
 }
 
 // newNotesInitCmd creates the notes init subcommand.
 func newNotesInitCmd() *cobra.Command {
 	var remote string
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "init",
@@ -52,19 +52,21 @@ enabling 'git fetch' to pull notes automatically.
 
 Examples:
   timbers notes init                   # Configure for origin
-  timbers notes init --remote upstream # Configure for upstream`,
+  timbers notes init --remote upstream # Configure for upstream
+  timbers notes init --dry-run         # Show what would be configured`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runNotesInit(cmd, remote)
+			return runNotesInit(cmd, remote, dryRun)
 		},
 	}
 
 	cmd.Flags().StringVar(&remote, "remote", "origin", "Remote name to configure")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be done without doing it")
 
 	return cmd
 }
 
 // runNotesInit executes the notes init command.
-func runNotesInit(cmd *cobra.Command, remote string) error {
+func runNotesInit(cmd *cobra.Command, remote string, dryRun bool) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
 
 	if !git.IsRepo() {
@@ -74,6 +76,23 @@ func runNotesInit(cmd *cobra.Command, remote string) error {
 	}
 
 	wasConfigured := git.NotesConfigured(remote)
+
+	if dryRun {
+		if jsonFlag {
+			return printer.Success(map[string]any{
+				"status":             "dry_run",
+				"remote":             remote,
+				"already_configured": wasConfigured,
+				"would_configure":    !wasConfigured,
+			})
+		}
+		if wasConfigured {
+			printer.Print("Dry run: Notes fetch already configured for remote '%s' (no changes needed)\n", remote)
+		} else {
+			printer.Print("Dry run: Would configure notes fetch for remote '%s'\n", remote)
+		}
+		return nil
+	}
 
 	if err := git.ConfigureNotesFetch(remote); err != nil {
 		sysErr := output.NewSystemErrorWithCause("failed to configure notes fetch", err)
@@ -100,6 +119,7 @@ func runNotesInit(cmd *cobra.Command, remote string) error {
 // newNotesPushCmd creates the notes push subcommand.
 func newNotesPushCmd() *cobra.Command {
 	var remote string
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "push",
@@ -111,25 +131,42 @@ entries available to collaborators.
 
 Examples:
   timbers notes push                   # Push to origin
-  timbers notes push --remote upstream # Push to upstream`,
+  timbers notes push --remote upstream # Push to upstream
+  timbers notes push --dry-run         # Show what would be pushed`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runNotesPush(cmd, remote)
+			return runNotesPush(cmd, remote, dryRun)
 		},
 	}
 
 	cmd.Flags().StringVar(&remote, "remote", "origin", "Remote name to push to")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be done without doing it")
 
 	return cmd
 }
 
 // runNotesPush executes the notes push command.
-func runNotesPush(cmd *cobra.Command, remote string) error {
+func runNotesPush(cmd *cobra.Command, remote string, dryRun bool) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
 
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")
 		printer.Error(err)
 		return err
+	}
+
+	if dryRun {
+		commits, _ := git.ListNotedCommits()
+		entryCount := len(commits)
+
+		if jsonFlag {
+			return printer.Success(map[string]any{
+				"status":      "dry_run",
+				"remote":      remote,
+				"entry_count": entryCount,
+			})
+		}
+		printer.Print("Dry run: Would push %d entries to remote '%s'\n", entryCount, remote)
+		return nil
 	}
 
 	if err := git.PushNotes(remote); err != nil {
@@ -152,6 +189,7 @@ func runNotesPush(cmd *cobra.Command, remote string) error {
 // newNotesFetchCmd creates the notes fetch subcommand.
 func newNotesFetchCmd() *cobra.Command {
 	var remote string
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "fetch",
@@ -163,25 +201,44 @@ entries created by collaborators.
 
 Examples:
   timbers notes fetch                   # Fetch from origin
-  timbers notes fetch --remote upstream # Fetch from upstream`,
+  timbers notes fetch --remote upstream # Fetch from upstream
+  timbers notes fetch --dry-run         # Show what would be fetched`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runNotesFetch(cmd, remote)
+			return runNotesFetch(cmd, remote, dryRun)
 		},
 	}
 
 	cmd.Flags().StringVar(&remote, "remote", "origin", "Remote name to fetch from")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be done without doing it")
 
 	return cmd
 }
 
 // runNotesFetch executes the notes fetch command.
-func runNotesFetch(cmd *cobra.Command, remote string) error {
+func runNotesFetch(cmd *cobra.Command, remote string, dryRun bool) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
 
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")
 		printer.Error(err)
 		return err
+	}
+
+	if dryRun {
+		configured := git.NotesConfigured(remote)
+		if jsonFlag {
+			return printer.Success(map[string]any{
+				"status":     "dry_run",
+				"remote":     remote,
+				"configured": configured,
+			})
+		}
+		if configured {
+			printer.Print("Dry run: Would fetch notes from remote '%s'\n", remote)
+		} else {
+			printer.Print("Dry run: Would fetch notes from remote '%s' (note: fetch not configured; run 'timbers notes init' first)\n", remote)
+		}
+		return nil
 	}
 
 	if err := git.FetchNotes(remote); err != nil {

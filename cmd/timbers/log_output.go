@@ -59,6 +59,10 @@ func outputLogSuccess(printer *output.Printer, entry *ledger.Entry, pushedMsg st
 			"id":      entry.ID,
 			"anchor":  entry.Workset.AnchorCommit,
 			"commits": commitSHAs,
+			"suggested_commands": []string{
+				"timbers show --latest",
+				"timbers notes push",
+			},
 		})
 	}
 

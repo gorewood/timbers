@@ -186,6 +186,18 @@ func findSummaryLine(out string) string {
 	return ""
 }
 
+// parseMatchInt extracts an int from a regex match group, returning 0 on error.
+func parseMatchInt(matches []string, idx int) int {
+	if idx >= len(matches) || matches[idx] == "" {
+		return 0
+	}
+	val, err := strconv.Atoi(matches[idx])
+	if err != nil {
+		return 0
+	}
+	return val
+}
+
 // extractDiffstatFromSummary parses the diffstat summary line using regex.
 func extractDiffstatFromSummary(summaryLine string) Diffstat {
 	matches := diffstatLineRegex.FindStringSubmatch(summaryLine)
@@ -193,22 +205,9 @@ func extractDiffstatFromSummary(summaryLine string) Diffstat {
 		return Diffstat{}
 	}
 
-	stat := Diffstat{}
-
-	// matches[1] = files changed
-	if len(matches) > 1 && matches[1] != "" {
-		stat.Files, _ = strconv.Atoi(matches[1])
+	return Diffstat{
+		Files:      parseMatchInt(matches, 1),
+		Insertions: parseMatchInt(matches, 2),
+		Deletions:  parseMatchInt(matches, 3),
 	}
-
-	// matches[2] = insertions (optional)
-	if len(matches) > 2 && matches[2] != "" {
-		stat.Insertions, _ = strconv.Atoi(matches[2])
-	}
-
-	// matches[3] = deletions (optional)
-	if len(matches) > 3 && matches[3] != "" {
-		stat.Deletions, _ = strconv.Atoi(matches[3])
-	}
-
-	return stat
 }
