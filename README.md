@@ -116,6 +116,7 @@ timbers notes push
 
 ## Documentation
 
+- [Tutorial](docs/tutorial.md) - Step-by-step setup, catching up history, agent integration, common uses
 - [Spec](docs/spec.md) - Full specification
 - [Agent DX Guide](docs/agent-dx-guide.md) - CLI design patterns for agents
 
