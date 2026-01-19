@@ -2,9 +2,10 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"os"
 
+	"github.com/charmbracelet/fang"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/rbergman/timbers/internal/output"
 	"github.com/spf13/cobra"
@@ -24,7 +25,7 @@ func main() {
 
 func run() int {
 	cmd := newRootCmd()
-	err := cmd.Execute()
+	err := fang.Execute(context.Background(), cmd, fang.WithVersion(version))
 	return output.GetExitCode(err)
 }
 
@@ -57,9 +58,6 @@ All commands support --json for structured output.`,
 			return cmd.Help()
 		},
 	}
-
-	// Set custom version template
-	cmd.SetVersionTemplate(fmt.Sprintf("timbers version %s\n", version))
 
 	// Add persistent --json flag (available to all subcommands)
 	cmd.PersistentFlags().BoolVar(&jsonFlag, "json", false, "Output in JSON format")
