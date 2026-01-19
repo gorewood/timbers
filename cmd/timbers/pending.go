@@ -2,6 +2,8 @@
 package main
 
 import (
+	"strconv"
+
 	"github.com/rbergman/timbers/internal/git"
 	"github.com/rbergman/timbers/internal/ledger"
 	"github.com/rbergman/timbers/internal/output"
@@ -159,20 +161,24 @@ func outputPendingHuman(printer *output.Printer, result *pendingResult, countOnl
 		return
 	}
 
-	// Full output with commit list
-	printer.Print("%d pending commit", result.Count)
-	if result.Count != 1 {
-		printer.Print("s")
-	}
-	if result.LastEntry != nil {
-		printer.Print(" since %s", result.LastEntry.ID)
-	}
-	printer.Println()
-	printer.Println()
+	// Section header
+	printer.Section("Pending Commits")
 
-	// List commits
+	// Build table rows from commits
+	rows := make([][]string, 0, len(result.Commits))
 	for _, c := range result.Commits {
-		printer.Print("  %s %s\n", c.Short, c.Subject)
+		rows = append(rows, []string{c.Short, c.Subject})
+	}
+
+	// Render commit table
+	printer.Table([]string{"SHA", "Subject"}, rows)
+
+	// Summary with count
+	printer.Println()
+	printer.KeyValue("Count", strconv.Itoa(result.Count))
+
+	if result.LastEntry != nil {
+		printer.KeyValue("Since", result.LastEntry.ID)
 	}
 
 	// Suggest command

@@ -3,6 +3,7 @@ package main
 
 import (
 	"path/filepath"
+	"strconv"
 
 	"github.com/rbergman/timbers/internal/git"
 	"github.com/rbergman/timbers/internal/output"
@@ -122,17 +123,15 @@ func gatherStatus() (*statusResult, error) {
 
 // printHumanStatus outputs status in human-readable format.
 func printHumanStatus(printer *output.Printer, status *statusResult) {
-	printer.Println("Repository Status")
-	printer.Println("─────────────────")
-	printer.Print("  Repo:    %s\n", status.Repo)
-	printer.Print("  Branch:  %s\n", status.Branch)
-	printer.Print("  HEAD:    %s\n", status.Head[:min(12, len(status.Head))])
-	printer.Println()
-	printer.Println("Timbers Notes")
-	printer.Println("─────────────")
-	printer.Print("  Ref:        %s\n", status.NotesRef)
-	printer.Print("  Configured: %s\n", formatBool(status.NotesConfigured))
-	printer.Print("  Entries:    %d\n", status.EntryCount)
+	printer.Section("Repository")
+	printer.KeyValue("Repo", status.Repo)
+	printer.KeyValue("Branch", status.Branch)
+	printer.KeyValue("HEAD", status.Head[:min(12, len(status.Head))])
+
+	printer.Section("Timbers Notes")
+	printer.KeyValue("Ref", status.NotesRef)
+	printer.KeyValue("Configured", formatBool(status.NotesConfigured))
+	printer.KeyValue("Entries", strconv.Itoa(status.EntryCount))
 }
 
 // formatBool returns a human-readable boolean string.

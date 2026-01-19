@@ -4,6 +4,7 @@ package main
 import (
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rbergman/timbers/internal/git"
@@ -191,11 +192,17 @@ func outputQueryJSON(printer *output.Printer, entries []*ledger.Entry) error {
 	return printer.WriteJSON(entries)
 }
 
-// outputQueryOneline outputs entries in compact format: <id>  <what>
+// outputQueryOneline outputs entries in compact table format: ID | Date | What
 func outputQueryOneline(printer *output.Printer, entries []*ledger.Entry) {
+	headers := []string{"ID", "Date", "What"}
+	rows := make([][]string, 0, len(entries))
+
 	for _, entry := range entries {
-		printer.Print("%s  %s\n", entry.ID, entry.Summary.What)
+		date := entry.CreatedAt.Format("2006-01-02")
+		rows = append(rows, []string{entry.ID, date, entry.Summary.What})
 	}
+
+	printer.Table(headers, rows)
 }
 
 // outputQueryHuman outputs entries in human-readable format.
@@ -207,7 +214,7 @@ func outputQueryHuman(printer *output.Printer, entries []*ledger.Entry) {
 
 	for i, entry := range entries {
 		if i > 0 {
-			printer.Println()
+			printer.Println("────────────────────────────────────────")
 		}
 		outputQueryEntry(printer, entry)
 	}
@@ -215,10 +222,14 @@ func outputQueryHuman(printer *output.Printer, entries []*ledger.Entry) {
 
 // outputQueryEntry outputs a single entry in human-readable format.
 func outputQueryEntry(printer *output.Printer, entry *ledger.Entry) {
-	outputShowHeader(printer, entry)
-	outputShowSummary(printer, entry)
-	outputShowWorkset(printer, entry)
-	outputShowTags(printer, entry)
-	outputShowWorkItems(printer, entry)
-	outputShowTimestamps(printer, entry)
+	printer.Section(entry.ID)
+	printer.KeyValue("What", entry.Summary.What)
+	printer.KeyValue("Why", entry.Summary.Why)
+	printer.KeyValue("How", entry.Summary.How)
+	printer.KeyValue("Anchor", shortSHA(entry.Workset.AnchorCommit))
+	printer.KeyValue("Created", entry.CreatedAt.Format("2006-01-02 15:04:05 UTC"))
+
+	if len(entry.Tags) > 0 {
+		printer.KeyValue("Tags", strings.Join(entry.Tags, ", "))
+	}
 }

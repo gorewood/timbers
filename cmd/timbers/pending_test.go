@@ -86,7 +86,7 @@ func TestPendingCommand(t *testing.T) {
 				},
 			},
 			wantCount:    3,
-			wantContains: []string{"3 pending", "abc123d", "Third commit"},
+			wantContains: []string{"Pending Commits", "Count: 3", "abc123d", "Third commit"},
 		},
 		{
 			name: "has entry - shows commits since anchor",
@@ -101,7 +101,7 @@ func TestPendingCommand(t *testing.T) {
 				},
 			},
 			wantCount:    2,
-			wantContains: []string{"2 pending", "abc123d", "New commit"},
+			wantContains: []string{"Pending Commits", "Count: 2", "abc123d", "New commit"},
 		},
 		{
 			name: "no pending commits",
