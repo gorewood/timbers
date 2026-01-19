@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -26,6 +27,12 @@ type Styles struct {
 	Warning lipgloss.Style
 	Bold    lipgloss.Style
 	Dim     lipgloss.Style
+	Title   lipgloss.Style
+	Muted   lipgloss.Style
+	Key     lipgloss.Style
+	Value   lipgloss.Style
+	Border  lipgloss.Color
+	Accent  lipgloss.Style
 }
 
 // NewPrinter creates a new Printer.
@@ -38,6 +45,12 @@ func NewPrinter(writer io.Writer, jsonMode bool, isTTY bool) *Printer {
 		Warning: lipgloss.NewStyle().Foreground(lipgloss.Color("11")),           // Yellow
 		Bold:    lipgloss.NewStyle().Bold(true),
 		Dim:     lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+		Title:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12")), // Blue
+		Muted:   lipgloss.NewStyle().Faint(true),
+		Key:     lipgloss.NewStyle().Foreground(lipgloss.Color("14")), // Cyan
+		Value:   lipgloss.NewStyle(),
+		Border:  lipgloss.Color("8"),                                  // Gray
+		Accent:  lipgloss.NewStyle().Foreground(lipgloss.Color("13")), // Magenta
 	}
 
 	// Disable colors if not a TTY
@@ -47,6 +60,12 @@ func NewPrinter(writer io.Writer, jsonMode bool, isTTY bool) *Printer {
 		styles.Warning = lipgloss.NewStyle()
 		styles.Bold = lipgloss.NewStyle()
 		styles.Dim = lipgloss.NewStyle()
+		styles.Title = lipgloss.NewStyle()
+		styles.Muted = lipgloss.NewStyle()
+		styles.Key = lipgloss.NewStyle()
+		styles.Value = lipgloss.NewStyle()
+		styles.Border = lipgloss.Color("")
+		styles.Accent = lipgloss.NewStyle()
 	}
 
 	return &Printer{
@@ -169,4 +188,120 @@ func mustWrite(_ int, err error) {
 	if err != nil {
 		panic(fmt.Sprintf("write failed: %v", err))
 	}
+}
+
+// Table renders a simple table with column alignment.
+// Headers are rendered in Bold style. Column widths are auto-calculated.
+// For non-TTY output, renders plain text with space padding.
+func (p *Printer) Table(headers []string, rows [][]string) {
+	if len(headers) == 0 {
+		return
+	}
+
+	widths := calcColumnWidths(headers, rows)
+	p.printTableHeaders(headers, widths)
+	p.printTableRows(rows, widths)
+}
+
+// calcColumnWidths computes the max width for each column.
+func calcColumnWidths(headers []string, rows [][]string) []int {
+	widths := make([]int, len(headers))
+	for i, h := range headers {
+		widths[i] = len(h)
+	}
+	for _, row := range rows {
+		for i, cell := range row {
+			if i < len(widths) && len(cell) > widths[i] {
+				widths[i] = len(cell)
+			}
+		}
+	}
+	return widths
+}
+
+// printTableHeaders renders the table header row.
+func (p *Printer) printTableHeaders(headers []string, widths []int) {
+	for i, h := range headers {
+		padded := padRight(h, widths[i])
+		if i > 0 {
+			mustWrite(fmt.Fprint(p.w, "  "))
+		}
+		mustWrite(fmt.Fprint(p.w, p.styles.Bold.Render(padded)))
+	}
+	mustWrite(fmt.Fprintln(p.w))
+}
+
+// printTableRows renders all data rows.
+func (p *Printer) printTableRows(rows [][]string, widths []int) {
+	for _, row := range rows {
+		p.printTableRow(row, widths)
+	}
+}
+
+// printTableRow renders a single data row.
+func (p *Printer) printTableRow(row []string, widths []int) {
+	for i, cell := range row {
+		if i >= len(widths) {
+			break
+		}
+		if i > 0 {
+			mustWrite(fmt.Fprint(p.w, "  "))
+		}
+		mustWrite(fmt.Fprint(p.w, padRight(cell, widths[i])))
+	}
+	mustWrite(fmt.Fprintln(p.w))
+}
+
+// Box renders content in a bordered box with an optional title.
+// For TTY output, uses lipgloss.RoundedBorder.
+// For non-TTY output, renders plain text without borders.
+func (p *Printer) Box(title string, content string) {
+	if !p.isTTY {
+		// Non-TTY: plain text without borders
+		if title != "" {
+			mustWrite(fmt.Fprintln(p.w, title))
+			mustWrite(fmt.Fprintln(p.w))
+		}
+		mustWrite(fmt.Fprintln(p.w, content))
+		return
+	}
+
+	// TTY: use lipgloss border
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(p.styles.Border).
+		Padding(0, 1)
+
+	boxContent := content
+	if title != "" {
+		boxContent = p.styles.Title.Render(title) + "\n\n" + content
+	}
+
+	mustWrite(fmt.Fprintln(p.w, style.Render(boxContent)))
+}
+
+// Section renders a section header with underline.
+// Adds a blank line before the header.
+func (p *Printer) Section(title string) {
+	mustWrite(fmt.Fprintln(p.w))
+	mustWrite(fmt.Fprintln(p.w, p.styles.Title.Render(title)))
+	// Create underline matching title length
+	underline := strings.Repeat("─", len(title))
+	mustWrite(fmt.Fprintln(p.w, p.styles.Muted.Render(underline)))
+}
+
+// KeyValue renders a key-value pair with styles applied.
+// Format: "Key: Value"
+func (p *Printer) KeyValue(key string, value string) {
+	styledKey := p.styles.Key.Render(key + ":")
+	styledValue := p.styles.Value.Render(value)
+	mustWrite(fmt.Fprintf(p.w, "%s %s\n", styledKey, styledValue))
+}
+
+// padRight pads a string with spaces to reach the target width.
+func padRight(s string, width int) string {
+	if len(s) >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-len(s))
 }
