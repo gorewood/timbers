@@ -1,81 +1,118 @@
 # Timbers
 
-A Git-native development ledger that captures *what/why/how* as structured records.
+**Git knows what changed. Timbers captures why.**
 
-## What It Does
+A development ledger that pairs Git commits with structured rationale—what you did, why you did it, how you approached it—stored as portable Git notes.
 
-Timbers turns Git history into a durable development ledger by:
-- Harvesting objective facts from Git (commits, diffstat, changed files)
-- Pairing them with agent/human-authored rationale (what/why/how)
-- Storing as portable Git notes that sync to remotes
-- Exporting structured data for downstream narrative generation
+## The Problem
+
+Git history shows *what* changed. Commit messages hint at *how*. But the *why*—the reasoning, constraints, decisions, context—lives in Slack threads, PR comments, and session memory that evaporates when the conversation ends.
+
+Six months later, you're staring at a commit wondering "why did we do it this way?" The answer is gone.
+
+## The Solution
+
+Timbers creates a durable development ledger:
+
+```bash
+# After completing work, capture the context
+timbers log "Fixed auth bypass" \
+  --why "User input wasn't sanitized before JWT validation" \
+  --how "Added validation middleware before auth handler"
+
+# See what needs documenting
+timbers pending
+
+# Generate reports from your ledger
+timbers prompt changelog --since 7d | claude
+```
+
+Each entry captures:
+- **What**: The work summary
+- **Why**: The reasoning and constraints
+- **How**: The approach taken
+- **Context**: Commits, diffstat, timestamps (harvested from Git)
+
+Entries are stored as Git notes—they travel with your repo, sync to remotes, and survive rebases.
 
 ## Quick Start
 
 ```bash
 # Install
-go install github.com/steveyegge/timbers/cmd/timbers@latest
+go install github.com/rbergman/timbers/cmd/timbers@latest
 
-# Record work (the primary operation)
-timbers log "Fixed auth bypass" --why "Input not sanitized" --how "Added validation"
+# Initialize notes sync (one-time)
+timbers notes init origin
 
-# Auto-extract from commit messages
-timbers log --auto
+# Record work
+timbers log "Added rate limiting" --why "Prevent API abuse" --how "Token bucket algorithm"
 
-# Batch entries by work item
-timbers log --batch beads
-
-# See what needs documentation
+# Check for undocumented commits
 timbers pending
 
-# Get workflow context at session start
-timbers prime
+# Query your ledger
+timbers query --last 10
+timbers query --since 7d --tags security
 
-# Export for LLM pipelines
-timbers export --last 5 --json | claude "Generate changelog"
+# Generate LLM-ready reports
+timbers prompt changelog --since 7d | claude
+timbers prompt pr-description --range main..HEAD | llm
 ```
 
-## Command Reference
+## Commands
 
-**Core Commands**
-- `timbers log` - Record development work with what/why/how
-- `timbers pending` - Show commits awaiting documentation
-- `timbers status` - Display repository and notes state
-- `timbers show` - Display a single ledger entry
-- `timbers prime` - Emit session context for agent workflow start
+**Recording**
+- `log` - Record work with what/why/how
+- `pending` - Show commits awaiting documentation
 
-**Query & Export**
-- `timbers query` - Search ledger entries by tags or content
-- `timbers export` - Export entries as JSON or Markdown
+**Querying**
+- `query` - Search entries by time, tags, or content
+- `show` - Display a single entry
+- `export` - Export as JSON or Markdown
 
-**Sync & Management**
-- `timbers notes init` - Initialize Git notes remote
-- `timbers notes push` - Push notes to remote
-- `timbers notes fetch` - Fetch notes from remote
-- `timbers notes status` - Check sync status
+**Reporting**
+- `prompt` - Render templates for LLM piping (changelog, pr-description, exec-summary, etc.)
+
+**Sync**
+- `notes init|push|fetch|status` - Manage Git notes sync
 
 **Agent Integration**
-- `timbers skill` - Emit skill documentation for agents
+- `prime` - Session context injection with workflow instructions
+- `skill` - Self-documentation for building agent skills
 
-All commands support `--json` for structured output and `--dry-run` for write operations.
+**Admin**
+- `status` - Repository and notes state
+- `uninstall` - Remove timbers from a repo (or `--binary` to also remove the CLI)
 
-## Core Philosophy
+All commands support `--json`. Write operations support `--dry-run`.
 
-**The "why" is the most valuable field in the ledger.**
+## Why Structured Rationale?
 
-Git captures *what* changed (the diff). Commit messages describe *how*. But *why* — the reasoning, context, requirements, decisions — lives in ephemeral places that evaporate after sessions end.
+Commit messages are too small. PRs are too scattered. Docs go stale. Timbers gives you:
 
-**Timbers exists to capture "why" before it disappears.**
+1. **Queryable history**: Find all security-related decisions from Q4
+2. **LLM-ready context**: Pipe entries to Claude for changelogs, summaries, blog posts
+3. **Onboarding gold**: New team members can understand not just what the code does, but why it's shaped that way
+4. **Audit trail**: Track decisions for compliance, post-mortems, or your future self
 
-## Agent DX
+## Agent-First Design
 
-Timbers is designed for agent consumption:
-- `--json` on every command
-- `timbers prime` for session context injection
-- `timbers pending` for clear next action
-- `timbers skill` for self-documentation
+Timbers is built for AI agent workflows:
+- `--json` everywhere for structured consumption
+- `prime` injects workflow context at session start
+- `pending` provides clear "what needs attention" signal
+- `prompt` generates LLM-ready output with built-in templates
 - Structured errors with recovery hints
-- Pipe-friendly exports
+- Exit codes follow conventions (0=success, 1=user error, 2=system error)
+
+```bash
+# Agent session start
+timbers prime
+
+# Agent session end
+timbers pending && timbers log "..." --why "..." --how "..."
+timbers notes push
+```
 
 ## Documentation
 
@@ -85,8 +122,8 @@ Timbers is designed for agent consumption:
 ## Development
 
 ```bash
-just setup    # First-time setup (mise, deps)
-just check    # Run all quality gates (lint, test)
+just setup    # First-time setup
+just check    # Lint + test (required before commit)
 just fix      # Auto-fix lint issues
 just run      # Run the CLI
 ```
