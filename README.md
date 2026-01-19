@@ -6,9 +6,11 @@ A development ledger that pairs Git commits with structured rationale—what you
 
 ## The Problem
 
-Git history shows *what* changed. Commit messages hint at *how*. But the *why*—the reasoning, constraints, decisions, context—lives in Slack threads, PR comments, and session memory that evaporates when the conversation ends.
+As AI agents take on more development work—from assisted coding to nearly autonomous feature delivery—human oversight becomes both harder and more critical. Git history shows *what* changed. Commit messages hint at *how*. But the *why*—the reasoning, constraints, decisions, context—lives in agent session logs that get compacted, Slack threads that scroll away, and PR comments that nobody reads twice.
 
-Six months later, you're staring at a commit wondering "why did we do it this way?" The answer is gone.
+Six months later, you're staring at agent-written code wondering "why did it do it this way?" The answer is gone.
+
+**In the era of vibe engineering, high-level understanding of large volumes of agent-assisted work is increasingly critical.** Timbers exists to maintain human oversight and comprehension as development becomes more automated.
 
 ## The Solution
 
@@ -86,37 +88,48 @@ timbers prompt pr-description --range main..HEAD | llm
 
 All commands support `--json`. Write operations support `--dry-run`.
 
-## Why Structured Rationale?
+## Human Oversight at Scale
 
-Commit messages are too small. PRs are too scattered. Docs go stale. Timbers gives you:
+When agents write code, humans need to stay in the loop without reading every line. Timbers enables:
 
-1. **Queryable history**: Find all security-related decisions from Q4
-2. **LLM-ready context**: Pipe entries to Claude for changelogs, summaries, blog posts
-3. **Onboarding gold**: New team members can understand not just what the code does, but why it's shaped that way
-4. **Audit trail**: Track decisions for compliance, post-mortems, or your future self
+1. **Executive summaries**: `timbers prompt exec-summary --since 7d | claude` — understand a week of agent work in 5 bullets
+2. **Queryable decisions**: Find all security-related changes, all work on a feature, all decisions by a particular agent session
+3. **Onboarding acceleration**: New team members understand not just *what* the code does, but *why* it's shaped that way
+4. **Audit trail**: Track the reasoning behind changes for compliance, post-mortems, or when "the agent did something weird"
 
-## Agent-First Design
+The ledger grows automatically as agents document their work. Humans harvest insights when they need them.
 
-Timbers is built for AI agent workflows:
-- `--json` everywhere for structured consumption
-- `prime` injects workflow context at session start
-- `pending` provides clear "what needs attention" signal
-- `prompt` generates LLM-ready output with built-in templates
-- Structured errors with recovery hints
-- Exit codes follow conventions (0=success, 1=user error, 2=system error)
+## Agent-Native Workflow
+
+Timbers is designed for agents to use directly. The typical session:
 
 ```bash
-# Agent session start
+# Session start: agent gets context
 timbers prime
 
-# Agent session end
-timbers pending && timbers log "..." --why "..." --how "..."
+# Session end: agent documents work
+timbers pending  # Check for undocumented commits
+timbers log "Implemented rate limiting" \
+  --why "API abuse detected in logs" \
+  --how "Token bucket with Redis backend"
 timbers notes push
 ```
 
+Humans rarely need to run `timbers log` directly—agents keep the ledger current. Humans use:
+- `timbers query` — to review what happened
+- `timbers prompt` — to generate summaries and reports
+
+**Agent-friendly features:**
+- `--json` on every command
+- `prime` for session context injection
+- `pending` for clear "what needs attention" signal
+- Structured errors with recovery hints
+- Exit codes: 0=success, 1=user error, 2=system error
+
 ## Documentation
 
-- [Tutorial](docs/tutorial.md) - Step-by-step setup, catching up history, agent integration, common uses
+- [Tutorial](docs/tutorial.md) - Step-by-step setup, catching up history, agent integration
+- [Publishing Artifacts](docs/publishing-artifacts.md) - Generating changelogs, reports, blogs via CI/CD
 - [Spec](docs/spec.md) - Full specification
 - [Agent DX Guide](docs/agent-dx-guide.md) - CLI design patterns for agents
 
