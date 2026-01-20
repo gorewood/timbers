@@ -115,12 +115,43 @@ prompt-model model +args:
     @claude -p --model {{model}} "$(go run ./cmd/timbers prompt {{args}})"
 
 # =============================================================================
+# RELEASE (goreleaser)
+# =============================================================================
+
+# Tag and push a release (triggers GitHub Actions)
+# Usage: just release 0.1.0
+release version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "{{version}}" =~ ^v ]]; then
+        tag="{{version}}"
+    else
+        tag="v{{version}}"
+    fi
+    echo "Creating release $tag..."
+    git tag "$tag"
+    git push origin "$tag"
+    echo "Release $tag pushed. GitHub Actions will build and publish."
+
+# Validate goreleaser configuration
+release-check:
+    goreleaser check
+
+# Test release build locally (no publish)
+release-snapshot:
+    goreleaser release --snapshot --clean
+
+# Build release locally (no publish)
+release-local:
+    goreleaser release --clean
+
+# =============================================================================
 # CLEANUP
 # =============================================================================
 
 # Remove build artifacts
 clean:
-    rm -rf bin/
+    rm -rf bin/ dist/
     rm -f coverage.out coverage.html
 
 # Deep clean including caches

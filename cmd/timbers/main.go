@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/charmbracelet/fang"
@@ -11,12 +12,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// version is set via ldflags at build time.
-// Example: go build -ldflags "-X main.version=1.0.0"
-var version = "dev"
+// Build info set via ldflags at build time by goreleaser.
+// Example: go build -ldflags "-X main.version=1.0.0 -X main.commit=abc123 -X main.date=2024-01-01"
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
 
 // jsonFlag is the global --json flag value.
 var jsonFlag bool
+
+// buildVersion returns the full version string including commit and date.
+func buildVersion() string {
+	if commit == "none" && date == "unknown" {
+		return version
+	}
+	shortCommit := commit
+	if len(commit) > 7 {
+		shortCommit = commit[:7]
+	}
+	return fmt.Sprintf("%s (%s, %s)", version, shortCommit, date)
+}
 
 func main() {
 	code := run()
@@ -25,7 +42,7 @@ func main() {
 
 func run() int {
 	cmd := newRootCmd()
-	err := fang.Execute(context.Background(), cmd, fang.WithVersion(version))
+	err := fang.Execute(context.Background(), cmd, fang.WithVersion(buildVersion()))
 	return output.GetExitCode(err)
 }
 
@@ -43,7 +60,7 @@ Timbers turns Git history into a durable development ledger by:
   - Exporting structured data for downstream narrative generation
 
 All commands support --json for structured output.`,
-		Version:       version,
+		Version:       buildVersion(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {

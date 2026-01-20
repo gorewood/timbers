@@ -58,6 +58,14 @@ Desktop.ini
 !.golangci.yml
 !.mise.toml
 !.envrc.example
+!.goreleaser.yaml
+
+# CI/CD
+!.github/
+!.github/**
+
+# Install script
+!install.sh
 
 # Beads issue tracking
 !.beads/

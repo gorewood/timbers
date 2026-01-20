@@ -1,0 +1,82 @@
+# GoReleaser v2 configuration
+# Documentation: https://goreleaser.com/customization/
+version: 2
+
+project_name: timbers
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: timbers
+    main: ./cmd/timbers
+    binary: timbers
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      # Windows ARM64 support is limited
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE*
+      - README*
+      - CHANGELOG*
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: rbergman
+    name: timbers
+  draft: false
+  prerelease: auto
+  name_template: "v{{.Version}}"
+  footer: |
+    ## Installation
+
+    ### curl | bash (Linux/macOS)
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/rbergman/timbers/main/install.sh | bash
+    ```
+
+    ### Go install
+    ```bash
+    go install github.com/rbergman/timbers/cmd/timbers@{{.Tag}}
+    ```
+
+    ### Manual download
+    Download the appropriate archive for your platform from the assets below.
