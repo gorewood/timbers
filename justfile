@@ -118,6 +118,19 @@ prompt-model model +args:
 # RELEASE (goreleaser)
 # =============================================================================
 
+# Install from source to GOPATH for local testing before release
+# Injects version info from git
+install-local:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+    commit=$(git rev-parse --short HEAD)
+    date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    echo "Installing timbers $version ($commit) to GOPATH..."
+    go install -ldflags "-X main.version=$version -X main.commit=$commit -X main.date=$date" ./cmd/timbers
+    echo "Installed: $(which timbers)"
+    timbers --version
+
 # Tag and push a release (triggers GitHub Actions)
 # Usage: just release 0.1.0
 release version:
@@ -141,9 +154,9 @@ release-check:
 release-snapshot:
     goreleaser release --snapshot --clean
 
-# Build release locally (no publish)
-release-local:
-    goreleaser release --clean
+# Build with goreleaser locally (no publish, no tag required)
+release-build:
+    goreleaser release --snapshot --clean
 
 # =============================================================================
 # CLEANUP

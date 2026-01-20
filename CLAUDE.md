@@ -7,13 +7,14 @@ A Git-native development ledger that captures *what/why/how* as structured recor
 **ALWAYS use `just` commands for development tasks.** Do not run `go` commands directly.
 
 ```bash
-just setup    # First-time setup (run once)
-just check    # REQUIRED: Run before commit (lint + test)
-just fix      # Auto-fix lint issues
-just run      # Run CLI: just run log "..." --why "..." --how "..."
-just build    # Build binary to bin/timbers
-just test     # Run tests only
-just lint     # Run linter only
+just setup         # First-time setup (run once)
+just check         # REQUIRED: Run before commit (lint + test)
+just fix           # Auto-fix lint issues
+just run           # Run CLI: just run log "..." --why "..." --how "..."
+just build         # Build binary to bin/timbers
+just test          # Run tests only
+just lint          # Run linter only
+just install-local # Install to GOPATH from source (for testing before release)
 ```
 
 **Quality Gate**: `just check` must pass before any commit. No exceptions.
@@ -198,10 +199,21 @@ func TestLogPendingCycle(t *testing.T) {
 
 ## Development Workflow
 
-After completing work on timbers itself:
+**Session start:**
 ```bash
-# Use timbers to document timbers development (dogfooding)
+timbers prime        # Get context and workflow instructions
+```
+
+**After completing work:**
+```bash
+timbers pending      # Check for undocumented commits
 timbers log "what" --why "why" --how "how"
-timbers pending      # Check for undocumented work
 timbers notes push   # Sync to remote
+```
+
+**Before releasing a new version:**
+```bash
+just install-local   # Install from source with version info
+# Test the local build
+just release 0.x.x   # Tag and push (triggers GitHub Actions)
 ```
