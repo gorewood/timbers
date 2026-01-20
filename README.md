@@ -4,6 +4,16 @@
 
 A development ledger that pairs Git commits with structured rationale—what you did, why you did it, how you approached it—stored as portable Git notes.
 
+## Installation
+
+```bash
+# One-liner (Linux/macOS)
+curl -fsSL https://raw.githubusercontent.com/rbergman/timbers/main/install.sh | bash
+
+# Or with Go
+go install github.com/rbergman/timbers/cmd/timbers@latest
+```
+
 ## The Problem
 
 As AI agents take on more development work—from assisted coding to nearly autonomous feature delivery—human oversight becomes both harder and more critical. Git history shows *what* changed. Commit messages hint at *how*. But the *why*—the reasoning, constraints, decisions, context—lives in agent session logs that get compacted, Slack threads that scroll away, and PR comments that nobody reads twice.
@@ -40,9 +50,6 @@ Entries are stored as Git notes—they travel with your repo, sync to remotes, a
 ## Quick Start
 
 ```bash
-# Install
-go install github.com/rbergman/timbers/cmd/timbers@latest
-
 # Initialize notes sync (one-time)
 timbers notes init origin
 
