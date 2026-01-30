@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ if .Title }}{{ .Title }} | {{ end }}{{ .Site.Title }}</title>
+  <style>
+    :root { --bg: #1a1a1a; --fg: #e0e0e0; --accent: #7cb342; --muted: #888; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg); max-width: 720px; margin: 0 auto; padding: 2rem 1rem; line-height: 1.6; }
+    a { color: var(--accent); }
+    h1, h2, h3 { font-weight: 600; }
+    .meta { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    article { margin-bottom: 3rem; }
+    .post-list { list-style: none; padding: 0; }
+    .post-list li { margin-bottom: 1rem; }
+    .post-list time { color: var(--muted); font-size: 0.85rem; }
+    code { background: #2a2a2a; padding: 0.2em 0.4em; border-radius: 3px; }
+    pre { background: #2a2a2a; padding: 1rem; overflow-x: auto; border-radius: 6px; }
+    pre code { background: none; padding: 0; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #333; color: var(--muted); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><a href="/" style="text-decoration: none; color: inherit;">{{ .Site.Title }}</a></h1>
+  </header>
+  <main>
+    {{ block "main" . }}{{ end }}
+  </main>
+  <footer>
+    <p>Generated with <a href="https://github.com/rbergman/timbers">Timbers</a> and Hugo</p>
+  </footer>
+</body>
+</html>
