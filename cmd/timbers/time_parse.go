@@ -37,8 +37,8 @@ func parseUntilValue(value string) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, fmt.Errorf("invalid --until value %q; use duration (24h, 7d, 2w) or date (2026-01-17)", value)
 	}
-	// For date-only values, extend to end of day
-	if len(value) == 10 { // YYYY-MM-DD format
+	// For date-only values (YYYY-MM-DD), extend to end of day
+	if len(value) == 10 && value[4] == '-' && value[7] == '-' {
 		cutoff = cutoff.Add(24*time.Hour - time.Second)
 	}
 	return cutoff, nil

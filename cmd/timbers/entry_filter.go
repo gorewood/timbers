@@ -11,7 +11,7 @@ import (
 	"github.com/rbergman/timbers/internal/output"
 )
 
-// filterEntriesSince filters entries to those created after the cutoff.
+// filterEntriesSince filters entries to those created at or after the cutoff.
 func filterEntriesSince(entries []*ledger.Entry, cutoff time.Time) []*ledger.Entry {
 	var result []*ledger.Entry
 	for _, entry := range entries {
