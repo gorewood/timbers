@@ -1,17 +1,27 @@
 ---
 name: release-notes
-description: User-facing release notes for version bumps
-version: 1
+description: User-facing release notes
+version: 2
 ---
 Generate user-facing release notes from these development log entries.
 
-Write for end users, not developers. Focus on:
-- New capabilities they can use
-- Problems that are now fixed
-- Breaking changes they need to know about
+**Audience**: End users, not developers.
 
-Avoid technical jargon. Use benefit-oriented language.
-Group into: New Features, Improvements, Bug Fixes, Breaking Changes.
+**Format** (include only sections with content):
+- **New Features**
+- **Improvements**
+- **Bug Fixes**
+- **Breaking Changes**
+
+**Style**:
+- Benefit-oriented language ("You can now..." not "Added support for...")
+- Avoid technical jargon where possible
+- One line per item
+
+**Constraints**:
+- Only include what's in the entries.
+- Don't invent user-facing benefits not implied by the changes.
+- Skip sections with no relevant entries.
 
 ## Entries ({{entry_count}}) | {{date_range}}
 

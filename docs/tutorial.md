@@ -268,6 +268,7 @@ timbers query --since 7d      # Last 7 days
 timbers query --since 2w      # Last 2 weeks
 timbers query --since 24h     # Last 24 hours
 timbers query --since 2026-01-01  # Since a specific date
+timbers query --since 2026-01-01 --until 2026-01-15  # Date range
 ```
 
 ### Filter by Tags
@@ -310,13 +311,11 @@ timbers prompt --list
 
 Built-in templates:
 - `changelog` — Conventional changelog format
+- `devblog` — Developer blog post (Carmack .plan style)
 - `exec-summary` — Executive summary for stakeholders
-- `sprint-report` — Sprint/iteration report
 - `pr-description` — Pull request description
 - `release-notes` — User-facing release notes
-- `devblog-gamedev` — Game development blog post
-- `devblog-opensource` — Open source project blog post
-- `devblog-startup` — Startup/product blog post
+- `sprint-report` — Sprint/iteration report
 
 ### Built-in LLM Execution
 
@@ -346,7 +345,7 @@ timbers prompt pr-description --range main..HEAD | claude -p
 timbers prompt exec-summary --last 10 | claude -p
 
 # Blog post with custom focus
-timbers prompt devblog-opensource --last 20 --append "Focus on the new plugin system" | claude -p
+timbers prompt devblog --last 20 --append "Focus on the new plugin system" | claude -p
 
 # Or use built-in LLM execution (simpler, no piping)
 timbers prompt changelog --since 7d --model local

@@ -18,6 +18,7 @@ import (
 func newPromptCmd() *cobra.Command {
 	var lastFlag string
 	var sinceFlag string
+	var untilFlag string
 	var rangeFlag string
 	var appendFlag string
 	var listFlag bool
@@ -44,17 +45,19 @@ Examples:
   timbers prompt changelog --since 7d --model haiku      # Built-in LLM execution
   timbers prompt exec-summary --last 5 --model sonnet    # Use specific model
   timbers prompt pr-description --range main..HEAD --model gemini-flash
+  timbers prompt changelog --since 2026-01-01 --until 2026-01-15  # Date range
 
   timbers prompt --list                    # List available templates
   timbers prompt changelog --show          # Show template content`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runPrompt(cmd, args, lastFlag, sinceFlag, rangeFlag, appendFlag, listFlag, showFlag, modelFlag, providerFlag)
+			return runPrompt(cmd, args, lastFlag, sinceFlag, untilFlag, rangeFlag, appendFlag, listFlag, showFlag, modelFlag, providerFlag)
 		},
 	}
 
 	cmd.Flags().StringVar(&lastFlag, "last", "", "Use last N entries")
 	cmd.Flags().StringVar(&sinceFlag, "since", "", "Use entries since duration (24h, 7d) or date")
+	cmd.Flags().StringVar(&untilFlag, "until", "", "Use entries until duration (24h, 7d) or date")
 	cmd.Flags().StringVar(&rangeFlag, "range", "", "Use entries in commit range (A..B)")
 	cmd.Flags().StringVar(&appendFlag, "append", "", "Append extra instructions to the prompt")
 	cmd.Flags().BoolVar(&listFlag, "list", false, "List available templates")
@@ -68,7 +71,7 @@ Examples:
 // runPrompt executes the prompt command.
 func runPrompt(
 	cmd *cobra.Command, args []string,
-	lastFlag, sinceFlag, rangeFlag, appendFlag string,
+	lastFlag, sinceFlag, untilFlag, rangeFlag, appendFlag string,
 	listFlag, showFlag bool,
 	modelFlag, providerFlag string,
 ) error {
@@ -100,22 +103,22 @@ func runPrompt(
 		return runPromptShow(printer, tmpl)
 	}
 
-	return runPromptRender(printer, tmpl, templateName, lastFlag, sinceFlag, rangeFlag, appendFlag, modelFlag, providerFlag)
+	return runPromptRender(printer, tmpl, templateName, lastFlag, sinceFlag, untilFlag, rangeFlag, appendFlag, modelFlag, providerFlag)
 }
 
 // runPromptRender renders the template with entries and outputs the result.
 func runPromptRender(
-	printer *output.Printer, tmpl *prompt.Template, templateName, lastFlag, sinceFlag, rangeFlag, appendFlag, modelFlag, providerFlag string,
+	printer *output.Printer, tmpl *prompt.Template, templateName, lastFlag, sinceFlag, untilFlag, rangeFlag, appendFlag, modelFlag, providerFlag string,
 ) error {
 	// Validate entry selection flags
-	if lastFlag == "" && sinceFlag == "" && rangeFlag == "" {
-		err := output.NewUserError("specify --last N, --since <duration|date>, or --range A..B to select entries")
+	if lastFlag == "" && sinceFlag == "" && untilFlag == "" && rangeFlag == "" {
+		err := output.NewUserError("specify --last N, --since <duration|date>, --until <duration|date>, or --range A..B to select entries")
 		printer.Error(err)
 		return err
 	}
 
 	// Get entries
-	entries, err := getPromptEntries(printer, lastFlag, sinceFlag, rangeFlag)
+	entries, err := getPromptEntries(printer, lastFlag, sinceFlag, untilFlag, rangeFlag)
 	if err != nil {
 		return err
 	}
@@ -280,7 +283,7 @@ func runPromptShow(printer *output.Printer, tmpl *prompt.Template) error {
 }
 
 // getPromptEntries retrieves entries based on flags.
-func getPromptEntries(printer *output.Printer, lastFlag, sinceFlag, rangeFlag string) ([]*ledger.Entry, error) {
+func getPromptEntries(printer *output.Printer, lastFlag, sinceFlag, untilFlag, rangeFlag string) ([]*ledger.Entry, error) {
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")
 		printer.Error(err)
@@ -301,6 +304,18 @@ func getPromptEntries(printer *output.Printer, lastFlag, sinceFlag, rangeFlag st
 		}
 	}
 
+	// Parse --until if provided
+	var untilCutoff time.Time
+	if untilFlag != "" {
+		var parseErr error
+		untilCutoff, parseErr = parseUntilValue(untilFlag)
+		if parseErr != nil {
+			err := output.NewUserError(parseErr.Error())
+			printer.Error(err)
+			return nil, err
+		}
+	}
+
 	// If --range is specified, use commit-based filtering
 	if rangeFlag != "" {
 		entries, err := getEntriesByRange(printer, storage, rangeFlag)
@@ -310,12 +325,15 @@ func getPromptEntries(printer *output.Printer, lastFlag, sinceFlag, rangeFlag st
 		if !sinceCutoff.IsZero() {
 			entries = filterEntriesSince(entries, sinceCutoff)
 		}
+		if !untilCutoff.IsZero() {
+			entries = filterEntriesUntil(entries, untilCutoff)
+		}
 		return entries, nil
 	}
 
-	// If --since is specified, filter by time
-	if !sinceCutoff.IsZero() {
-		return getEntriesBySince(printer, storage, sinceCutoff, lastFlag)
+	// If --since or --until is specified, filter by time
+	if !sinceCutoff.IsZero() || !untilCutoff.IsZero() {
+		return getEntriesByTimeRange(printer, storage, sinceCutoff, untilCutoff, lastFlag)
 	}
 
 	// Otherwise use --last

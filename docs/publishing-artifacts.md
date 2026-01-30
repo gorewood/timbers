@@ -12,7 +12,7 @@ This document outlines strategies for publishing artifacts generated from your d
 | Release Notes | End users | `release-notes` | Per release |
 | Executive Summary | Internal stakeholders | `exec-summary` | Weekly/sprint |
 | Sprint Report | Team | `sprint-report` | Per sprint |
-| Dev Blog | External community | `devblog-*` | Monthly/milestone |
+| Dev Blog | External community | `devblog` | Monthly/milestone |
 
 ---
 
@@ -140,8 +140,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           WEEK=$(date +%Y-week%V)
-          timbers prompt devblog-opensource --since 7d \
-            --append "This is the weekly update for $WEEK. Focus on what shipped and what's coming." \
+          timbers prompt devblog --since 7d \
+            --append "This is the weekly update for $WEEK." \
             | claude --model haiku --print > docs/blog/$WEEK.md
 
       - name: Commit and push
@@ -212,7 +212,7 @@ timbers prompt sprint-report --since 14d | claude --model haiku --print > /share
 ```bash
 # Examples
 timbers prompt changelog --since 30d | claude --model haiku --print
-timbers prompt devblog-opensource --last 20 | claude --model sonnet --print
+timbers prompt devblog --last 20 | claude --model sonnet --print
 ```
 
 ---

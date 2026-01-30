@@ -25,6 +25,7 @@ func newExportCmd() *cobra.Command {
 func newExportCmdInternal(storage *ledger.Storage) *cobra.Command {
 	var lastFlag string
 	var sinceFlag string
+	var untilFlag string
 	var rangeFlag string
 	var formatFlag string
 	var outFlag string
@@ -38,16 +39,18 @@ Examples:
   timbers export --last 5 --json                    # Export last 5 as JSON array to stdout
   timbers export --since 24h                        # Export entries from last 24 hours
   timbers export --since 7d --format md             # Export last 7 days as markdown
+  timbers export --since 2026-01-01 --until 2026-01-15  # Date range
   timbers export --last 5 --out ./exports/          # Export last 5 as JSON files to directory
   timbers export --range v1.0.0..v1.1.0 --json      # Export range as JSON
   timbers export --last 10 --format md --out ./notes/ # Export last 10 as markdown files`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runExport(cmd, storage, lastFlag, sinceFlag, rangeFlag, formatFlag, outFlag)
+			return runExport(cmd, storage, lastFlag, sinceFlag, untilFlag, rangeFlag, formatFlag, outFlag)
 		},
 	}
 
 	cmd.Flags().StringVar(&lastFlag, "last", "", "Export last N entries")
 	cmd.Flags().StringVar(&sinceFlag, "since", "", "Export entries since duration (24h, 7d) or date (2026-01-17)")
+	cmd.Flags().StringVar(&untilFlag, "until", "", "Export entries until duration (24h, 7d) or date (2026-01-17)")
 	cmd.Flags().StringVar(&rangeFlag, "range", "", "Export entries in commit range (A..B)")
 	cmd.Flags().StringVar(&formatFlag, "format", "", "Output format: json or md (default: json for stdout, md for --out)")
 	cmd.Flags().StringVar(&outFlag, "out", "", "Output directory (if omitted, writes to stdout)")
@@ -56,10 +59,10 @@ Examples:
 }
 
 // runExport executes the export command.
-func runExport(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag, rangeFlag, formatFlag, outFlag string) error {
+func runExport(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag, untilFlag, rangeFlag, formatFlag, outFlag string) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
 
-	if err := validateExportFlags(printer, lastFlag, sinceFlag, rangeFlag); err != nil {
+	if err := validateExportFlags(printer, lastFlag, sinceFlag, untilFlag, rangeFlag); err != nil {
 		return err
 	}
 
@@ -68,6 +71,18 @@ func runExport(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag,
 	if sinceFlag != "" {
 		var parseErr error
 		sinceCutoff, parseErr = parseSinceValue(sinceFlag)
+		if parseErr != nil {
+			err := output.NewUserError(parseErr.Error())
+			printer.Error(err)
+			return err
+		}
+	}
+
+	// Parse --until if provided
+	var untilCutoff time.Time
+	if untilFlag != "" {
+		var parseErr error
+		untilCutoff, parseErr = parseUntilValue(untilFlag)
 		if parseErr != nil {
 			err := output.NewUserError(parseErr.Error())
 			printer.Error(err)
@@ -85,7 +100,7 @@ func runExport(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag,
 		return err
 	}
 
-	entries, err := getExportEntries(printer, storage, lastFlag, sinceCutoff, rangeFlag)
+	entries, err := getExportEntries(printer, storage, lastFlag, sinceCutoff, untilCutoff, rangeFlag)
 	if err != nil {
 		return err
 	}
@@ -94,9 +109,9 @@ func runExport(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag,
 }
 
 // validateExportFlags checks that required flags are provided.
-func validateExportFlags(printer *output.Printer, lastFlag, sinceFlag, rangeFlag string) error {
-	if lastFlag == "" && sinceFlag == "" && rangeFlag == "" {
-		err := output.NewUserError("specify --last N, --since <duration|date>, or --range A..B to export entries")
+func validateExportFlags(printer *output.Printer, lastFlag, sinceFlag, untilFlag, rangeFlag string) error {
+	if lastFlag == "" && sinceFlag == "" && untilFlag == "" && rangeFlag == "" {
+		err := output.NewUserError("specify --last N, --since <duration|date>, --until <duration|date>, or --range A..B to export entries")
 		printer.Error(err)
 		return err
 	}
@@ -140,9 +155,9 @@ func ensureStorage(printer *output.Printer, storage *ledger.Storage) (*ledger.St
 	return ledger.NewStorage(nil), nil
 }
 
-// getExportEntries retrieves entries based on --last, --since, or --range flags.
+// getExportEntries retrieves entries based on --last, --since, --until, or --range flags.
 func getExportEntries(
-	printer *output.Printer, storage *ledger.Storage, lastFlag string, sinceCutoff time.Time, rangeFlag string,
+	printer *output.Printer, storage *ledger.Storage, lastFlag string, sinceCutoff, untilCutoff time.Time, rangeFlag string,
 ) ([]*ledger.Entry, error) {
 	// If --range is specified, use commit-based filtering
 	if rangeFlag != "" {
@@ -154,28 +169,39 @@ func getExportEntries(
 		if !sinceCutoff.IsZero() {
 			entries = filterEntriesSince(entries, sinceCutoff)
 		}
+		// Apply --until filter if also specified
+		if !untilCutoff.IsZero() {
+			entries = filterEntriesUntil(entries, untilCutoff)
+		}
 		return entries, nil
 	}
 
-	// If --since is specified, filter by time
-	if !sinceCutoff.IsZero() {
-		return getEntriesBySince(printer, storage, sinceCutoff, lastFlag)
+	// If --since or --until is specified, filter by time
+	if !sinceCutoff.IsZero() || !untilCutoff.IsZero() {
+		return getEntriesByTimeRange(printer, storage, sinceCutoff, untilCutoff, lastFlag)
 	}
 
 	// Otherwise use --last
 	return getEntriesByLast(printer, storage, lastFlag)
 }
 
-// getEntriesBySince retrieves entries created after the cutoff, with optional limit.
-func getEntriesBySince(printer *output.Printer, storage *ledger.Storage, cutoff time.Time, lastFlag string) ([]*ledger.Entry, error) {
+// getEntriesByTimeRange retrieves entries within the time range, with optional limit.
+func getEntriesByTimeRange(printer *output.Printer, storage *ledger.Storage, sinceCutoff, untilCutoff time.Time, lastFlag string) ([]*ledger.Entry, error) {
 	entries, err := storage.ListEntries()
 	if err != nil {
 		printer.Error(err)
 		return nil, err
 	}
 
-	// Filter by cutoff
-	entries = filterEntriesSince(entries, cutoff)
+	// Filter by since cutoff
+	if !sinceCutoff.IsZero() {
+		entries = filterEntriesSince(entries, sinceCutoff)
+	}
+
+	// Filter by until cutoff
+	if !untilCutoff.IsZero() {
+		entries = filterEntriesUntil(entries, untilCutoff)
+	}
 
 	// Sort by created_at descending
 	sortEntriesByCreatedAt(entries)

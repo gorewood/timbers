@@ -73,7 +73,7 @@ func TestQueryCommand(t *testing.T) {
 			lastFlag:     "",
 			notes:        map[string][]byte{},
 			wantErr:      true,
-			wantContains: []string{"specify --last N or --since"},
+			wantContains: []string{"specify --last N, --since"},
 		},
 		{
 			name:         "--last with zero",

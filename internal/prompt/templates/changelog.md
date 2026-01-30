@@ -1,18 +1,25 @@
 ---
 name: changelog
-description: Conventional changelog grouped by date
-version: 1
+description: Conventional changelog grouped by type
+version: 2
 ---
 Generate a changelog from these development log entries.
 
-Use conventional changelog format with sections:
+**Format**: Conventional changelog with sections (include only those with entries):
 - **Added** - New features
 - **Changed** - Changes to existing functionality
 - **Fixed** - Bug fixes
 - **Removed** - Removed features
 
-Group by date (most recent first). Use past tense. One line per entry.
-Link to commits where relevant.
+**Style**:
+- Past tense, one line per item
+- Group by date (most recent first)
+- Derive categories from entry content—don't force entries into categories that don't fit
+
+**Constraints**:
+- Only include what's in the entries. Don't infer additional changes.
+- If an entry doesn't clearly fit a category, use your best judgment or skip it.
+- Don't add version numbers unless present in the entries.
 
 ## Entries ({{entry_count}})
 

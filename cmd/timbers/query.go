@@ -23,27 +23,30 @@ func newQueryCmd() *cobra.Command {
 func newQueryCmdInternal(storage *ledger.Storage) *cobra.Command {
 	var lastFlag string
 	var sinceFlag string
+	var untilFlag string
 	var onelineFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "query",
 		Short: "Retrieve ledger entries with filters",
-		Long: `Retrieve ledger entries with filters like --last N or --since.
+		Long: `Retrieve ledger entries with filters like --last N, --since, or --until.
 
 Examples:
-  timbers query --last 5           # Show last 5 entries
-  timbers query --since 24h        # Show entries from last 24 hours
-  timbers query --since 7d         # Show entries from last 7 days
-  timbers query --since 2026-01-15 # Show entries since date
-  timbers query --last 10 --json   # Show last 10 as JSON
-  timbers query --last 3 --oneline # Show last 3 in compact format`,
+  timbers query --last 5                      # Show last 5 entries
+  timbers query --since 24h                   # Show entries from last 24 hours
+  timbers query --since 7d                    # Show entries from last 7 days
+  timbers query --since 2026-01-15            # Show entries since date
+  timbers query --since 2026-01-01 --until 2026-01-15  # Date range
+  timbers query --last 10 --json              # Show last 10 as JSON
+  timbers query --last 3 --oneline            # Show last 3 in compact format`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runQuery(cmd, storage, lastFlag, sinceFlag, onelineFlag)
+			return runQuery(cmd, storage, lastFlag, sinceFlag, untilFlag, onelineFlag)
 		},
 	}
 
 	cmd.Flags().StringVar(&lastFlag, "last", "", "Retrieve last N entries")
 	cmd.Flags().StringVar(&sinceFlag, "since", "", "Retrieve entries since duration (24h, 7d) or date (2026-01-17)")
+	cmd.Flags().StringVar(&untilFlag, "until", "", "Retrieve entries until duration (24h, 7d) or date (2026-01-17)")
 	cmd.Flags().BoolVar(&onelineFlag, "oneline", false, "Show compact format: <id>  <what>")
 
 	return cmd
@@ -53,14 +56,15 @@ Examples:
 type queryParams struct {
 	count       int
 	sinceCutoff time.Time
+	untilCutoff time.Time
 }
 
 // runQuery executes the query command.
-func runQuery(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag string, onelineFlag bool) error {
+func runQuery(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag, untilFlag string, onelineFlag bool) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
 
 	// Parse and validate flags
-	params, err := parseQueryFlags(lastFlag, sinceFlag)
+	params, err := parseQueryFlags(lastFlag, sinceFlag, untilFlag)
 	if err != nil {
 		printer.Error(err)
 		return err
@@ -73,7 +77,7 @@ func runQuery(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag s
 	}
 
 	// Get entries based on filters
-	entries, err := getQueryEntries(storage, params.count, params.sinceCutoff)
+	entries, err := getQueryEntries(storage, params.count, params.sinceCutoff, params.untilCutoff)
 	if err != nil {
 		printer.Error(err)
 		return err
@@ -84,9 +88,9 @@ func runQuery(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag s
 }
 
 // parseQueryFlags validates and parses the query flags.
-func parseQueryFlags(lastFlag, sinceFlag string) (*queryParams, error) {
-	if lastFlag == "" && sinceFlag == "" {
-		return nil, output.NewUserError("specify --last N or --since <duration|date> to retrieve entries")
+func parseQueryFlags(lastFlag, sinceFlag, untilFlag string) (*queryParams, error) {
+	if lastFlag == "" && sinceFlag == "" && untilFlag == "" {
+		return nil, output.NewUserError("specify --last N, --since <duration|date>, or --until <duration|date> to retrieve entries")
 	}
 
 	params := &queryParams{}
@@ -97,6 +101,14 @@ func parseQueryFlags(lastFlag, sinceFlag string) (*queryParams, error) {
 			return nil, output.NewUserError(err.Error())
 		}
 		params.sinceCutoff = cutoff
+	}
+
+	if untilFlag != "" {
+		cutoff, err := parseUntilValue(untilFlag)
+		if err != nil {
+			return nil, output.NewUserError(err.Error())
+		}
+		params.untilCutoff = cutoff
 	}
 
 	if lastFlag != "" {
@@ -140,10 +152,10 @@ func outputQueryResults(printer *output.Printer, entries []*ledger.Entry, onelin
 	return nil
 }
 
-// getQueryEntries retrieves entries based on --last and --since filters.
-func getQueryEntries(storage *ledger.Storage, count int, sinceCutoff time.Time) ([]*ledger.Entry, error) {
+// getQueryEntries retrieves entries based on --last, --since, and --until filters.
+func getQueryEntries(storage *ledger.Storage, count int, sinceCutoff, untilCutoff time.Time) ([]*ledger.Entry, error) {
 	// If only --last is specified, use the optimized path
-	if sinceCutoff.IsZero() && count > 0 {
+	if sinceCutoff.IsZero() && untilCutoff.IsZero() && count > 0 {
 		return storage.GetLastNEntries(count)
 	}
 
@@ -156,6 +168,11 @@ func getQueryEntries(storage *ledger.Storage, count int, sinceCutoff time.Time) 
 	// Filter by --since if specified
 	if !sinceCutoff.IsZero() {
 		entries = filterEntriesSince(entries, sinceCutoff)
+	}
+
+	// Filter by --until if specified
+	if !untilCutoff.IsZero() {
+		entries = filterEntriesUntil(entries, untilCutoff)
 	}
 
 	// Sort by created_at descending (most recent first)
@@ -174,6 +191,17 @@ func filterEntriesSince(entries []*ledger.Entry, cutoff time.Time) []*ledger.Ent
 	var result []*ledger.Entry
 	for _, entry := range entries {
 		if entry.CreatedAt.After(cutoff) || entry.CreatedAt.Equal(cutoff) {
+			result = append(result, entry)
+		}
+	}
+	return result
+}
+
+// filterEntriesUntil filters entries to those created before or at the cutoff.
+func filterEntriesUntil(entries []*ledger.Entry, cutoff time.Time) []*ledger.Entry {
+	var result []*ledger.Entry
+	for _, entry := range entries {
+		if entry.CreatedAt.Before(cutoff) || entry.CreatedAt.Equal(cutoff) {
 			result = append(result, entry)
 		}
 	}
