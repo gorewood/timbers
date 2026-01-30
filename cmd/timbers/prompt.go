@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/rbergman/timbers/internal/git"
@@ -200,22 +199,6 @@ func runPromptWithLLM(
 
 	printer.Print("%s\n", resp.Content)
 	return nil
-}
-
-// buildRenderContext creates a RenderContext from entries and flags.
-func buildRenderContext(entries []*ledger.Entry, appendFlag string) *prompt.RenderContext {
-	repoName := ""
-	if root, rootErr := git.RepoRoot(); rootErr == nil {
-		repoName = filepath.Base(root)
-	}
-	branch, _ := git.CurrentBranch()
-
-	return &prompt.RenderContext{
-		Entries:    entries,
-		RepoName:   repoName,
-		Branch:     branch,
-		AppendText: appendFlag,
-	}
 }
 
 // runPromptList lists available templates.
