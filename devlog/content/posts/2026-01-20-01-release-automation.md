@@ -1,14 +1,19 @@
 ---
 title: "Release Automation"
-date: 2026-01-20T03:12:00Z
+date: 2026-01-20T03:13:00Z
 ---
 
-I was staring at the empty prompt line, wondering why every time I needed a quick LLM answer I had to pipe it through some external tool like a medieval messenger. Then it hit me: *why not bake it right into the command?* That little spark turned into the new `--model` and `--provider` flags on the `prompt` command. I added them with a few lines of code, hooked the flag parsing into the existing `llm` package, and suddenly you can fire off a model locally or point it at a cloud endpoint without breaking your flow. It felt like slipping a new lens into an old telescope—still the same view, but suddenly clearer.
+I hit one of those infuriating edge cases where your tool works perfectly in your pristine dev repo, then someone tries it in the wild and it explodes. Turns out people use git notes for *other things*. Who knew?
 
-Later, I thought about the catchup command. It was fine, but the batch size was fixed, and the grouping was hard‑coded. Users kept asking, “Can I limit how many entries I process at once?” and “Can I group by day instead of work‑item?” So I tossed in `--limit`/`-l` and `--group-by`/`-g`. Nothing massive—just a tiny tweak that caps the batch and lets you pick the grouping strategy. The diff was modest, but the flexibility felt like a modest refactor that paid off every time I ran a catchup loop.
+Timbers stores its structured entries as git notes under a specific ref. But if you've got notes from another tool—or just random experiments—the parser would choke trying to deserialize them as timbers entries. The fix was straightforward: added `ErrNotTimbersNote` and schema validation during parsing. Now `timbers status --verbose` will skip foreign notes gracefully instead of vomiting errors. **The tool should fit into existing workflows, not demand a sterile environment.**
 
-And then there’s the release story. I’ve been pushing binaries manually for years, and each time I’d think, “There’s got to be a smoother way.” Enter `goreleaser`. I dropped a `.goreleaser.yaml` into the repo, spun up a GitHub Actions workflow that fires on tag pushes, and added an `install.sh` that does checksum verification before handing you the binary. The `just install-local` helper lets me test locally before the release hits the world. It turned a clunky manual process into a hefty chunk of automation that feels almost invisible once it’s running.
+While I was in there, I wired up `--limit` and `--group-by` flags for the `catchup` command. The original version would just batch everything by day, which is fine until you've got a week of uncommitted work and don't want to generate a novella. Now you can cap how many entries you process in one go, and choose whether to group by day or by logical work item. Small tweak, but it makes the command actually usable when you're behind.
 
-*These changes are tiny in the grand scheme, but they’re the kind of incremental polish that makes the whole toolchain feel alive.*  
+The bigger change: **built-in LLM execution**. Before, you'd pipe `timbers prompt` output to `llm` or whatever your preferred wrapper was. It worked, but felt clunky. Now you can pass `--model` and `--provider` directly to the `prompt` command and get output inline. The plumbing hooks into the same `llm` package I use for catchup generation, so there's no extra dependency sprawl. Just less friction between intent and result.
 
-*Transparency: this post was generated from the recent development log entries.*
+Also stood up goreleaser and a GitHub Actions workflow. The goal is dead-simple distribution: `curl | bash` for the impatient, pre-built binaries for everyone else. Config was straightforward—goreleaser does the heavy lifting, and I threw in checksum verification in `install.sh` because security nihilism is boring. Added a `just install-local` target to smoke-test the install script before actually cutting a release, which already saved me from shipping something embarrassing.
+
+All of this felt like yak-shaving, but the good kind. The core tool works; now it's about removing papercuts and making it easy to get your hands on.
+
+---
+*Written with AI assistance as a editing tool.*
