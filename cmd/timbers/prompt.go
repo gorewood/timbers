@@ -108,7 +108,9 @@ func runPrompt(
 
 // runPromptRender renders the template with entries and outputs the result.
 func runPromptRender(
-	printer *output.Printer, tmpl *prompt.Template, templateName, lastFlag, sinceFlag, untilFlag, rangeFlag, appendFlag, modelFlag, providerFlag string,
+	printer *output.Printer, tmpl *prompt.Template,
+	templateName, lastFlag, sinceFlag, untilFlag, rangeFlag string,
+	appendFlag, modelFlag, providerFlag string,
 ) error {
 	// Validate entry selection flags
 	if lastFlag == "" && sinceFlag == "" && untilFlag == "" && rangeFlag == "" {
@@ -283,7 +285,9 @@ func runPromptShow(printer *output.Printer, tmpl *prompt.Template) error {
 }
 
 // getPromptEntries retrieves entries based on flags.
-func getPromptEntries(printer *output.Printer, lastFlag, sinceFlag, untilFlag, rangeFlag string) ([]*ledger.Entry, error) {
+func getPromptEntries(
+	printer *output.Printer, lastFlag, sinceFlag, untilFlag, rangeFlag string,
+) ([]*ledger.Entry, error) {
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")
 		printer.Error(err)
@@ -291,51 +295,55 @@ func getPromptEntries(printer *output.Printer, lastFlag, sinceFlag, untilFlag, r
 	}
 
 	storage := ledger.NewStorage(nil)
-
-	// Parse --since if provided
-	var sinceCutoff time.Time
-	if sinceFlag != "" {
-		var parseErr error
-		sinceCutoff, parseErr = parseSinceValue(sinceFlag)
-		if parseErr != nil {
-			err := output.NewUserError(parseErr.Error())
-			printer.Error(err)
-			return nil, err
-		}
+	sinceCutoff, untilCutoff, err := parseTimeCutoffs(printer, sinceFlag, untilFlag)
+	if err != nil {
+		return nil, err
 	}
 
-	// Parse --until if provided
-	var untilCutoff time.Time
-	if untilFlag != "" {
-		var parseErr error
-		untilCutoff, parseErr = parseUntilValue(untilFlag)
-		if parseErr != nil {
-			err := output.NewUserError(parseErr.Error())
-			printer.Error(err)
-			return nil, err
-		}
-	}
-
-	// If --range is specified, use commit-based filtering
 	if rangeFlag != "" {
-		entries, err := getEntriesByRange(printer, storage, rangeFlag)
-		if err != nil {
-			return nil, err
-		}
-		if !sinceCutoff.IsZero() {
-			entries = filterEntriesSince(entries, sinceCutoff)
-		}
-		if !untilCutoff.IsZero() {
-			entries = filterEntriesUntil(entries, untilCutoff)
-		}
-		return entries, nil
+		return getEntriesByRangeWithFilters(printer, storage, rangeFlag, sinceCutoff, untilCutoff)
 	}
-
-	// If --since or --until is specified, filter by time
 	if !sinceCutoff.IsZero() || !untilCutoff.IsZero() {
 		return getEntriesByTimeRange(printer, storage, sinceCutoff, untilCutoff, lastFlag)
 	}
-
-	// Otherwise use --last
 	return getEntriesByLast(printer, storage, lastFlag)
+}
+
+// parseTimeCutoffs parses --since and --until flags into time cutoffs.
+func parseTimeCutoffs(printer *output.Printer, sinceFlag, untilFlag string) (time.Time, time.Time, error) {
+	var sinceCutoff, untilCutoff time.Time
+	var err error
+	if sinceFlag != "" {
+		if sinceCutoff, err = parseSinceValue(sinceFlag); err != nil {
+			userErr := output.NewUserError(err.Error())
+			printer.Error(userErr)
+			return time.Time{}, time.Time{}, userErr
+		}
+	}
+	if untilFlag != "" {
+		if untilCutoff, err = parseUntilValue(untilFlag); err != nil {
+			userErr := output.NewUserError(err.Error())
+			printer.Error(userErr)
+			return time.Time{}, time.Time{}, userErr
+		}
+	}
+	return sinceCutoff, untilCutoff, nil
+}
+
+// getEntriesByRangeWithFilters retrieves entries by commit range with time filters.
+func getEntriesByRangeWithFilters(
+	printer *output.Printer, storage *ledger.Storage,
+	rangeFlag string, sinceCutoff, untilCutoff time.Time,
+) ([]*ledger.Entry, error) {
+	entries, err := getEntriesByRange(printer, storage, rangeFlag)
+	if err != nil {
+		return nil, err
+	}
+	if !sinceCutoff.IsZero() {
+		entries = filterEntriesSince(entries, sinceCutoff)
+	}
+	if !untilCutoff.IsZero() {
+		entries = filterEntriesUntil(entries, untilCutoff)
+	}
+	return entries, nil
 }

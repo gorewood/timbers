@@ -2,7 +2,6 @@
 package main
 
 import (
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -95,31 +94,56 @@ func parseQueryFlags(lastFlag, sinceFlag, untilFlag string) (*queryParams, error
 
 	params := &queryParams{}
 
-	if sinceFlag != "" {
-		cutoff, err := parseSinceValue(sinceFlag)
-		if err != nil {
-			return nil, output.NewUserError(err.Error())
-		}
-		params.sinceCutoff = cutoff
+	if err := parseQuerySinceFlag(sinceFlag, params); err != nil {
+		return nil, err
 	}
-
-	if untilFlag != "" {
-		cutoff, err := parseUntilValue(untilFlag)
-		if err != nil {
-			return nil, output.NewUserError(err.Error())
-		}
-		params.untilCutoff = cutoff
+	if err := parseQueryUntilFlag(untilFlag, params); err != nil {
+		return nil, err
 	}
-
-	if lastFlag != "" {
-		count, err := strconv.Atoi(lastFlag)
-		if err != nil || count <= 0 {
-			return nil, output.NewUserError("--last must be a positive integer")
-		}
-		params.count = count
+	if err := parseQueryLastFlag(lastFlag, params); err != nil {
+		return nil, err
 	}
 
 	return params, nil
+}
+
+// parseQuerySinceFlag parses the --since flag into params.
+func parseQuerySinceFlag(sinceFlag string, params *queryParams) error {
+	if sinceFlag == "" {
+		return nil
+	}
+	cutoff, err := parseSinceValue(sinceFlag)
+	if err != nil {
+		return output.NewUserError(err.Error())
+	}
+	params.sinceCutoff = cutoff
+	return nil
+}
+
+// parseQueryUntilFlag parses the --until flag into params.
+func parseQueryUntilFlag(untilFlag string, params *queryParams) error {
+	if untilFlag == "" {
+		return nil
+	}
+	cutoff, err := parseUntilValue(untilFlag)
+	if err != nil {
+		return output.NewUserError(err.Error())
+	}
+	params.untilCutoff = cutoff
+	return nil
+}
+
+// parseQueryLastFlag parses the --last flag into params.
+func parseQueryLastFlag(lastFlag string, params *queryParams) error {
+	if lastFlag == "" {
+		return nil
+	}
+	count, err := strconv.Atoi(lastFlag)
+	if err != nil || count <= 0 {
+		return output.NewUserError("--last must be a positive integer")
+	}
+	params.count = count
+	return nil
 }
 
 // initQueryStorage initializes storage, checking for git repo if needed.
@@ -184,35 +208,6 @@ func getQueryEntries(storage *ledger.Storage, count int, sinceCutoff, untilCutof
 	}
 
 	return entries, nil
-}
-
-// filterEntriesSince filters entries to those created after the cutoff.
-func filterEntriesSince(entries []*ledger.Entry, cutoff time.Time) []*ledger.Entry {
-	var result []*ledger.Entry
-	for _, entry := range entries {
-		if entry.CreatedAt.After(cutoff) || entry.CreatedAt.Equal(cutoff) {
-			result = append(result, entry)
-		}
-	}
-	return result
-}
-
-// filterEntriesUntil filters entries to those created before or at the cutoff.
-func filterEntriesUntil(entries []*ledger.Entry, cutoff time.Time) []*ledger.Entry {
-	var result []*ledger.Entry
-	for _, entry := range entries {
-		if entry.CreatedAt.Before(cutoff) || entry.CreatedAt.Equal(cutoff) {
-			result = append(result, entry)
-		}
-	}
-	return result
-}
-
-// sortEntriesByCreatedAt sorts entries by created_at descending (most recent first).
-func sortEntriesByCreatedAt(entries []*ledger.Entry) {
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].CreatedAt.After(entries[j].CreatedAt)
-	})
 }
 
 // outputQueryJSON outputs the entries as JSON array.

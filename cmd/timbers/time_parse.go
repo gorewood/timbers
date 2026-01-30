@@ -33,15 +33,15 @@ func parseSinceValue(value string) (time.Time, error) {
 // Returns the cutoff time (entries created before this time should be included).
 // For dates, returns end of day (23:59:59) to include the full day.
 func parseUntilValue(value string) (time.Time, error) {
-	t, err := parseTimeValue(value)
+	cutoff, err := parseTimeValue(value)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("invalid --until value %q; use duration (24h, 7d, 2w) or date (2026-01-17)", value)
 	}
 	// For date-only values, extend to end of day
 	if len(value) == 10 { // YYYY-MM-DD format
-		t = t.Add(24*time.Hour - time.Second)
+		cutoff = cutoff.Add(24*time.Hour - time.Second)
 	}
-	return t, nil
+	return cutoff, nil
 }
 
 // parseTimeValue parses a time value (duration or date) into a time.Time.

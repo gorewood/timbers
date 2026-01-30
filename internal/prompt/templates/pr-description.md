@@ -1,7 +1,7 @@
 ---
 name: pr-description
 description: Pull request body with summary and test plan
-version: 2
+version: 3
 ---
 Generate a pull request description from these development log entries.
 
@@ -20,6 +20,13 @@ Generate a pull request description from these development log entries.
 **Style**:
 - Concise. Reviewers skim.
 - Focus on what matters for review: intent, scope, risk areas.
+- Use `backticks` for file names, function names, flags, commands
+- Be specific: "Added `--until` flag to `query` command" not "Added new flag"
+- Call out breaking changes or behavioral shifts explicitly
+
+**Numbers and metrics**:
+- DO NOT cite raw diff stats ("45 insertions, 12 deletions")
+- Scope can be conveyed naturally: "Touched most of the CLI layer" or "Focused change to one module"
 
 **Constraints**:
 - Only describe changes present in the entries.

@@ -4,8 +4,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/rbergman/timbers/internal/export"
@@ -183,107 +181,6 @@ func getExportEntries(
 
 	// Otherwise use --last
 	return getEntriesByLast(printer, storage, lastFlag)
-}
-
-// getEntriesByTimeRange retrieves entries within the time range, with optional limit.
-func getEntriesByTimeRange(printer *output.Printer, storage *ledger.Storage, sinceCutoff, untilCutoff time.Time, lastFlag string) ([]*ledger.Entry, error) {
-	entries, err := storage.ListEntries()
-	if err != nil {
-		printer.Error(err)
-		return nil, err
-	}
-
-	// Filter by since cutoff
-	if !sinceCutoff.IsZero() {
-		entries = filterEntriesSince(entries, sinceCutoff)
-	}
-
-	// Filter by until cutoff
-	if !untilCutoff.IsZero() {
-		entries = filterEntriesUntil(entries, untilCutoff)
-	}
-
-	// Sort by created_at descending
-	sortEntriesByCreatedAt(entries)
-
-	// Apply --last limit if specified
-	if lastFlag != "" {
-		count, parseErr := strconv.Atoi(lastFlag)
-		if parseErr == nil && count > 0 && len(entries) > count {
-			entries = entries[:count]
-		}
-	}
-
-	return entries, nil
-}
-
-// getEntriesByLast retrieves the last N entries.
-func getEntriesByLast(printer *output.Printer, storage *ledger.Storage, lastFlag string) ([]*ledger.Entry, error) {
-	count, parseErr := strconv.Atoi(lastFlag)
-	if parseErr != nil || count <= 0 {
-		err := output.NewUserError("--last must be a positive integer")
-		printer.Error(err)
-		return nil, err
-	}
-
-	entries, err := storage.GetLastNEntries(count)
-	if err != nil {
-		printer.Error(err)
-		return nil, err
-	}
-	return entries, nil
-}
-
-// getEntriesByRange retrieves entries whose commits fall within the given range.
-func getEntriesByRange(printer *output.Printer, storage *ledger.Storage, rangeFlag string) ([]*ledger.Entry, error) {
-	parts := strings.Split(rangeFlag, "..")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		err := output.NewUserError("--range must be in format A..B")
-		printer.Error(err)
-		return nil, err
-	}
-
-	fromRef, toRef := parts[0], parts[1]
-
-	allEntries, err := storage.ListEntries()
-	if err != nil {
-		printer.Error(err)
-		return nil, err
-	}
-
-	commits, err := storage.LogRange(fromRef, toRef)
-	if err != nil {
-		printer.Error(err)
-		return nil, err
-	}
-
-	commitSet := make(map[string]bool, len(commits))
-	for _, commit := range commits {
-		commitSet[commit.SHA] = true
-	}
-
-	return filterEntriesByCommits(allEntries, commitSet), nil
-}
-
-// filterEntriesByCommits returns entries that have at least one commit in the given set.
-func filterEntriesByCommits(allEntries []*ledger.Entry, commitSet map[string]bool) []*ledger.Entry {
-	var entries []*ledger.Entry
-	for _, entry := range allEntries {
-		if entryInCommitSet(entry, commitSet) {
-			entries = append(entries, entry)
-		}
-	}
-	return entries
-}
-
-// entryInCommitSet checks if any commit in entry's workset is in the set.
-func entryInCommitSet(entry *ledger.Entry, commitSet map[string]bool) bool {
-	for _, commitSHA := range entry.Workset.Commits {
-		if commitSet[commitSHA] {
-			return true
-		}
-	}
-	return false
 }
 
 // writeExportOutput writes entries to stdout or directory based on flags.
