@@ -204,12 +204,14 @@ func getCoreCommands() []skillCommand {
 			Flags: []commandFlag{
 				{Name: "--last", Description: "Show last N entries"},
 				{Name: "--since", Description: "Entries since duration (24h, 7d) or date"},
+				{Name: "--until", Description: "Entries until duration (24h, 7d) or date"},
 				{Name: "--oneline", Description: "Compact output"}}},
 		{Name: "export", Description: "Export entries to formats",
 			Usage: "timbers export [flags]",
 			Flags: []commandFlag{
 				{Name: "--last", Description: "Export last N"},
 				{Name: "--since", Description: "Entries since duration (24h, 7d) or date"},
+				{Name: "--until", Description: "Entries until duration (24h, 7d) or date"},
 				{Name: "--range", Description: "Commit range (A..B)"},
 				{Name: "--format", Description: "json or md"},
 				{Name: "--out", Description: "Output directory"}}},

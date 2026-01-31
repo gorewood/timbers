@@ -110,7 +110,7 @@ prompt +args:
     @claude -p --model haiku "$(go run ./cmd/timbers prompt {{args}})"
 
 # Generate a report with specific model
-# Usage: just prompt-model sonnet devblog-opensource --last 20
+# Usage: just prompt-model sonnet devblog --last 20
 prompt-model model +args:
     @claude -p --model {{model}} "$(go run ./cmd/timbers prompt {{args}})"
 
@@ -157,6 +157,82 @@ release-snapshot:
 # Build with goreleaser locally (no publish, no tag required)
 release-build:
     goreleaser release --snapshot --clean
+
+# =============================================================================
+# DEVLOG
+# =============================================================================
+
+# Generate a new devlog post from recent entries
+# Usage: just devlog                    # Last 5 entries
+#        just devlog --last 10          # Last 10 entries
+#        just devlog --since 7d         # Since 7 days ago
+devlog *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Default to --last 5 if no args
+    ARGS="${*:---last 5}"
+
+    # Generate title from date
+    DATE=$(date +%Y-%m-%d)
+    SLUG=$(date +%Y%m%d)-devlog
+
+    echo "Generating devlog post..."
+    CONTENT=$(go run ./cmd/timbers prompt devblog $ARGS | go run ./cmd/timbers generate --model local)
+
+    # Extract first sentence for title (up to first period)
+    TITLE=$(echo "$CONTENT" | head -1 | sed 's/\..*//' | head -c 60)
+    if [ ${#TITLE} -eq 60 ]; then TITLE="$TITLE..."; fi
+
+    # Write with frontmatter
+    cat > "devlog/content/posts/${SLUG}.md" << EOF
+    ---
+    title: "${TITLE}"
+    date: ${DATE}
+    ---
+
+    ${CONTENT}
+    EOF
+
+    # Clean up leading whitespace from heredoc
+    sed -i '' 's/^    //' "devlog/content/posts/${SLUG}.md"
+
+    echo "Created: devlog/content/posts/${SLUG}.md"
+
+# Regenerate all devlogs from scratch (clears existing posts)
+devlog-regen:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo "Clearing existing devlog posts..."
+    rm -f devlog/content/posts/*.md
+
+    echo "Generating devlog from all entries..."
+    CONTENT=$(go run ./cmd/timbers prompt devblog --last 50 | go run ./cmd/timbers generate --model local)
+
+    DATE=$(date +%Y-%m-%d)
+    TITLE="Development Log"
+
+    cat > "devlog/content/posts/${DATE}-devlog.md" << EOF
+    ---
+    title: "${TITLE}"
+    date: ${DATE}
+    ---
+
+    ${CONTENT}
+    EOF
+
+    sed -i '' 's/^    //' "devlog/content/posts/${DATE}-devlog.md"
+
+    echo "Regenerated devlog: devlog/content/posts/${DATE}-devlog.md"
+
+# Run Hugo dev server for devlog
+devlog-serve:
+    cd devlog && hugo server -D --bind 0.0.0.0
+
+# Build static devlog site
+devlog-build:
+    cd devlog && hugo --minify
 
 # =============================================================================
 # CLEANUP

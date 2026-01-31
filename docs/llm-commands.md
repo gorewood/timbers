@@ -36,6 +36,7 @@ timbers export --last 10 --out ./exports/
 **Flags:**
 - `--last N` — Export last N entries
 - `--since <duration|date>` — Export entries since duration (24h, 7d) or date (2026-01-17)
+- `--until <duration|date>` — Export entries until duration (24h, 7d) or date (2026-01-17)
 - `--range A..B` — Export entries in commit range
 - `--format json|md` — Output format (default: json for stdout, md for --out)
 - `--out <dir>` — Write to directory instead of stdout
@@ -57,7 +58,7 @@ Render templates with ledger entries for LLM consumption. By default, outputs te
 timbers prompt changelog --since 7d | claude -p
 
 # Append custom instructions
-timbers prompt devblog-gamedev --last 10 --append "Focus on physics engine changes" | claude -p
+timbers prompt devblog --last 10 --append "Focus on physics engine changes" | claude -p
 
 # By commit range
 timbers prompt pr-description --range main..HEAD | claude -p
@@ -71,12 +72,13 @@ timbers prompt changelog --show
 # Built-in LLM execution (no piping needed)
 timbers prompt changelog --since 7d --model local
 timbers prompt exec-summary --last 10 --model haiku
-timbers prompt devblog-gamedev --last 20 --model flash --append "Focus on physics"
+timbers prompt devblog --last 20 --model flash --append "Focus on physics"
 ```
 
 **Flags:**
 - `--last N` — Use last N entries
 - `--since <duration|date>` — Use entries since duration or date
+- `--until <duration|date>` — Use entries until duration or date
 - `--range A..B` — Use entries in commit range
 - `--append <text>` — Append extra instructions to the prompt
 - `--list` — List available templates
@@ -92,9 +94,7 @@ Built-in templates (use `timbers prompt --list` for current list):
 | Template | Purpose |
 |----------|---------|
 | `changelog` | Generate release changelogs |
-| `devblog-gamedev` | Game development blog posts |
-| `devblog-opensource` | Open source project updates |
-| `devblog-startup` | Startup/product development updates |
+| `devblog` | Developer blog post (Carmack .plan style) |
 | `exec-summary` | Executive summary for stakeholders |
 | `pr-description` | Pull request descriptions |
 | `release-notes` | User-facing release notes |

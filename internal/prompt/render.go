@@ -12,10 +12,13 @@ import (
 
 // RenderContext provides data for template rendering.
 type RenderContext struct {
-	Entries    []*ledger.Entry
-	RepoName   string
-	Branch     string
-	AppendText string // Optional extra instructions from --append
+	Entries            []*ledger.Entry
+	RepoName           string
+	Branch             string
+	AppendText         string // Optional extra instructions from --append
+	TotalEntries       int    // Total entries in repo (for detecting first batch)
+	IsFirstBatch       bool   // True if entries include the chronologically earliest
+	ProjectDescription string // Brief project description for context
 }
 
 // Render substitutes variables in the template content.
@@ -63,6 +66,19 @@ func buildVars(ctx *RenderContext) (map[string]string, error) {
 
 	// branch
 	vars["branch"] = ctx.Branch
+
+	// total_entries
+	vars["total_entries"] = strconv.Itoa(ctx.TotalEntries)
+
+	// is_first_batch
+	if ctx.IsFirstBatch {
+		vars["is_first_batch"] = "true"
+	} else {
+		vars["is_first_batch"] = "false"
+	}
+
+	// project_description
+	vars["project_description"] = ctx.ProjectDescription
 
 	return vars, nil
 }

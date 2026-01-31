@@ -1,0 +1,20 @@
+{{ define "main" }}
+<article>
+  <h1>{{ .Title }}</h1>
+  <p class="meta">{{ .Date.Format "January 2, 2006" }}</p>
+  {{ .Content }}
+</article>
+<nav class="post-nav">
+  {{ with .PrevInSection }}
+  <a href="{{ .Permalink }}" class="prev">← {{ .Title }}</a>
+  {{ else }}
+  <span class="prev disabled">← (oldest)</span>
+  {{ end }}
+  <a href="/" class="home">All Posts</a>
+  {{ with .NextInSection }}
+  <a href="{{ .Permalink }}" class="next">{{ .Title }} →</a>
+  {{ else }}
+  <span class="next disabled">(newest) →</span>
+  {{ end }}
+</nav>
+{{ end }}
