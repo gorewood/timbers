@@ -311,24 +311,18 @@ All commands support --json for structured output.
 Run 'mytool <command> --help' for details.
 ```
 
-### 5.2 Skill Generation
+### 5.2 Dynamic Context over Static Documentation
 
-**Provide a command that outputs content for building agent skills.**
+**Prefer dynamic context injection over static skill generation.**
 
-```bash
-mytool skill
-mytool skill --format json
-mytool skill --include-examples
-```
+A `skill` command that outputs static documentation seems useful, but in practice:
+- Static docs drift from actual behavior
+- Agents need *current state*, not reference material
+- The `prime` command already provides workflow context
 
-This outputs:
-- Core concepts and mental model
-- Workflow patterns
-- Command quick reference
-- Common recipes
-- Error recovery patterns
+**Better pattern:** Use `prime` for dynamic context, `onboard` for minimal documentation pointers, and `setup` for automatic injection. If static reference docs are needed, put them in `docs/` where they can be version-controlled and reviewed.
 
-The tool knows itself best—let it generate its own documentation.
+The exception: if your tool is designed to generate plugin/skill files for agent frameworks, a `skill --emit-plugin` command may be warranted. But don't conflate "self-documenting" with "agent-friendly."
 
 ---
 
@@ -349,41 +343,210 @@ When documenting your CLI for agents, include an explicit contract:
 
 ---
 
-## 7. Integration Patterns
+## 7. Automatic Integration
 
-### 7.1 Hook Points
+### 7.1 The Injection Problem
 
-Design for integration with agent hooks:
+**Good primitives aren't enough.** A tool can have perfect `prime`, `pending`, and `--json` support, but if agents don't *use* them, the tool fails silently.
+
+Real-world failure mode:
+```
+Session starts → Agent jumps into task → Commits work → Never runs prime
+                                                      → Never checks pending
+                                                      → Work is undocumented
+```
+
+The agent had access to `mytool prime` and `mytool pending`. The CLAUDE.md even documented the workflow. But nothing *triggered* the agent to use them.
+
+**The fix: automatic injection.** Don't rely on agents reading documentation and remembering to run commands. Wire the tool into the environment so context flows automatically.
+
+### 7.2 The Integration Stack
+
+A complete agent-oriented CLI provides four layers of integration:
+
+| Layer | Command | Purpose |
+|-------|---------|---------|
+| Health | `mytool doctor` | Verify setup, suggest fixes |
+| Git Hooks | `mytool hooks install` | Pre-commit warnings, auto-sync |
+| Editor Integration | `mytool setup claude` | Session-start context injection |
+| Documentation | `mytool onboard` | Minimal AGENTS.md snippet |
+
+Each layer reinforces the others. If hooks fail, doctor catches it. If setup is missing, doctor warns. If an agent reads AGENTS.md, it points to `prime` for dynamic context.
+
+### 7.3 Health Check: `doctor`
+
+**Every tool should have a `doctor` command** that verifies installation health and suggests fixes.
 
 ```bash
-# Session start hook
-mytool prime >> $SESSION_CONTEXT
+$ mytool doctor
 
-# Pre-commit hook
-mytool pending --count | grep -q "^0$" || echo "Warning: undocumented work"
+CORE
+  ✓  Storage initialized
+  ✓  Remote configured
 
-# Post-work hook
-mytool log "$WORK_SUMMARY" --why "$WORK_RATIONALE" --how "$WORK_METHOD"
+WORKFLOW
+  ⚠  Pending 3 undocumented items
+     └─ Run 'mytool pending' to review
+
+INTEGRATION
+  ✓  Git hooks installed
+  ⚠  Claude integration not configured
+     └─ Run 'mytool setup claude' to install
+
+✓ 3 passed  ⚠ 2 warnings  ✖ 0 failed
 ```
 
-### 7.2 Workflow Documentation
+**Design principles:**
+- Categorize checks (Core, Workflow, Integration, etc.)
+- Show pass/warn/fail with visual indicators
+- Provide specific fix commands for each issue
+- Support `--fix` to auto-remediate where possible
+- Support `--json` for programmatic checking
 
-Provide copy-paste blocks for CLAUDE.md / AGENTS.md:
+### 7.4 Git Hooks: `hooks install/uninstall`
 
-```markdown
+**Git hooks provide passive enforcement** without blocking developer workflow.
+
+```bash
+$ mytool hooks install
+✓ Installed pre-commit hook
+  └─ Warns about undocumented work (non-blocking)
+```
+
+**Key design decisions:**
+
+1. **Warn, don't block.** Pre-commit hooks should print warnings but allow commits to proceed. Blocking commits creates friction that makes developers disable hooks entirely.
+
+2. **Chain with existing hooks.** Use `--chain` to preserve pre-existing hooks:
+   ```bash
+   mytool hooks install --chain  # Runs existing hooks, then mytool hook
+   ```
+
+3. **Thin shims, not shell scripts.** Hook files should be minimal shims that call back into the CLI:
+   ```bash
+   #!/bin/sh
+   mytool hook run pre-commit "$@"
+   ```
+   This keeps logic in testable Go/Rust code, not fragile shell.
+
+4. **Graceful degradation.** Hooks should handle missing binaries:
+   ```bash
+   if command -v mytool >/dev/null 2>&1; then
+     mytool hook run pre-commit "$@"
+   fi
+   ```
+
+5. **Clean uninstall.** `mytool hooks uninstall` should restore any backed-up hooks and leave no traces.
+
+### 7.5 Editor Integration: `setup <editor>`
+
+**Editor-specific hooks inject context at session start** without requiring the agent to remember.
+
+```bash
+$ mytool setup claude
+✓ Claude Code hook installed
+  └─ Will inject 'mytool prime' at session start
+```
+
+**Supported patterns:**
+
+```bash
+mytool setup claude          # Install Claude Code integration
+mytool setup claude --check  # Verify installation
+mytool setup claude --remove # Uninstall
+mytool setup claude --print  # Show what would be installed (dry-run)
+mytool setup --list          # Show available integrations
+```
+
+**What setup installs:**
+
+For Claude Code, this typically means adding a `SessionStart` hook that runs `mytool prime` and injects the output into the session context. The agent starts every session with workflow state already loaded.
+
+**Future integrations** might include: Cursor, Windsurf, Aider, Gemini CLI, Copilot.
+
+### 7.6 Documentation Snippets: `onboard`
+
+**Generate minimal documentation that points to dynamic context.**
+
+```bash
+$ mytool onboard
+
 ## Development Workflow
 
-This project uses MyTool for tracking work.
+This project uses **mytool** for tracking work.
+Run `mytool prime` for workflow context, or install hooks (`mytool hooks install`) for auto-injection.
 
-At session start:
-  mytool prime
+**Quick reference:**
+- `mytool pending` - Check for undocumented work
+- `mytool log "what" --why "why" --how "how"` - Record work
 
-After completing work:
-  mytool log "what" --why "why" --how "how"
-
-At session end:
-  mytool pending    # Check for undocumented work
+For full workflow details: `mytool prime`
 ```
+
+**Why minimal?** Documentation rots. If AGENTS.md contains detailed workflow instructions, they'll drift from actual behavior. Instead:
+- Keep the snippet short (< 15 lines)
+- Point to `mytool prime` for dynamic context
+- Let `prime` provide the authoritative workflow documentation
+
+### 7.7 Orchestrated Setup: `init`
+
+**A single command should set up everything.**
+
+```bash
+$ mytool init
+
+Initializing mytool in my-project...
+
+  ✓ Storage created
+  ✓ Remote configured
+  ✓ Git hooks installed (pre-commit)
+
+Optional integrations:
+  ? Install Claude Code integration? [Y/n] y
+  ✓ Claude hook installed
+
+Next steps:
+  1. Add workflow snippet to CLAUDE.md:
+     mytool onboard >> CLAUDE.md
+
+  2. Verify setup:
+     mytool doctor
+```
+
+**Design principles:**
+- Single entry point for new users
+- Interactive prompts for optional integrations
+- `--yes` flag for scripted/automated setup
+- Idempotent (safe to run again)
+- Clear next-steps guidance
+
+### 7.8 Clean Removal: `uninstall`
+
+**Uninstall should reverse everything init/hooks/setup created.**
+
+```bash
+$ mytool uninstall
+
+Components found:
+  • Storage: 16 entries
+  • Git hooks: pre-commit
+  • Claude integration: installed
+
+? Remove all components? [y/N] y
+
+  ✓ Claude integration removed
+  ✓ Git hooks removed
+  ✓ Storage refs removed
+  ✓ Config cleaned
+
+Mytool removed. Your git history is unchanged.
+```
+
+**Design principles:**
+- Show what will be removed before doing it
+- Offer `--keep-data` to remove tooling but preserve data
+- Reverse everything in the right order (integrations before storage)
+- Idempotent (safe to run on already-uninstalled repo)
 
 ---
 
@@ -391,7 +554,7 @@ At session end:
 
 Use this checklist when designing agent-oriented CLIs:
 
-### Essential
+### Essential (Core DX)
 - [ ] `--json` flag on every command
 - [ ] Structured error output with codes
 - [ ] `prime` or equivalent context injection command
@@ -399,18 +562,27 @@ Use this checklist when designing agent-oriented CLIs:
 - [ ] Sensible defaults—works without config
 - [ ] `--dry-run` on write operations
 
+### Essential (Integration)
+- [ ] `doctor` command for health checking
+- [ ] `hooks install/uninstall` for git integration
+- [ ] `setup <editor>` for editor-specific hooks
+- [ ] `init` that orchestrates full setup
+- [ ] `uninstall` that reverses all setup
+
 ### Recommended
 - [ ] `--batch` mode for multi-item operations
 - [ ] `--oneline` / `--ids-only` for compact output
-- [ ] `skill` command for self-documentation
+- [ ] `onboard` command for documentation snippets
 - [ ] Suggested next commands in output
 - [ ] Recoverable error messages with hints
+- [ ] `doctor --fix` for auto-remediation
 
 ### Bonus
 - [ ] Stdin support for batch input
 - [ ] Exit code conventions documented
-- [ ] Integration hooks documented
-- [ ] CLAUDE.md workflow snippet provided
+- [ ] `hooks install --chain` to preserve existing hooks
+- [ ] `setup --check` and `setup --remove` flags
+- [ ] Multiple editor integrations (claude, cursor, gemini, etc.)
 
 ---
 
@@ -418,19 +590,35 @@ Use this checklist when designing agent-oriented CLIs:
 
 ### Beads (Issue Tracking)
 
+**Core DX:**
 - `bd prime` — Context injection
 - `bd ready` — Clear next action
 - `bd close <id>` — Minimal ceremony
 - `--json` on all commands
 
+**Integration stack:**
+- `bd doctor` — Comprehensive health check with `--fix`
+- `bd hooks install` — Git hooks with `--chain` support
+- `bd setup claude` — Claude Code integration with `--check`/`--remove`
+- `bd onboard` — Minimal AGENTS.md snippet generator
+- `bd init` — Orchestrated setup with interactive prompts
+
 ### Timbers (Development Ledger)
 
-- `timbers prime` — Context injection
+**Core DX:**
+- `timbers prime` — Context injection with pending count
 - `timbers pending` — Clear next action
 - `timbers log "what" --why "why" --how "how"` — Single command capture
 - `timbers export --json | claude "..."` — Unix composability
-- `timbers skill` — Self-documentation
 - `--batch` mode for efficiency
+
+**Integration stack:**
+- `timbers doctor` — Health check for notes, hooks, integrations
+- `timbers hooks install` — Pre-commit warning for undocumented work
+- `timbers setup claude` — Session-start prime injection
+- `timbers onboard` — Minimal CLAUDE.md snippet
+- `timbers init` — Full setup with optional Claude integration
+- `timbers uninstall` — Clean removal of all components
 
 ---
 
@@ -453,3 +641,9 @@ Generic error messages without codes or recovery hints. Agents need structured f
 
 ### Broad Permissions
 Commands that require "run anything" permissions. Allowlist-friendly commands can be pre-approved.
+
+### Documentation-Only Integration
+Relying on CLAUDE.md or AGENTS.md instructions without automatic injection. Agents don't reliably read and follow documentation—they jump into tasks. If your only integration is "add this to your CLAUDE.md", agents will skip the workflow steps. Wire integration into hooks so context flows automatically.
+
+### Blocking Git Hooks
+Pre-commit hooks that fail and block commits. Developers disable blocking hooks. Use warnings instead—inform without obstructing. The goal is awareness, not enforcement.
