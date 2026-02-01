@@ -120,8 +120,15 @@ func addCommands(cmd *cobra.Command) {
 	addGroupedCommand(cmd, newGenerateCmd(), "agent")
 	addGroupedCommand(cmd, newCatchupCmd(), "agent")
 
-	// Admin commands: uninstall
+	// Admin commands: uninstall, doctor, hooks, setup, onboard
 	addGroupedCommand(cmd, newUninstallCmd(), "admin")
+	addGroupedCommand(cmd, newDoctorCmd(), "admin")
+	addGroupedCommand(cmd, newHooksCmd(), "admin")
+	addGroupedCommand(cmd, newSetupCmd(), "admin")
+	addGroupedCommand(cmd, newOnboardCmd(), "admin")
+
+	// Hidden internal commands
+	cmd.AddCommand(newHookCmd())
 }
 
 // addGroupedCommand adds a subcommand with a group assignment.
