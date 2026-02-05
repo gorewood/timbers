@@ -71,9 +71,13 @@ Desktop.ini
 !.beads/
 !.beads/**
 
-# Devlog (Hugo site)
-!devlog/
-!devlog/**
+# Hugo site (blog) - source files only
+!site/
+!site/hugo.toml
+!site/go.mod
+!site/go.sum
+!site/content/
+!site/content/**
 
 # Allow directories to be traversed
 !*/

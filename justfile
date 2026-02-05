@@ -43,9 +43,9 @@ doctor:
 # Run all quality checks
 check: fmt-check lint test
 
-# Run linter
+# Run linter (skip site/ which is Hugo-only)
 lint:
-    go tool golangci-lint run
+    go tool golangci-lint run ./cmd/... ./internal/...
 
 # Run tests
 test:
@@ -159,80 +159,42 @@ release-build:
     goreleaser release --snapshot --clean
 
 # =============================================================================
-# DEVLOG
+# BLOG
 # =============================================================================
 
-# Generate a new devlog post from recent entries
-# Usage: just devlog                    # Last 5 entries
-#        just devlog --last 10          # Last 10 entries
-#        just devlog --since 7d         # Since 7 days ago
-devlog *args:
+# Generate dev blog post
+blog:
     #!/usr/bin/env bash
     set -euo pipefail
-
-    # Default to --last 5 if no args
-    ARGS="${*:---last 5}"
-
-    # Generate title from date
     DATE=$(date +%Y-%m-%d)
-    SLUG=$(date +%Y%m%d)-devlog
+    WEEK=$(date +%Y)-week-$(date +%V)
+    FILE="site/content/posts/${DATE}-${WEEK}.md"
+    mkdir -p site/content/posts
+    {
+        echo "+++"
+        echo "title = 'Weekly Update: Week $(date +%V), $(date +%Y)'"
+        echo "date = '${DATE}'"
+        echo "+++"
+        echo ""
+        timbers prompt devblog --since 7d --model haiku
+    } > "$FILE"
+    echo "Created: $FILE"
 
-    echo "Generating devlog post..."
-    CONTENT=$(go run ./cmd/timbers prompt devblog $ARGS | go run ./cmd/timbers generate --model local)
+# Preview blog locally
+blog-serve:
+    cd site && hugo server -D
 
-    # Extract first sentence for title (up to first period)
-    TITLE=$(echo "$CONTENT" | head -1 | sed 's/\..*//' | head -c 60)
-    if [ ${#TITLE} -eq 60 ]; then TITLE="$TITLE..."; fi
-
-    # Write with frontmatter
-    cat > "devlog/content/posts/${SLUG}.md" << EOF
-    ---
-    title: "${TITLE}"
-    date: ${DATE}
-    ---
-
-    ${CONTENT}
-    EOF
-
-    # Clean up leading whitespace from heredoc
-    sed -i '' 's/^    //' "devlog/content/posts/${SLUG}.md"
-
-    echo "Created: devlog/content/posts/${SLUG}.md"
-
-# Regenerate all devlogs from scratch (clears existing posts)
-devlog-regen:
+# Generate changelog draft
+changelog-draft:
     #!/usr/bin/env bash
     set -euo pipefail
-
-    echo "Clearing existing devlog posts..."
-    rm -f devlog/content/posts/*.md
-
-    echo "Generating devlog from all entries..."
-    CONTENT=$(go run ./cmd/timbers prompt devblog --last 50 | go run ./cmd/timbers generate --model local)
-
-    DATE=$(date +%Y-%m-%d)
-    TITLE="Development Log"
-
-    cat > "devlog/content/posts/${DATE}-devlog.md" << EOF
-    ---
-    title: "${TITLE}"
-    date: ${DATE}
-    ---
-
-    ${CONTENT}
-    EOF
-
-    sed -i '' 's/^    //' "devlog/content/posts/${DATE}-devlog.md"
-
-    echo "Regenerated devlog: devlog/content/posts/${DATE}-devlog.md"
-
-# Run Hugo dev server for devlog
-devlog-serve:
-    cd devlog && hugo server -D --bind 0.0.0.0
-
-# Build static devlog site
-devlog-build:
-    cd devlog && hugo --minify
+    PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+    if [ -n "$PREV_TAG" ]; then
+        timbers prompt changelog --range "$PREV_TAG"..HEAD --model haiku
+    else
+        timbers prompt changelog --last 50 --model haiku
+    fi > CHANGELOG-draft.md
+    echo "Created: CHANGELOG-draft.md (review before committing)"
 
 # =============================================================================
 # CLEANUP

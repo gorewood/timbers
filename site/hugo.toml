@@ -1,0 +1,34 @@
+baseURL = "https://rbergman.github.io/timbers/"
+languageCode = "en-us"
+title = "Timbers"
+
+[params]
+  description = "Git knows what changed. Timbers captures why."
+  author = "rbergman"
+  showReadingTime = false
+  showShareButtons = false
+  showPostNavLinks = true
+  showBreadCrumbs = false
+  defaultTheme = "auto"
+
+[params.homeInfoParams]
+  Title = "Timbers"
+  Content = "Git knows what changed. Timbers captures why."
+
+[[params.socialIcons]]
+  name = "github"
+  url = "https://github.com/rbergman/timbers"
+
+[menu]
+  [[menu.main]]
+    name = "Blog"
+    url = "/posts/"
+    weight = 1
+  [[menu.main]]
+    name = "GitHub"
+    url = "https://github.com/rbergman/timbers"
+    weight = 2
+
+[module]
+  [[module.imports]]
+    path = "github.com/adityatelange/hugo-PaperMod"
