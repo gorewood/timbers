@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rbergman/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/output"
 )
 
 // Commit represents a git commit with its metadata.

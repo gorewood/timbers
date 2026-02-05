@@ -70,12 +70,12 @@ release:
 
     ### curl | bash (Linux/macOS)
     ```bash
-    curl -fsSL https://raw.githubusercontent.com/rbergman/timbers/main/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/gorewood/timbers/main/install.sh | bash
     ```
 
     ### Go install
     ```bash
-    go install github.com/rbergman/timbers/cmd/timbers@{{.Tag}}
+    go install github.com/gorewood/timbers/cmd/timbers@{{.Tag}}
     ```
 
     ### Manual download

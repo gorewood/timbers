@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/rbergman/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/output"
 )
 
 // Anthropic API types.

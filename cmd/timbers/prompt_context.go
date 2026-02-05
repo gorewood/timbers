@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rbergman/timbers/internal/git"
-	"github.com/rbergman/timbers/internal/ledger"
-	"github.com/rbergman/timbers/internal/prompt"
+	"github.com/gorewood/timbers/internal/git"
+	"github.com/gorewood/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/prompt"
 )
 
 // buildRenderContext creates a RenderContext from entries and flags.

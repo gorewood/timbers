@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rbergman/timbers/internal/git"
-	"github.com/rbergman/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/git"
+	"github.com/gorewood/timbers/internal/output"
 )
 
 // --- Test Helpers ---

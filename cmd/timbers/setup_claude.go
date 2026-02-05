@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rbergman/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/output"
 )
 
 // resolveClaudeHookPath determines the hook path based on scope.

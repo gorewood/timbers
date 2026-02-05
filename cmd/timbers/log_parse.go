@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rbergman/timbers/internal/git"
-	"github.com/rbergman/timbers/internal/ledger"
-	"github.com/rbergman/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/git"
+	"github.com/gorewood/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/output"
 )
 
 // validateBasicInput validates basic input before commits are fetched.

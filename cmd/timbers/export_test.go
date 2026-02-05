@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rbergman/timbers/internal/git"
-	"github.com/rbergman/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/git"
+	"github.com/gorewood/timbers/internal/ledger"
 )
 
 // mockGitOpsForExport implements ledger.GitOps for testing export command.

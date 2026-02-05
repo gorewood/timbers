@@ -1,4 +1,4 @@
-module github.com/rbergman/timbers
+module github.com/gorewood/timbers
 
 go 1.25.3
 

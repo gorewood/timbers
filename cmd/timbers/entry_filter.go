@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rbergman/timbers/internal/ledger"
-	"github.com/rbergman/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/output"
 )
 
 // filterEntriesSince filters entries to those created at or after the cutoff.

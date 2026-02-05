@@ -143,4 +143,4 @@ formatters:
       sections:
         - standard
         - default
-        - prefix(github.com/steveyegge/timbers)
+        - prefix(github.com/gorewood/timbers)

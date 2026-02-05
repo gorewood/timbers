@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rbergman/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/ledger"
 )
 
 // RenderContext provides data for template rendering.

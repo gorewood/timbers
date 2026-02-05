@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/rbergman/timbers/internal/ledger"
-	"github.com/rbergman/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/output"
 )
 
 // FormatJSON outputs the entries as a JSON array to the printer.

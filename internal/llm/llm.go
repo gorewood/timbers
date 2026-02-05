@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rbergman/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/output"
 )
 
 // Provider represents an LLM provider.

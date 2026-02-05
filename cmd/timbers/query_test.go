@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rbergman/timbers/internal/git"
-	"github.com/rbergman/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/git"
+	"github.com/gorewood/timbers/internal/ledger"
 )
 
 // mockGitOpsForQuery implements ledger.GitOps for testing query command.

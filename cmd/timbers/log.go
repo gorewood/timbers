@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rbergman/timbers/internal/git"
-	"github.com/rbergman/timbers/internal/ledger"
-	"github.com/rbergman/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/git"
+	"github.com/gorewood/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/output"
 	"github.com/spf13/cobra"
 )
 

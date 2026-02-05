@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rbergman/timbers/internal/ledger"
-	"github.com/rbergman/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/output"
 )
 
 // outputDryRun outputs what would be written without actually writing.

@@ -9,7 +9,7 @@ A step-by-step guide to setting up Timbers for your project, catching up existin
 ### Install Timbers
 
 ```bash
-go install github.com/rbergman/timbers/cmd/timbers@latest
+go install github.com/gorewood/timbers/cmd/timbers@latest
 ```
 
 Verify the installation:

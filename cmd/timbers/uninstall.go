@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/rbergman/timbers/internal/git"
-	"github.com/rbergman/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/git"
+	"github.com/gorewood/timbers/internal/output"
 	"github.com/spf13/cobra"
 )
 

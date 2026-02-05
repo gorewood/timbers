@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rbergman/timbers/internal/git"
-	"github.com/rbergman/timbers/internal/ledger"
-	"github.com/rbergman/timbers/internal/llm"
-	"github.com/rbergman/timbers/internal/output"
-	"github.com/rbergman/timbers/internal/prompt"
+	"github.com/gorewood/timbers/internal/git"
+	"github.com/gorewood/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/llm"
+	"github.com/gorewood/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/prompt"
 	"github.com/spf13/cobra"
 )
 

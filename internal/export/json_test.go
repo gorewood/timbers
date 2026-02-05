@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rbergman/timbers/internal/ledger"
-	"github.com/rbergman/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/output"
 )
 
 // testEntry creates a fully populated entry for testing.

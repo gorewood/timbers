@@ -72,7 +72,7 @@ jobs:
         run: git fetch origin refs/notes/timbers:refs/notes/timbers
 
       - name: Install timbers
-        run: go install github.com/rbergman/timbers/cmd/timbers@latest
+        run: go install github.com/gorewood/timbers/cmd/timbers@latest
 
       - name: Generate release notes
         env:
@@ -133,7 +133,7 @@ jobs:
         run: git fetch origin refs/notes/timbers:refs/notes/timbers
 
       - name: Install timbers
-        run: go install github.com/rbergman/timbers/cmd/timbers@latest
+        run: go install github.com/gorewood/timbers/cmd/timbers@latest
 
       - name: Generate blog post
         env:

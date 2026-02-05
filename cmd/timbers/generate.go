@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rbergman/timbers/internal/llm"
-	"github.com/rbergman/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/llm"
+	"github.com/gorewood/timbers/internal/output"
 	"github.com/spf13/cobra"
 )
 

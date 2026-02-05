@@ -8,10 +8,10 @@ A development ledger that pairs Git commits with structured rationale—what you
 
 ```bash
 # One-liner (Linux/macOS)
-curl -fsSL https://raw.githubusercontent.com/rbergman/timbers/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gorewood/timbers/main/install.sh | bash
 
 # Or with Go
-go install github.com/rbergman/timbers/cmd/timbers@latest
+go install github.com/gorewood/timbers/cmd/timbers@latest
 ```
 
 ## The Problem

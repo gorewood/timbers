@@ -2,7 +2,7 @@
 set -e
 
 # Install script for timbers
-# Usage: curl -fsSL https://raw.githubusercontent.com/rbergman/timbers/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/gorewood/timbers/main/install.sh | bash
 #
 # Environment variables:
 #   INSTALL_DIR - Installation directory (default: ~/.local/bin)

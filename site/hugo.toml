@@ -17,7 +17,7 @@ title = "Timbers"
 
 [[params.socialIcons]]
   name = "github"
-  url = "https://github.com/rbergman/timbers"
+  url = "https://github.com/gorewood/timbers"
 
 [menu]
   [[menu.main]]
@@ -26,7 +26,7 @@ title = "Timbers"
     weight = 1
   [[menu.main]]
     name = "GitHub"
-    url = "https://github.com/rbergman/timbers"
+    url = "https://github.com/gorewood/timbers"
     weight = 2
 
 [module]

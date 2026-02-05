@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rbergman/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/ledger"
 )
 
 func TestFormatMarkdown(t *testing.T) {
