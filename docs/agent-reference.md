@@ -1,0 +1,208 @@
+# Timbers Agent Reference
+
+This document provides reference documentation for AI agents working with Timbers.
+For dynamic session context, use `timbers prime`. For CLAUDE.md integration, use `timbers onboard`.
+
+## Core Concepts
+
+**Timbers**: A Git-native development ledger that captures what/why/how as structured records.
+
+**Development Ledger**: A persistent record of work that pairs objective facts from Git with human-authored rationale.
+
+**Entry**: A single ledger record documenting a unit of work. It contains a workset (git data) and summary (what/why/how).
+
+**Workset**: Captures the Git evidence: anchor commit, commit list, range, and diffstat.
+
+**Summary**: Provides the rationale: what was done, why it was done, and how it was accomplished.
+
+### Key Points
+
+- Entries are stored in Git notes (refs/notes/timbers) and sync with remotes
+- Each entry has a unique ID: tb_<timestamp>_<short-sha>
+- The ledger is append-only; entries document completed work
+- All commands support --json for structured output
+
+## Workflow Patterns
+
+A typical session follows: prime -> work -> pending -> log -> query
+
+### Prime
+**Command**: `timbers prime`
+
+Bootstrap session context.
+
+### Work
+**Command**: (git commits)
+
+Do development work.
+
+### Check
+**Command**: `timbers pending`
+
+Review undocumented commits.
+
+### Log
+**Command**: `timbers log "..." --why "..." --how "..."`
+
+Document work.
+
+### Query
+**Command**: `timbers query --last 5`
+
+Review recent entries.
+
+### Sync
+**Command**: `timbers notes push`
+
+Push notes to remote.
+
+## Command Reference
+
+### log
+
+Record work as a ledger entry
+
+**Usage**: `timbers log <what> --why <why> --how <how> [flags]`
+
+**Flags**:
+- `--why`: Why (required unless --minor/--auto)
+- `--how`: How (required unless --minor/--auto)
+- `--tag`: Add tag (repeatable)
+- `--work-item`: Link work item (system:id)
+- `--range`: Commit range (A..B)
+- `--minor`: Use defaults for trivial changes
+- `--auto`: Extract what/why/how from commits
+- `--yes`: Skip confirmation in auto mode
+- `--batch`: Create entries by work-item/day
+- `--dry-run`: Preview without writing
+- `--push`: Push notes after logging
+
+**Examples**:
+```bash
+timbers log "Added auth" --why "Security" --how "JWT"
+timbers log "Fix" --why "Bug" --how "Check" --tag bugfix
+```
+
+### pending
+
+Show undocumented commits
+
+**Usage**: `timbers pending [flags]`
+
+**Flags**:
+- `--count`: Show only count
+
+**Examples**:
+```bash
+timbers pending
+timbers pending --count
+```
+
+### prime
+
+Session context injection
+
+**Usage**: `timbers prime [flags]`
+
+**Flags**:
+- `--last`: Recent entries (default: 3)
+
+**Examples**:
+```bash
+timbers prime
+timbers prime --last 5
+```
+
+### status
+
+Show repository and notes state
+
+**Usage**: `timbers status [flags]`
+
+**Examples**:
+```bash
+timbers status
+timbers status --json
+```
+
+### show
+
+Display a single entry
+
+**Usage**: `timbers show [<id>] [flags]`
+
+**Flags**:
+- `--latest`: Show most recent entry
+
+**Examples**:
+```bash
+timbers show <id>
+timbers show --last
+```
+
+### query
+
+Search and retrieve entries
+
+**Usage**: `timbers query [flags]`
+
+**Flags**:
+- `--last`: Show last N entries
+- `--since`: Entries since duration (24h, 7d) or date
+- `--until`: Entries until duration (24h, 7d) or date
+- `--oneline`: Compact output
+
+**Examples**:
+```bash
+timbers query --last 5
+timbers query --last 10 --oneline
+```
+
+### export
+
+Export entries to formats
+
+**Usage**: `timbers export [flags]`
+
+**Flags**:
+- `--last`: Export last N
+- `--since`: Entries since duration (24h, 7d) or date
+- `--until`: Entries until duration (24h, 7d) or date
+- `--range`: Commit range (A..B)
+- `--format`: json or md
+- `--out`: Output directory
+
+**Examples**:
+```bash
+timbers export --last 5 --json
+timbers export --format md --out ./notes/
+```
+
+### notes
+
+Notes management
+
+**Usage**: `timbers notes <subcommand>`
+
+**Examples**:
+```bash
+timbers notes init
+timbers notes push
+```
+
+## Contract
+
+**Schema**: `timbers.devlog/v1`
+
+**JSON Support**: All commands support --json for structured output
+
+**Error Format**: `{"error": "message", "code": N}`
+
+### Exit Codes
+
+| Code | Meaning | Description |
+|------|---------|-------------|
+| 0 | Success | Command completed successfully |
+| 1 | User error | Bad arguments, missing fields, not found |
+| 2 | System error | Git failed, I/O error |
+| 3 | Conflict | Entry exists, state mismatch |

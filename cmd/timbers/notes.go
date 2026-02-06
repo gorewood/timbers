@@ -4,9 +4,10 @@ package main
 import (
 	"strconv"
 
+	"github.com/spf13/cobra"
+
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/output"
-	"github.com/spf13/cobra"
 )
 
 // newNotesCmd creates the notes parent command with subcommands.

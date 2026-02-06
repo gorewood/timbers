@@ -8,8 +8,9 @@ import (
 
 	"github.com/charmbracelet/fang"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/gorewood/timbers/internal/output"
 	"github.com/spf13/cobra"
+
+	"github.com/gorewood/timbers/internal/output"
 )
 
 // Build info set via ldflags at build time by goreleaser.
@@ -113,14 +114,14 @@ func addCommands(cmd *cobra.Command) {
 	// Sync commands: notes
 	addGroupedCommand(cmd, newNotesCmd(), "sync")
 
-	// Agent commands: prime, skill, prompt, generate, catchup
+	// Agent commands: prime, prompt, generate, catchup
 	addGroupedCommand(cmd, newPrimeCmd(), "agent")
-	addGroupedCommand(cmd, newSkillCmd(), "agent")
 	addGroupedCommand(cmd, newPromptCmd(), "agent")
 	addGroupedCommand(cmd, newGenerateCmd(), "agent")
 	addGroupedCommand(cmd, newCatchupCmd(), "agent")
 
-	// Admin commands: uninstall, doctor, hooks, setup, onboard
+	// Admin commands: init, uninstall, doctor, hooks, setup, onboard
+	addGroupedCommand(cmd, newInitCmd(), "admin")
 	addGroupedCommand(cmd, newUninstallCmd(), "admin")
 	addGroupedCommand(cmd, newDoctorCmd(), "admin")
 	addGroupedCommand(cmd, newHooksCmd(), "admin")

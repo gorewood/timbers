@@ -5,10 +5,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
 	"github.com/gorewood/timbers/internal/output"
-	"github.com/spf13/cobra"
 )
 
 // newLogCmd creates the log command.

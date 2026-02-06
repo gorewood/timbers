@@ -6,10 +6,11 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/spf13/cobra"
+
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
 	"github.com/gorewood/timbers/internal/output"
-	"github.com/spf13/cobra"
 )
 
 // statusResult holds the data for status output.

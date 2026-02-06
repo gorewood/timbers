@@ -2,10 +2,11 @@
 package main
 
 import (
+	"github.com/spf13/cobra"
+
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
 	"github.com/gorewood/timbers/internal/output"
-	"github.com/spf13/cobra"
 )
 
 // newHookCmd creates the hidden hook parent command for internal hook execution.

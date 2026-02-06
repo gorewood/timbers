@@ -4,10 +4,11 @@ package main
 import (
 	"strconv"
 
+	"github.com/spf13/cobra"
+
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
 	"github.com/gorewood/timbers/internal/output"
-	"github.com/spf13/cobra"
 )
 
 // pendingResult holds the data for pending output.

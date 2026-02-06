@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
 	"github.com/gorewood/timbers/internal/llm"
 	"github.com/gorewood/timbers/internal/output"
 	"github.com/gorewood/timbers/internal/prompt"
-	"github.com/spf13/cobra"
 )
 
 // newPromptCmd creates the prompt command.

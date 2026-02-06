@@ -2,9 +2,10 @@
 package main
 
 import (
+	"github.com/spf13/cobra"
+
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/output"
-	"github.com/spf13/cobra"
 )
 
 // checkStatus represents the result of a health check.

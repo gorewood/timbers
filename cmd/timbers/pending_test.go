@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
-	"github.com/spf13/cobra"
 )
 
 // mockGitOpsForPending implements ledger.GitOps for testing pending command.
