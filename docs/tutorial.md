@@ -241,14 +241,9 @@ timbers prime --export > .timbers/PRIME.md
 vim .timbers/PRIME.md
 ```
 
-### Generating Agent Skills
+### Agent Reference
 
-For building agent skills that know how to use Timbers:
-
-```bash
-timbers skill
-timbers skill --json  # Structured format
-```
+For building agent skills that integrate with Timbers, see [docs/agent-reference.md](agent-reference.md) for the complete command reference and contract.
 
 ---
 

@@ -52,7 +52,6 @@ cmd/timbers/
     show.go           # timbers show
     query.go          # timbers query
     export.go         # timbers export
-    skill.go          # timbers skill
     notes.go          # timbers notes (subcommands)
 
 internal/
@@ -187,6 +186,7 @@ func TestLogPendingCycle(t *testing.T) {
 
 | Command | Purpose |
 |---------|---------|
+| `timbers init` | Full setup (notes, hooks, Claude integration) |
 | `timbers log` | Record work with what/why/how |
 | `timbers pending` | Show undocumented commits |
 | `timbers prime` | Context injection for session start |
@@ -194,8 +194,9 @@ func TestLogPendingCycle(t *testing.T) {
 | `timbers show` | Display single entry |
 | `timbers query` | Search entries |
 | `timbers export` | Export for pipelines |
-| `timbers skill` | Emit skill content |
 | `timbers notes` | Notes management (init/push/fetch) |
+| `timbers doctor` | Health check and diagnostics |
+| `timbers onboard` | Generate CLAUDE.md snippet |
 
 ## Development Workflow
 

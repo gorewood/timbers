@@ -63,7 +63,6 @@ The CLI gathers evidence deterministically. The agent supplies meaning. Never fa
 - `timbers show` — Display a single entry
 - `timbers query` — Retrieve entries (--last N for M1)
 - `timbers export` — Structured export for pipelines
-- `timbers skill` — Emit content for agent skill creation
 - `timbers notes` — Notes management (init/push/fetch/status)
 
 **Features:**
@@ -448,33 +447,7 @@ tags: [security, auth]
 - Files changed: 6 (+241/-88)
 ```
 
-### 4.9 `timbers skill`
-
-Emit content for building a Timbers skill in any agent environment.
-
-```bash
-timbers skill
-timbers skill --format json
-timbers skill --include-examples
-```
-
-**Flags:**
-- `--format <md|json>` — Output format (default: md)
-- `--include-examples` — Include worked examples
-
-**What it outputs:**
-- Core concepts (evidence vs meaning, primacy of why)
-- Workflow patterns (log/pending/prime cycle)
-- Command quick reference
-- Agent execution contract
-- Integration patterns
-
-**Why this approach:**
-- Environment-agnostic — Timbers doesn't know your skill format
-- Agent-driven — You shape the skill for your context
-- Current — Output reflects latest Timbers capabilities
-
-### 4.10 `timbers notes`
+### 4.9 `timbers notes`
 
 Manage Git notes for syncing.
 
@@ -746,7 +719,6 @@ cmd/
     show.go           # show command
     query.go          # query command
     export.go         # export command
-    skill.go          # skill command
     notes.go          # notes subcommands
 
 internal/

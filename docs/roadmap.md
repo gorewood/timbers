@@ -324,23 +324,16 @@ Each epic builds on proven foundations. No epic begins until prerequisites are w
 
 ---
 
-## Epic 12: Skill Command
+## Epic 12: Skill Command [REMOVED]
 
-**Goal**: Self-documentation for building agent skills.
+**Status**: Removed in favor of static documentation.
 
-### 12.1 Skill Content
-- [ ] Create `cmd/timbers/skill.go`
-- [ ] Embed skill content (core concepts, workflows, commands)
-- [ ] Add `--format` flag (md|json)
-- [ ] Add `--include-examples` flag
+The `timbers skill` command was removed because:
+- Static docs belong in docs/, not a command
+- `timbers prime` provides the dynamic context agents need
+- `timbers onboard` provides the CLAUDE.md snippet
 
-### 12.2 Skill Output
-- [ ] Markdown output: documentation for skill creation
-- [ ] JSON output: structured skill data
-- [ ] Include: concepts, workflow patterns, command reference, contract
-- [ ] Test: output is complete and accurate
-
-**Acceptance**: `timbers skill` outputs useful skill-building content.
+See [docs/agent-reference.md](agent-reference.md) for the reference content.
 
 ---
 
