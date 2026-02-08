@@ -62,7 +62,7 @@ func newNotesInitCmd() *cobra.Command {
 
 // runNotesInit executes the notes init command.
 func runNotesInit(cmd *cobra.Command, remote string, dryRun bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")
@@ -73,7 +73,7 @@ func runNotesInit(cmd *cobra.Command, remote string, dryRun bool) error {
 	wasConfigured := git.NotesConfigured(remote)
 
 	if dryRun {
-		if jsonFlag {
+		if printer.IsJSON() {
 			return printer.Success(map[string]any{
 				"status":             "dry_run",
 				"remote":             remote,
@@ -97,7 +97,7 @@ func runNotesInit(cmd *cobra.Command, remote string, dryRun bool) error {
 		return sysErr
 	}
 
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status":     "ok",
 			"remote":     remote,
@@ -137,7 +137,7 @@ func newNotesPushCmd() *cobra.Command {
 
 // runNotesPush executes the notes push command.
 func runNotesPush(cmd *cobra.Command, remote string, dryRun bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")
@@ -149,7 +149,7 @@ func runNotesPush(cmd *cobra.Command, remote string, dryRun bool) error {
 		commits, _ := git.ListNotedCommits()
 		entryCount := len(commits)
 
-		if jsonFlag {
+		if printer.IsJSON() {
 			return printer.Success(map[string]any{
 				"status":      "dry_run",
 				"remote":      remote,
@@ -169,7 +169,7 @@ func runNotesPush(cmd *cobra.Command, remote string, dryRun bool) error {
 		return sysErr
 	}
 
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status": "ok",
 			"remote": remote,
@@ -203,7 +203,7 @@ func newNotesFetchCmd() *cobra.Command {
 
 // runNotesFetch executes the notes fetch command.
 func runNotesFetch(cmd *cobra.Command, remote string, dryRun bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")
@@ -213,7 +213,7 @@ func runNotesFetch(cmd *cobra.Command, remote string, dryRun bool) error {
 
 	if dryRun {
 		configured := git.NotesConfigured(remote)
-		if jsonFlag {
+		if printer.IsJSON() {
 			return printer.Success(map[string]any{
 				"status":     "dry_run",
 				"remote":     remote,
@@ -237,7 +237,7 @@ func runNotesFetch(cmd *cobra.Command, remote string, dryRun bool) error {
 		return sysErr
 	}
 
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status": "ok",
 			"remote": remote,
@@ -277,7 +277,7 @@ type notesStatusResult struct {
 
 // runNotesStatus executes the notes status command.
 func runNotesStatus(cmd *cobra.Command, remote string) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")
@@ -291,7 +291,7 @@ func runNotesStatus(cmd *cobra.Command, remote string) error {
 		return err
 	}
 
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"ref_exists":  result.RefExists,
 			"configured":  result.Configured,

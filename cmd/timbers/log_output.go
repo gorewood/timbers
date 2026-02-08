@@ -12,7 +12,7 @@ import (
 
 // outputDryRun outputs what would be written without actually writing.
 func outputDryRun(printer *output.Printer, entry *ledger.Entry) error {
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status": "dry_run",
 			"entry":  entryToMap(entry),
@@ -55,7 +55,7 @@ func formatDiffstat(ds *ledger.Diffstat) string {
 
 // outputLogSuccess outputs the success result.
 func outputLogSuccess(printer *output.Printer, entry *ledger.Entry, pushedMsg string) error {
-	if jsonFlag {
+	if printer.IsJSON() {
 		commitSHAs := make([]string, len(entry.Workset.Commits))
 		copy(commitSHAs, entry.Workset.Commits)
 		return printer.Success(map[string]any{

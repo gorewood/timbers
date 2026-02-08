@@ -84,7 +84,7 @@ Examples:
 
 // runDoctor executes the doctor command.
 func runDoctor(cmd *cobra.Command, flags *doctorFlags) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	// Check if we're in a git repo
 	if !git.IsRepo() {
@@ -97,7 +97,7 @@ func runDoctor(cmd *cobra.Command, flags *doctorFlags) error {
 	result := gatherDoctorChecks(flags)
 
 	// Output based on mode
-	if jsonFlag {
+	if printer.IsJSON() {
 		return outputDoctorJSON(printer, result)
 	}
 

@@ -107,7 +107,7 @@ Examples:
 
 // runSetupClaude executes the setup claude command.
 func runSetupClaude(cmd *cobra.Command, project, check, remove, dryRun bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	hookPath, scope, err := resolveClaudeHookPath(project)
 	if err != nil {
@@ -131,7 +131,7 @@ func runSetupClaude(cmd *cobra.Command, project, check, remove, dryRun bool) err
 
 // runSetupList lists available integrations and their status.
 func runSetupList(cmd *cobra.Command) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	// Get Claude integration status
 	globalHookPath, _, _ := resolveClaudeHookPath(false)
@@ -162,7 +162,7 @@ func runSetupList(cmd *cobra.Command) error {
 		},
 	}
 
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"integrations": integrations,
 		})

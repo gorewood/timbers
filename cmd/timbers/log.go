@@ -79,7 +79,7 @@ type logContext struct {
 
 // runLog executes the log command.
 func runLog(cmd *cobra.Command, storage *ledger.Storage, args []string, flags logFlags) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	storage, err := initLogStorage(storage, printer)
 	if err != nil {

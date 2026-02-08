@@ -33,7 +33,7 @@ func resolveClaudeHookPath(project bool) (string, string, error) {
 func runSetupClaudeCheck(printer *output.Printer, hookPath, scope string) error {
 	installed := isTimbersSectionInstalled(hookPath)
 
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"integration": "claude",
 			"installed":   installed,
@@ -58,7 +58,7 @@ func runSetupClaudeRemove(printer *output.Printer, hookPath, scope string, dryRu
 	installed := isTimbersSectionInstalled(hookPath)
 
 	if !installed {
-		if jsonFlag {
+		if printer.IsJSON() {
 			return printer.Success(map[string]any{
 				"status":      "not_installed",
 				"integration": "claude",
@@ -71,7 +71,7 @@ func runSetupClaudeRemove(printer *output.Printer, hookPath, scope string, dryRu
 	}
 
 	if dryRun {
-		if jsonFlag {
+		if printer.IsJSON() {
 			return printer.Success(map[string]any{
 				"status":      "dry_run",
 				"integration": "claude",
@@ -92,7 +92,7 @@ func runSetupClaudeRemove(printer *output.Printer, hookPath, scope string, dryRu
 		return err
 	}
 
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status":      "removed",
 			"integration": "claude",
@@ -115,7 +115,7 @@ func runSetupClaudeInstall(printer *output.Printer, hookPath, scope string, dryR
 			action = "would update (already installed)"
 		}
 
-		if jsonFlag {
+		if printer.IsJSON() {
 			return printer.Success(map[string]any{
 				"status":            "dry_run",
 				"integration":       "claude",
@@ -142,7 +142,7 @@ func runSetupClaudeInstall(printer *output.Printer, hookPath, scope string, dryR
 		msg = "Updated"
 	}
 
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status":      "installed",
 			"integration": "claude",

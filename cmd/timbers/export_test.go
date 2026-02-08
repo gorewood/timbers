@@ -193,9 +193,6 @@ func TestExportCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Reset global flag
-			jsonFlag = tt.jsonOutput
-
 			// Create storage with mock
 			storage := ledger.NewStorage(&mockGitOpsForExport{
 				notes:   tt.notes,
@@ -204,6 +201,12 @@ func TestExportCommand(t *testing.T) {
 
 			// Create command
 			cmd := newExportCmdInternal(storage)
+
+			// Set JSON mode for testing
+			if tt.jsonOutput {
+				cmd.PersistentFlags().Bool("json", false, "")
+				_ = cmd.PersistentFlags().Set("json", "true")
+			}
 
 			// Set flags
 			if tt.lastFlag != "" {

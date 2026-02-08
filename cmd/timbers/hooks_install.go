@@ -39,7 +39,7 @@ Use --force to overwrite existing hooks without backup.`,
 
 // runHooksInstall executes the hooks install command.
 func runHooksInstall(cmd *cobra.Command, chain, force, dryRun bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")
@@ -99,7 +99,7 @@ func backupExistingHook(hookPath string) error {
 
 // outputInstallSuccess outputs the success message for install.
 func outputInstallSuccess(printer *output.Printer, chained bool) error {
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status":  "ok",
 			"hook":    "pre-commit",
@@ -116,7 +116,7 @@ func outputInstallSuccess(printer *output.Printer, chained bool) error {
 
 // handleInstallDryRun handles dry-run output for install.
 func handleInstallDryRun(printer *output.Printer, hookPath string, existingHook, chain, force bool) error {
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status":          "dry_run",
 			"hook":            "pre-commit",
@@ -192,7 +192,7 @@ func newHooksUninstallCmd() *cobra.Command {
 
 // runHooksUninstall executes the hooks uninstall command.
 func runHooksUninstall(cmd *cobra.Command, dryRun bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")
@@ -245,7 +245,7 @@ func performUninstall(printer *output.Printer, hookPath, backupPath string, inst
 
 // outputNoHookInstalled outputs the message when no hook is installed.
 func outputNoHookInstalled(printer *output.Printer) error {
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status":  "ok",
 			"message": "no timbers hook installed",
@@ -256,7 +256,7 @@ func outputNoHookInstalled(printer *output.Printer) error {
 
 // outputUninstallSuccess outputs the success message for uninstall.
 func outputUninstallSuccess(printer *output.Printer, restored bool) error {
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status":   "ok",
 			"hook":     "pre-commit",
@@ -273,7 +273,7 @@ func outputUninstallSuccess(printer *output.Printer, restored bool) error {
 
 // handleUninstallDryRun handles dry-run output for uninstall.
 func handleUninstallDryRun(printer *output.Printer, hookPath string, installed, hasBackup bool) error {
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status":        "dry_run",
 			"hook":          "pre-commit",

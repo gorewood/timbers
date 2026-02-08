@@ -254,9 +254,6 @@ func TestBatchLog_MultipleEntries(t *testing.T) {
 	}
 	mock.diffstat = git.Diffstat{Files: 2, Insertions: 30, Deletions: 10}
 
-	// Reset global flag
-	jsonFlag = false
-
 	storage := ledger.NewStorage(mock)
 	cmd := newLogCmdWithStorage(storage)
 	cmd.SetArgs([]string{"--batch"})
@@ -294,8 +291,6 @@ func TestBatchLog_GroupByWorkItem(t *testing.T) {
 		{SHA: "ghi789012345678", Short: "ghi7890", Subject: "Another PROJ-1 fix", Body: "Work-item: jira:PROJ-1", Date: now},
 	}
 	mock.diffstat = git.Diffstat{Files: 2, Insertions: 30, Deletions: 10}
-
-	jsonFlag = false
 
 	storage := ledger.NewStorage(mock)
 	cmd := newLogCmdWithStorage(storage)
@@ -337,8 +332,6 @@ func TestBatchLog_DryRun(t *testing.T) {
 	}
 	mock.diffstat = git.Diffstat{Files: 1, Insertions: 10, Deletions: 5}
 
-	jsonFlag = false
-
 	storage := ledger.NewStorage(mock)
 	cmd := newLogCmdWithStorage(storage)
 	cmd.SetArgs([]string{"--batch", "--dry-run"})
@@ -377,10 +370,10 @@ func TestBatchLog_JSONOutput(t *testing.T) {
 	}
 	mock.diffstat = git.Diffstat{Files: 2, Insertions: 30, Deletions: 10}
 
-	jsonFlag = true
-
 	storage := ledger.NewStorage(mock)
 	cmd := newLogCmdWithStorage(storage)
+	cmd.PersistentFlags().Bool("json", false, "")
+	_ = cmd.PersistentFlags().Set("json", "true")
 	cmd.SetArgs([]string{"--batch"})
 
 	var buf bytes.Buffer
@@ -421,10 +414,10 @@ func TestBatchLog_JSONDryRun(t *testing.T) {
 	}
 	mock.diffstat = git.Diffstat{Files: 1, Insertions: 5, Deletions: 2}
 
-	jsonFlag = true
-
 	storage := ledger.NewStorage(mock)
 	cmd := newLogCmdWithStorage(storage)
+	cmd.PersistentFlags().Bool("json", false, "")
+	_ = cmd.PersistentFlags().Set("json", "true")
 	cmd.SetArgs([]string{"--batch", "--dry-run"})
 
 	var buf bytes.Buffer
@@ -452,8 +445,6 @@ func TestBatchLog_NoPendingCommits(t *testing.T) {
 	mock := newMockGitOpsForLog()
 	mock.head = "abc123def456789"
 	mock.reachableResult = []git.Commit{} // No commits
-
-	jsonFlag = false
 
 	storage := ledger.NewStorage(mock)
 	cmd := newLogCmdWithStorage(storage)
@@ -484,8 +475,6 @@ func TestBatchLog_WithUntrackedGroup(t *testing.T) {
 		{SHA: "def456789012345", Short: "def4567", Subject: "Untracked commit", Body: "No work item here", Date: now},
 	}
 	mock.diffstat = git.Diffstat{Files: 1, Insertions: 5, Deletions: 2}
-
-	jsonFlag = false
 
 	storage := ledger.NewStorage(mock)
 	cmd := newLogCmdWithStorage(storage)

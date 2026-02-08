@@ -316,7 +316,7 @@ func outputBatchResult(printer *output.Printer, entries []batchEntryRef, isDryRu
 		status = "dry_run"
 	}
 
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.WriteJSON(batchResult{
 			Status:  status,
 			Count:   len(entries),

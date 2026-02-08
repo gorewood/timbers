@@ -61,7 +61,7 @@ type queryParams struct {
 
 // runQuery executes the query command.
 func runQuery(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag, untilFlag string, onelineFlag bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	// Parse and validate flags
 	params, err := parseQueryFlags(lastFlag, sinceFlag, untilFlag)
@@ -164,7 +164,7 @@ func initQueryStorage(storage *ledger.Storage, printer *output.Printer) (*ledger
 
 // outputQueryResults outputs entries based on the output mode.
 func outputQueryResults(printer *output.Printer, entries []*ledger.Entry, onelineFlag bool) error {
-	if jsonFlag {
+	if printer.IsJSON() {
 		return outputQueryJSON(printer, entries)
 	}
 

@@ -46,7 +46,7 @@ Examples:
 
 // runShow executes the show command.
 func runShow(cmd *cobra.Command, storage *ledger.Storage, args []string, latestFlag bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	// Validate arguments
 	if len(args) == 0 && !latestFlag {
@@ -80,7 +80,7 @@ func runShow(cmd *cobra.Command, storage *ledger.Storage, args []string, latestF
 	}
 
 	// Output based on mode
-	if jsonFlag {
+	if printer.IsJSON() {
 		return outputShowJSON(printer, entry)
 	}
 
