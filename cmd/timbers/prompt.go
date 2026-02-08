@@ -67,7 +67,7 @@ Examples:
 
 // runPrompt executes the prompt command.
 func runPrompt(cmd *cobra.Command, args []string, flags promptFlags) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	// Handle --list
 	if flags.list {
@@ -139,7 +139,7 @@ func runPromptRender(
 	}
 
 	// Default: output rendered prompt
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"template":      templateName,
 			"template_path": tmpl.Source,
@@ -188,7 +188,7 @@ func runPromptWithLLM(
 	metadata := buildGenerationMetadata(templateName, tmpl, entries, resp.Model, selFlags)
 
 	// Output result
-	if jsonFlag {
+	if printer.IsJSON() {
 		result := map[string]any{
 			"template":       templateName,
 			"template_path":  tmpl.Source,
@@ -219,7 +219,7 @@ func runPromptList(printer *output.Printer) error {
 		return sysErr
 	}
 
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"templates": templates,
 		})
@@ -260,7 +260,7 @@ func runPromptList(printer *output.Printer) error {
 
 // runPromptShow shows template content without rendering.
 func runPromptShow(printer *output.Printer, tmpl *prompt.Template) error {
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"name":        tmpl.Name,
 			"description": tmpl.Description,

@@ -72,7 +72,7 @@ Examples:
 
 // runInit executes the init command.
 func runInit(cmd *cobra.Command, flags *initFlags) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")
@@ -114,7 +114,7 @@ func gatherInitState() *initState {
 func handleInitDryRun(printer *output.Printer, repoName string, state *initState, flags *initFlags) error {
 	steps := buildDryRunSteps(state, flags)
 
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status":    "dry_run",
 			"repo_name": repoName,
@@ -156,7 +156,7 @@ func performInit(cmd *cobra.Command, printer *output.Printer, repoName string, s
 		return outputAlreadyInitialized(printer, repoName)
 	}
 
-	if !jsonFlag {
+	if !printer.IsJSON() {
 		printer.Println()
 		printer.Print("Initializing timbers in %s...\n", repoName)
 		printer.Println()
@@ -176,7 +176,7 @@ func isAlreadyInitialized(state *initState, flags *initFlags) bool {
 
 // outputAlreadyInitialized handles the already-initialized case.
 func outputAlreadyInitialized(printer *output.Printer, repoName string) error {
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status":              "ok",
 			"already_initialized": true,
@@ -196,7 +196,7 @@ func outputInitResult(printer *output.Printer, repoName string, state *initState
 	hooksInstalled := stepHasStatus(steps, "hooks", "ok")
 	claudeInstalled := stepHasStatus(steps, "claude", "ok")
 
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status":              "ok",
 			"repo_name":           repoName,

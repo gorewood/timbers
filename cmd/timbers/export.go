@@ -59,7 +59,7 @@ Examples:
 
 // runExport executes the export command.
 func runExport(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag, untilFlag, rangeFlag, formatFlag, outFlag string) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	if err := validateExportFlags(printer, lastFlag, sinceFlag, untilFlag, rangeFlag); err != nil {
 		return err
@@ -228,7 +228,7 @@ func writeToDirectory(printer *output.Printer, entries []*ledger.Entry, format, 
 	}
 
 	// Output confirmation - JSON or human-readable
-	if jsonFlag {
+	if printer.IsJSON() {
 		entryIDs := make([]string, len(entries))
 		for i, e := range entries {
 			entryIDs[i] = e.ID

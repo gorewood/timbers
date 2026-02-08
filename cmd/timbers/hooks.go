@@ -59,7 +59,7 @@ func newHooksListCmd() *cobra.Command {
 
 // runHooksList executes the hooks list command.
 func runHooksList(cmd *cobra.Command, _ []string) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")
@@ -73,7 +73,7 @@ func runHooksList(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"pre_commit": map[string]any{
 				"installed": result.PreCommit.Installed,

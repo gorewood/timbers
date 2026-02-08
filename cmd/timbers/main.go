@@ -21,8 +21,17 @@ var (
 	date    = "unknown"
 )
 
-// jsonFlag is the global --json flag value.
-var jsonFlag bool
+// isJSONMode reads the --json persistent flag from the command hierarchy.
+// This replaces the former global jsonFlag variable, making commands
+// independently testable without shared mutable state.
+func isJSONMode(cmd *cobra.Command) bool {
+	flag := cmd.Flags().Lookup("json")
+	if flag == nil {
+		// Walk up to root to find the persistent flag
+		flag = cmd.Root().PersistentFlags().Lookup("json")
+	}
+	return flag != nil && flag.Value.String() == "true"
+}
 
 // buildVersion returns the full version string including commit and date.
 func buildVersion() string {
@@ -66,7 +75,7 @@ All commands support --json for structured output.`,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// If --json flag is set but no subcommand, output JSON error
-			if jsonFlag {
+			if isJSONMode(cmd) {
 				printer := output.NewPrinter(cmd.OutOrStdout(), true, false)
 				err := output.NewUserError("no command specified. Run 'timbers --help' for usage")
 				printer.Error(err)
@@ -78,7 +87,7 @@ All commands support --json for structured output.`,
 	}
 
 	// Add persistent --json flag (available to all subcommands)
-	cmd.PersistentFlags().BoolVar(&jsonFlag, "json", false, "Output in JSON format")
+	cmd.PersistentFlags().Bool("json", false, "Output in JSON format")
 
 	// Configure lipgloss for TTY detection
 	lipgloss.SetHasDarkBackground(true)

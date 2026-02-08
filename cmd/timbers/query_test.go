@@ -168,14 +168,17 @@ func TestQueryCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Reset global flag
-			jsonFlag = tt.jsonOutput
-
 			// Create storage with mock
 			storage := ledger.NewStorage(&mockGitOpsForQuery{notes: tt.notes})
 
 			// Create command
 			cmd := newQueryCmdInternal(storage)
+
+			// Set JSON mode for testing
+			if tt.jsonOutput {
+				cmd.PersistentFlags().Bool("json", false, "")
+				_ = cmd.PersistentFlags().Set("json", "true")
+			}
 
 			// Set flags
 			if err := cmd.Flags().Set("last", tt.lastFlag); err != nil {

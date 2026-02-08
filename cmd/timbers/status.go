@@ -51,7 +51,7 @@ Examples:
 
 // runStatus executes the status command.
 func runStatus(cmd *cobra.Command, _ []string) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	// Check if we're in a git repo
 	if !git.IsRepo() {
@@ -68,7 +68,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Output based on mode
-	if jsonFlag {
+	if printer.IsJSON() {
 		data := map[string]any{
 			"repo":             result.Repo,
 			"branch":           result.Branch,

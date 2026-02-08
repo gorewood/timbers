@@ -56,10 +56,10 @@ func TestSetupClaudeCheck(t *testing.T) {
 			t.Run("json", func(t *testing.T) {
 				var buf bytes.Buffer
 				cmd := newSetupCmd()
+				cmd.PersistentFlags().Bool("json", false, "")
+				_ = cmd.PersistentFlags().Set("json", "true")
 				cmd.SetOut(&buf)
 				cmd.SetArgs([]string{"claude", "--check"})
-				jsonFlag = true
-				defer func() { jsonFlag = false }()
 
 				err := cmd.Execute()
 				if err != nil {
@@ -88,7 +88,6 @@ func TestSetupClaudeCheck(t *testing.T) {
 				cmd := newSetupCmd()
 				cmd.SetOut(&buf)
 				cmd.SetArgs([]string{"claude", "--check"})
-				jsonFlag = false
 
 				err := cmd.Execute()
 				if err != nil {
@@ -116,7 +115,6 @@ func TestSetupClaudeInstall(t *testing.T) {
 		cmd := newSetupCmd()
 		cmd.SetOut(&buf)
 		cmd.SetArgs([]string{"claude"})
-		jsonFlag = false
 
 		err := cmd.Execute()
 		if err != nil {
@@ -159,7 +157,6 @@ func TestSetupClaudeInstall(t *testing.T) {
 			cmd := newSetupCmd()
 			cmd.SetOut(&buf)
 			cmd.SetArgs([]string{"claude"})
-			jsonFlag = false
 
 			err := cmd.Execute()
 			if err != nil {
@@ -200,7 +197,6 @@ func TestSetupClaudeInstall(t *testing.T) {
 		cmd := newSetupCmd()
 		cmd.SetOut(&buf)
 		cmd.SetArgs([]string{"claude"})
-		jsonFlag = false
 
 		err := cmd.Execute()
 		if err != nil {
@@ -253,7 +249,6 @@ echo 'after'
 		cmd := newSetupCmd()
 		cmd.SetOut(&buf)
 		cmd.SetArgs([]string{"claude", "--remove"})
-		jsonFlag = false
 
 		err := cmd.Execute()
 		if err != nil {
@@ -285,7 +280,6 @@ echo 'after'
 		cmd := newSetupCmd()
 		cmd.SetOut(&buf)
 		cmd.SetArgs([]string{"claude", "--remove"})
-		jsonFlag = false
 
 		err := cmd.Execute()
 		if err != nil {
@@ -311,7 +305,6 @@ func TestSetupClaudeDryRun(t *testing.T) {
 	cmd := newSetupCmd()
 	cmd.SetOut(&buf)
 	cmd.SetArgs([]string{"claude", "--dry-run"})
-	jsonFlag = false
 
 	err := cmd.Execute()
 	if err != nil {
@@ -357,7 +350,6 @@ func TestSetupClaudeProject(t *testing.T) {
 	cmd := newSetupCmd()
 	cmd.SetOut(&buf)
 	cmd.SetArgs([]string{"claude", "--project"})
-	jsonFlag = false
 
 	err := cmd.Execute()
 	if err != nil {
@@ -385,10 +377,10 @@ func TestSetupList(t *testing.T) {
 
 		var buf bytes.Buffer
 		cmd := newSetupCmd()
+		cmd.PersistentFlags().Bool("json", false, "")
+		_ = cmd.PersistentFlags().Set("json", "true")
 		cmd.SetOut(&buf)
 		cmd.SetArgs([]string{"--list"})
-		jsonFlag = true
-		defer func() { jsonFlag = false }()
 
 		err := cmd.Execute()
 		if err != nil {
@@ -426,7 +418,6 @@ func TestSetupList(t *testing.T) {
 		cmd := newSetupCmd()
 		cmd.SetOut(&buf)
 		cmd.SetArgs([]string{"--list"})
-		jsonFlag = false
 
 		err := cmd.Execute()
 		if err != nil {

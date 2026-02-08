@@ -157,14 +157,17 @@ func TestShowCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Reset global flag
-			jsonFlag = tt.jsonOutput
-
 			// Create storage with mock
 			storage := ledger.NewStorage(tt.mock)
 
 			// Create command
 			cmd := newShowCmdWithStorage(storage)
+
+			// Set JSON mode for testing
+			if tt.jsonOutput {
+				cmd.PersistentFlags().Bool("json", false, "")
+				_ = cmd.PersistentFlags().Set("json", "true")
+			}
 
 			// Set flags
 			if tt.lastFlag {
@@ -252,7 +255,6 @@ func TestShowWithTags(t *testing.T) {
 	}
 	data, _ := entry.ToJSON()
 
-	jsonFlag = false
 	storage := ledger.NewStorage(&mockGitOpsForShow{
 		notes: map[string][]byte{
 			"anchor123456": data,

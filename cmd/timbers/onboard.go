@@ -48,7 +48,7 @@ Examples:
 
 // runOnboard executes the onboard command.
 func runOnboard(cmd *cobra.Command, formatFlag, targetFlag string) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	// Validate target flag
 	if targetFlag != "claude" && targetFlag != "agents" {
@@ -65,7 +65,7 @@ func runOnboard(cmd *cobra.Command, formatFlag, targetFlag string) error {
 	}
 
 	// JSON output (either --json flag or --format json)
-	if jsonFlag || formatFlag == "json" {
+	if printer.IsJSON() || formatFlag == "json" {
 		return printer.WriteJSON(map[string]string{
 			"target":  targetFlag,
 			"format":  formatFlag,

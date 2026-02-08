@@ -105,7 +105,7 @@ func validateCatchupFlags(flags catchupFlags) error {
 }
 
 func runCatchup(cmd *cobra.Command, flags catchupFlags) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	// Validate flags before any other work
 	if err := validateCatchupFlags(flags); err != nil {
@@ -330,7 +330,7 @@ func outputCatchupResult(printer *output.Printer, entries []catchupEntryRef, fla
 	if flags.dryRun {
 		status = "dry_run"
 	}
-	if jsonFlag {
+	if printer.IsJSON() {
 		return printer.WriteJSON(catchupResult{Status: status, Count: len(entries), Entries: entries})
 	}
 	if flags.dryRun {

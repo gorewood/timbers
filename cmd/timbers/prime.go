@@ -108,7 +108,7 @@ Examples:
 
 // runPrime executes the prime command.
 func runPrime(cmd *cobra.Command, storage *ledger.Storage, lastN int) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	// Check if we're in a git repo (only when using real git)
 	if storage == nil && !git.IsRepo() {
@@ -130,7 +130,7 @@ func runPrime(cmd *cobra.Command, storage *ledger.Storage, lastN int) error {
 	}
 
 	// Output based on mode
-	if jsonFlag {
+	if printer.IsJSON() {
 		return outputPrimeJSON(printer, result)
 	}
 

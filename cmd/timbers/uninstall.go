@@ -46,7 +46,7 @@ Use --keep-notes to preserve ledger data. Use --binary to remove the binary.`,
 }
 
 func runUninstall(cmd *cobra.Command, dryRun, force, removeBinary, keepNotes bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 	result, err := gatherUninstallInfo(removeBinary)
 	if err != nil {
 		printer.Error(err)
@@ -55,7 +55,7 @@ func runUninstall(cmd *cobra.Command, dryRun, force, removeBinary, keepNotes boo
 	if dryRun {
 		return outputDryRunUninstall(printer, result, removeBinary, keepNotes)
 	}
-	if !force && !jsonFlag && !confirmUninstall(cmd, result, removeBinary, keepNotes) {
+	if !force && !printer.IsJSON() && !confirmUninstall(cmd, result, removeBinary, keepNotes) {
 		printer.Println("Uninstall cancelled.")
 		return nil
 	}
@@ -115,7 +115,7 @@ func findNotesConfigs() []string {
 }
 
 func outputDryRunUninstall(printer *output.Printer, result *uninstallResult, binary, keep bool) error {
-	if jsonFlag {
+	if printer.IsJSON() {
 		data := map[string]any{
 			"status": "dry_run", "in_repo": result.InRepo, "keep_notes": keep,
 			"notes_ref_exists": result.NotesRefRemoved && !keep, "notes_entry_count": result.NotesEntryCount,
@@ -286,7 +286,7 @@ func removeNotesConfig(remote string) error {
 
 //nolint:gocognit,cyclop // output function with multiple conditional sections
 func reportUninstallResult(printer *output.Printer, result *uninstallResult, binary, keep bool, errs []string) error {
-	if jsonFlag {
+	if printer.IsJSON() {
 		status := "ok"
 		if len(errs) > 0 {
 			status = "partial"

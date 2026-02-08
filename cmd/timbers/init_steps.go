@@ -72,19 +72,19 @@ func executeInitSteps(cmd *cobra.Command, printer *output.Printer, state *initSt
 
 	step := performNotesInit(state)
 	steps = append(steps, step)
-	if !jsonFlag {
+	if !printer.IsJSON() {
 		printStepResult(printer, step)
 	}
 
 	step = executeHooksStep(state, flags)
 	steps = append(steps, step)
-	if !jsonFlag {
+	if !printer.IsJSON() {
 		printStepResult(printer, step)
 	}
 
 	step = executeClaudeStep(cmd, printer, state, flags)
 	steps = append(steps, step)
-	if !jsonFlag {
+	if !printer.IsJSON() {
 		printStepResult(printer, step)
 	}
 
@@ -163,7 +163,7 @@ func performClaudeSetup(cmd *cobra.Command, printer *output.Printer, state *init
 		return installClaudeIntegration()
 	}
 
-	if !jsonFlag && output.IsTTY(cmd.OutOrStdout()) {
+	if !printer.IsJSON() && output.IsTTY(cmd.OutOrStdout()) {
 		return promptClaudeInstall(printer)
 	}
 
