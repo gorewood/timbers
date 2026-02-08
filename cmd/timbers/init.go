@@ -8,6 +8,7 @@ import (
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/setup"
 )
 
 // initFlags holds the command-line flags for the init command.
@@ -96,15 +97,15 @@ func gatherInitState() *initState {
 		remoteConfigured: git.NotesConfigured("origin"),
 	}
 
-	if hooksDir, err := getHooksDir(); err == nil {
+	if hooksDir, err := setup.GetHooksDir(); err == nil {
 		preCommitPath := filepath.Join(hooksDir, "pre-commit")
-		hookStatus := checkHookStatus(preCommitPath)
+		hookStatus := setup.CheckHookStatus(preCommitPath)
 		state.hooksInstalled = hookStatus.Installed
 	}
 
-	globalHookPath, _, _ := resolveClaudeHookPath(false)
-	projectHookPath, _, _ := resolveClaudeHookPath(true)
-	state.claudeInstalled = isTimbersSectionInstalled(globalHookPath) || isTimbersSectionInstalled(projectHookPath)
+	globalHookPath, _, _ := setup.ResolveClaudeHookPath(false)
+	projectHookPath, _, _ := setup.ResolveClaudeHookPath(true)
+	state.claudeInstalled = setup.IsTimbersSectionInstalled(globalHookPath) || setup.IsTimbersSectionInstalled(projectHookPath)
 
 	return state
 }

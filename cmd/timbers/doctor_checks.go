@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
@@ -197,7 +198,7 @@ func checkGitHooks() checkResult {
 		}
 	}
 
-	if hasSubstring(string(content), "timbers") {
+	if strings.Contains(string(content), "timbers") {
 		return checkResult{
 			Name:    "Git Hooks",
 			Status:  checkPass,
@@ -251,7 +252,7 @@ func checkClaudeIntegration() checkResult {
 		if fileErr != nil {
 			continue
 		}
-		if hasSubstring(string(content), "timbers") {
+		if strings.Contains(string(content), "timbers") {
 			return checkResult{
 				Name:    "Claude Integration",
 				Status:  checkPass,

@@ -1,4 +1,3 @@
-// Package main provides the entry point for the timbers CLI.
 package main
 
 import (
@@ -9,6 +8,7 @@ import (
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/setup"
 )
 
 // newHooksInstallCmd creates the hooks install subcommand.
@@ -47,14 +47,14 @@ func runHooksInstall(cmd *cobra.Command, chain, force, dryRun bool) error {
 		return err
 	}
 
-	hooksDir, err := getHooksDir()
+	hooksDir, err := setup.GetHooksDir()
 	if err != nil {
 		printer.Error(err)
 		return err
 	}
 
 	preCommitPath := filepath.Join(hooksDir, "pre-commit")
-	existingHook := hookExists(preCommitPath)
+	existingHook := setup.HookExists(preCommitPath)
 
 	if dryRun {
 		return handleInstallDryRun(printer, preCommitPath, existingHook, chain, force)
@@ -71,13 +71,13 @@ func performInstall(printer *output.Printer, hookPath string, existingHook, chai
 			printer.Error(err)
 			return err
 		}
-		if err := backupExistingHook(hookPath); err != nil {
+		if err := setup.BackupExistingHook(hookPath); err != nil {
 			printer.Error(err)
 			return err
 		}
 	}
 
-	hookContent := generatePreCommitHook(chain && existingHook)
+	hookContent := setup.GeneratePreCommitHook(chain && existingHook)
 	// #nosec G306 -- hook needs execute permission
 	if err := os.WriteFile(hookPath, []byte(hookContent), 0o755); err != nil {
 		sysErr := output.NewSystemErrorWithCause("failed to write hook", err)
@@ -86,15 +86,6 @@ func performInstall(printer *output.Printer, hookPath string, existingHook, chai
 	}
 
 	return outputInstallSuccess(printer, chain && existingHook)
-}
-
-// backupExistingHook moves the existing hook to a backup location.
-func backupExistingHook(hookPath string) error {
-	backupPath := hookPath + ".backup"
-	if err := os.Rename(hookPath, backupPath); err != nil {
-		return output.NewSystemErrorWithCause("failed to backup existing hook", err)
-	}
-	return nil
 }
 
 // outputInstallSuccess outputs the success message for install.
@@ -129,47 +120,9 @@ func handleInstallDryRun(printer *output.Printer, hookPath string, existingHook,
 	printer.Section("Dry Run")
 	printer.KeyValue("Hook", "pre-commit")
 	printer.KeyValue("Path", hookPath)
-	printer.KeyValue("Action", describeInstallAction(existingHook, chain, force))
+	printer.KeyValue("Action", setup.DescribeInstallAction(existingHook, chain, force))
 
 	return nil
-}
-
-// describeInstallAction returns a description of what install would do.
-func describeInstallAction(existingHook, chain, force bool) string {
-	if !existingHook {
-		return "would install"
-	}
-	switch {
-	case force:
-		return "would overwrite existing hook"
-	case chain:
-		return "would backup and chain existing hook"
-	default:
-		return "would fail (hook exists, use --chain or --force)"
-	}
-}
-
-// generatePreCommitHook generates the pre-commit hook script.
-func generatePreCommitHook(withChain bool) string {
-	script := `#!/bin/sh
-# timbers pre-commit hook
-# Warns about undocumented commits (non-blocking)
-
-if command -v timbers >/dev/null 2>&1; then
-  timbers hook run pre-commit "$@"
-fi
-`
-
-	if withChain {
-		script += `
-# Chain to original hook if it exists
-if [ -x ".git/hooks/pre-commit.backup" ]; then
-  exec .git/hooks/pre-commit.backup "$@"
-fi
-`
-	}
-
-	return script
 }
 
 // newHooksUninstallCmd creates the hooks uninstall subcommand.
@@ -200,7 +153,7 @@ func runHooksUninstall(cmd *cobra.Command, dryRun bool) error {
 		return err
 	}
 
-	hooksDir, err := getHooksDir()
+	hooksDir, err := setup.GetHooksDir()
 	if err != nil {
 		printer.Error(err)
 		return err
@@ -208,8 +161,8 @@ func runHooksUninstall(cmd *cobra.Command, dryRun bool) error {
 
 	preCommitPath := filepath.Join(hooksDir, "pre-commit")
 	backupPath := preCommitPath + ".backup"
-	status := checkHookStatus(preCommitPath)
-	hasBackup := hookExists(backupPath)
+	status := setup.CheckHookStatus(preCommitPath)
+	hasBackup := setup.HookExists(backupPath)
 
 	if dryRun {
 		return handleUninstallDryRun(printer, preCommitPath, status.Installed, hasBackup)
@@ -286,19 +239,7 @@ func handleUninstallDryRun(printer *output.Printer, hookPath string, installed, 
 	printer.Section("Dry Run")
 	printer.KeyValue("Hook", "pre-commit")
 	printer.KeyValue("Path", hookPath)
-	printer.KeyValue("Action", describeUninstallAction(installed, hasBackup))
+	printer.KeyValue("Action", setup.DescribeUninstallAction(installed, hasBackup))
 
 	return nil
-}
-
-// describeUninstallAction returns a description of what uninstall would do.
-func describeUninstallAction(installed, hasBackup bool) string {
-	switch {
-	case !installed:
-		return "no timbers hook installed"
-	case hasBackup:
-		return "would remove and restore backup"
-	default:
-		return "would remove"
-	}
 }

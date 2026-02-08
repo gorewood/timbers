@@ -1,26 +1,11 @@
-// Package main provides the entry point for the timbers CLI.
 package main
 
 import (
 	"github.com/spf13/cobra"
 
 	"github.com/gorewood/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/setup"
 )
-
-const (
-	// timbersHookMarkerBegin marks the start of timbers-managed content.
-	timbersHookMarkerBegin = "# BEGIN timbers"
-	// timbersHookMarkerEnd marks the end of timbers-managed content.
-	timbersHookMarkerEnd = "# END timbers"
-)
-
-// claudeHookContent is the hook script content that runs timbers prime.
-const claudeHookContent = `# BEGIN timbers
-# Timbers session context injection
-if command -v timbers >/dev/null 2>&1 && [ -d ".git" ]; then
-  timbers prime 2>/dev/null
-fi
-# END timbers`
 
 // integrationInfo describes an available integration.
 type integrationInfo struct {
@@ -109,23 +94,20 @@ Examples:
 func runSetupClaude(cmd *cobra.Command, project, check, remove, dryRun bool) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
 
-	hookPath, scope, err := resolveClaudeHookPath(project)
+	hookPath, scope, err := setup.ResolveClaudeHookPath(project)
 	if err != nil {
 		printer.Error(err)
 		return err
 	}
 
-	// Check mode
 	if check {
 		return runSetupClaudeCheck(printer, hookPath, scope)
 	}
 
-	// Remove mode
 	if remove {
 		return runSetupClaudeRemove(printer, hookPath, scope, dryRun)
 	}
 
-	// Install mode
 	return runSetupClaudeInstall(printer, hookPath, scope, dryRun)
 }
 
@@ -133,12 +115,11 @@ func runSetupClaude(cmd *cobra.Command, project, check, remove, dryRun bool) err
 func runSetupList(cmd *cobra.Command) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), jsonFlag, output.IsTTY(cmd.OutOrStdout()))
 
-	// Get Claude integration status
-	globalHookPath, _, _ := resolveClaudeHookPath(false)
-	projectHookPath, _, _ := resolveClaudeHookPath(true)
+	globalHookPath, _, _ := setup.ResolveClaudeHookPath(false)
+	projectHookPath, _, _ := setup.ResolveClaudeHookPath(true)
 
-	globalInstalled := isTimbersSectionInstalled(globalHookPath)
-	projectInstalled := isTimbersSectionInstalled(projectHookPath)
+	globalInstalled := setup.IsTimbersSectionInstalled(globalHookPath)
+	projectInstalled := setup.IsTimbersSectionInstalled(projectHookPath)
 
 	var claudeScope, claudeLocation string
 	var claudeInstalled bool

@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/setup"
 )
 
 // buildDryRunSteps constructs the list of dry-run step results.
@@ -125,21 +126,21 @@ func performHooksInstall(state *initState) initStepResult {
 		return initStepResult{Name: "hooks", Status: "skipped", Message: "already installed"}
 	}
 
-	hooksDir, err := getHooksDir()
+	hooksDir, err := setup.GetHooksDir()
 	if err != nil {
 		return initStepResult{Name: "hooks", Status: "failed", Message: err.Error()}
 	}
 
 	preCommitPath := filepath.Join(hooksDir, "pre-commit")
-	existingHook := hookExists(preCommitPath)
+	existingHook := setup.HookExists(preCommitPath)
 
 	if existingHook {
-		if err := backupExistingHook(preCommitPath); err != nil {
+		if err := setup.BackupExistingHook(preCommitPath); err != nil {
 			return initStepResult{Name: "hooks", Status: "failed", Message: "failed to backup: " + err.Error()}
 		}
 	}
 
-	hookContent := generatePreCommitHook(existingHook)
+	hookContent := setup.GeneratePreCommitHook(existingHook)
 	// #nosec G306 -- hook needs execute permission
 	if err := os.WriteFile(preCommitPath, []byte(hookContent), 0o755); err != nil {
 		return initStepResult{Name: "hooks", Status: "failed", Message: "failed to write: " + err.Error()}
@@ -191,12 +192,12 @@ func promptClaudeInstall(printer *output.Printer) initStepResult {
 
 // installClaudeIntegration installs the Claude hook globally.
 func installClaudeIntegration() initStepResult {
-	hookPath, _, err := resolveClaudeHookPath(false)
+	hookPath, _, err := setup.ResolveClaudeHookPath(false)
 	if err != nil {
 		return initStepResult{Name: "claude", Status: "failed", Message: err.Error()}
 	}
 
-	if err := installTimbersSection(hookPath); err != nil {
+	if err := setup.InstallTimbersSection(hookPath); err != nil {
 		return initStepResult{Name: "claude", Status: "failed", Message: err.Error()}
 	}
 

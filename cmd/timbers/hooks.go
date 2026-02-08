@@ -1,21 +1,17 @@
-// Package main provides the entry point for the timbers CLI.
 package main
 
 import (
-	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/setup"
 )
 
 // hookStatus represents the status of a single hook.
-type hookStatus struct {
-	Installed bool `json:"installed"`
-	Chained   bool `json:"chained"`
-}
+type hookStatus = setup.HookStatus
 
 // hooksListResult holds the data for hooks list output.
 type hooksListResult struct {
@@ -92,57 +88,16 @@ func runHooksList(cmd *cobra.Command, _ []string) error {
 
 // gatherHooksStatus collects hook status information.
 func gatherHooksStatus() (*hooksListResult, error) {
-	hooksDir, err := getHooksDir()
+	hooksDir, err := setup.GetHooksDir()
 	if err != nil {
 		return nil, err
 	}
 
 	result := &hooksListResult{}
 	preCommitPath := filepath.Join(hooksDir, "pre-commit")
-	result.PreCommit = checkHookStatus(preCommitPath)
+	result.PreCommit = setup.CheckHookStatus(preCommitPath)
 
 	return result, nil
-}
-
-// checkHookStatus checks if a hook is installed and whether it's chained.
-func checkHookStatus(hookPath string) hookStatus {
-	status := hookStatus{}
-
-	content, err := os.ReadFile(hookPath)
-	if err != nil {
-		return status // Not installed
-	}
-
-	contentStr := string(content)
-	if isTimberHook(contentStr) {
-		status.Installed = true
-		status.Chained = hasChainMarker(contentStr)
-	}
-
-	return status
-}
-
-// isTimberHook checks if content contains timbers hook marker.
-func isTimberHook(content string) bool {
-	return hasSubstring(content, "timbers hook run")
-}
-
-// hasChainMarker checks if content chains to a backup hook.
-func hasChainMarker(content string) bool {
-	return hasSubstring(content, ".backup")
-}
-
-// hasSubstring checks if substr exists in s.
-func hasSubstring(s, substr string) bool {
-	if len(s) < len(substr) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 // printHumanHooksList outputs hooks status in human-readable format.
@@ -157,19 +112,4 @@ func printHumanHooksList(printer *output.Printer, result *hooksListResult) {
 		}
 	}
 	printer.KeyValue("pre-commit", statusStr)
-}
-
-// getHooksDir returns the path to the .git/hooks directory.
-func getHooksDir() (string, error) {
-	root, err := git.RepoRoot()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(root, ".git", "hooks"), nil
-}
-
-// hookExists checks if a hook file exists.
-func hookExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }

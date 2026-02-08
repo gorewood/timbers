@@ -15,6 +15,7 @@ import (
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/output"
+	"github.com/gorewood/timbers/internal/setup"
 )
 
 type uninstallResult struct {
@@ -83,17 +84,17 @@ func gatherUninstallInfo(includeBinary bool) (*uninstallResult, error) {
 			}
 		}
 		result.ConfigsRemoved = findNotesConfigs()
-		if hooksDir, err := getHooksDir(); err == nil {
+		if hooksDir, err := setup.GetHooksDir(); err == nil {
 			p := filepath.Join(hooksDir, "pre-commit")
-			result.HooksInstalled, result.HooksHasBackup = checkHookStatus(p).Installed, hookExists(p+".backup")
+			result.HooksInstalled, result.HooksHasBackup = setup.CheckHookStatus(p).Installed, setup.HookExists(p+".backup")
 			result.PreCommitHookPath, result.PreCommitBackupPath = p, p+".backup"
 		}
 	}
-	globalPath, _, _ := resolveClaudeHookPath(false)
-	projectPath, _, _ := resolveClaudeHookPath(true)
-	if isTimbersSectionInstalled(projectPath) {
+	globalPath, _, _ := setup.ResolveClaudeHookPath(false)
+	projectPath, _, _ := setup.ResolveClaudeHookPath(true)
+	if setup.IsTimbersSectionInstalled(projectPath) {
 		result.ClaudeInstalled, result.ClaudeScope, result.ClaudeHookPath = true, "project", projectPath
-	} else if isTimbersSectionInstalled(globalPath) {
+	} else if setup.IsTimbersSectionInstalled(globalPath) {
 		result.ClaudeInstalled, result.ClaudeScope, result.ClaudeHookPath = true, "global", globalPath
 	}
 	return result, nil
@@ -218,7 +219,7 @@ func confirmUninstall(cmd *cobra.Command, result *uninstallResult, binary, keep 
 func doUninstall(result *uninstallResult, binary, keep bool) []string {
 	var errs []string
 	if result.ClaudeInstalled {
-		if err := removeTimbersSectionFromHook(result.ClaudeHookPath); err != nil {
+		if err := setup.RemoveTimbersSectionFromHook(result.ClaudeHookPath); err != nil {
 			errs = append(errs, "claude: "+err.Error())
 		} else {
 			result.ClaudeRemoved = true
