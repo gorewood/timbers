@@ -5,10 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/setup"
 )
 
 // runCoreChecks performs core infrastructure checks.
@@ -171,34 +171,27 @@ func runIntegrationChecks() []checkResult {
 
 // checkGitHooks checks if timbers is integrated with git hooks.
 func checkGitHooks() checkResult {
-	root, err := git.RepoRoot()
+	hooksDir, err := setup.GetHooksDir()
 	if err != nil {
 		return checkResult{
 			Name:    "Git Hooks",
 			Status:  checkWarn,
-			Message: "could not determine repo root",
+			Message: "could not determine hooks directory",
 		}
 	}
 
-	preCommitPath := filepath.Join(root, ".git", "hooks", "pre-commit")
-	content, readErr := os.ReadFile(preCommitPath)
-	if readErr != nil {
-		if os.IsNotExist(readErr) {
-			return checkResult{
-				Name:    "Git Hooks",
-				Status:  checkWarn,
-				Message: "pre-commit hook not installed",
-				Hint:    "Consider adding timbers to your pre-commit workflow",
-			}
-		}
+	preCommitPath := filepath.Join(hooksDir, "pre-commit")
+	if !setup.HookExists(preCommitPath) {
 		return checkResult{
 			Name:    "Git Hooks",
 			Status:  checkWarn,
-			Message: "could not read pre-commit hook",
+			Message: "pre-commit hook not installed",
+			Hint:    "Consider adding timbers to your pre-commit workflow",
 		}
 	}
 
-	if strings.Contains(string(content), "timbers") {
+	status := setup.CheckHookStatus(preCommitPath)
+	if status.Installed {
 		return checkResult{
 			Name:    "Git Hooks",
 			Status:  checkPass,
@@ -216,43 +209,13 @@ func checkGitHooks() checkResult {
 
 // checkClaudeIntegration checks if Claude Code hooks are configured.
 func checkClaudeIntegration() checkResult {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return checkResult{
-			Name:    "Claude Integration",
-			Status:  checkWarn,
-			Message: "could not determine home directory",
-		}
-	}
-
-	claudeHooksDir := filepath.Join(homeDir, ".claude", "hooks")
-	if _, statErr := os.Stat(claudeHooksDir); os.IsNotExist(statErr) {
-		return checkResult{
-			Name:    "Claude Integration",
-			Status:  checkWarn,
-			Message: "Claude Code hooks not configured",
-			Hint:    "Run 'timbers setup claude' to install (if available)",
-		}
-	}
-
-	entries, readErr := os.ReadDir(claudeHooksDir)
-	if readErr != nil {
-		return checkResult{
-			Name:    "Claude Integration",
-			Status:  checkWarn,
-			Message: "could not read Claude hooks directory",
-		}
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
+	// Check project-scope Claude hook first, then global.
+	for _, projectScope := range []bool{true, false} {
+		hookPath, _, err := setup.ResolveClaudeHookPath(projectScope)
+		if err != nil {
 			continue
 		}
-		content, fileErr := os.ReadFile(filepath.Join(claudeHooksDir, entry.Name()))
-		if fileErr != nil {
-			continue
-		}
-		if strings.Contains(string(content), "timbers") {
+		if setup.IsTimbersSectionInstalled(hookPath) {
 			return checkResult{
 				Name:    "Claude Integration",
 				Status:  checkPass,
@@ -264,7 +227,7 @@ func checkClaudeIntegration() checkResult {
 	return checkResult{
 		Name:    "Claude Integration",
 		Status:  checkWarn,
-		Message: "Claude hooks directory exists but no timbers integration found",
+		Message: "Claude hooks not configured for timbers",
 		Hint:    "Run 'timbers setup claude' to install (if available)",
 	}
 }
