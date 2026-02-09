@@ -61,6 +61,7 @@ func TestQueryCommand(t *testing.T) {
 	tests := []struct {
 		name           string
 		lastFlag       string
+		tagFlags       []string
 		onelineFlag    bool
 		jsonOutput     bool
 		notes          map[string][]byte
@@ -164,6 +165,58 @@ func TestQueryCommand(t *testing.T) {
 			wantErr:      false,
 			wantContains: []string{`"id"`, `"summary"`},
 		},
+		{
+			name:     "filter by single tag",
+			lastFlag: "10",
+			tagFlags: []string{"security"},
+			notes: map[string][]byte{
+				"anchor1": createQueryTestEntryWithTags("anchor1", "first", now.Add(-4*time.Hour), []string{"security", "auth"}),
+				"anchor2": createQueryTestEntryWithTags("anchor2", "second", now.Add(-3*time.Hour), []string{"feature"}),
+				"anchor3": createQueryTestEntryWithTags("anchor3", "third", now.Add(-2*time.Hour), []string{"security"}),
+				"anchor4": createQueryTestEntry("anchor4", "fourth", now.Add(-1*time.Hour)),
+				"anchor5": createQueryTestEntryWithTags("anchor5", "fifth", now, []string{"bugfix"}),
+			},
+			wantErr:        false,
+			wantContains:   []string{"first", "third"},
+			wantNotContain: []string{"second", "fourth", "fifth"},
+		},
+		{
+			name:     "filter by multiple tags (OR logic)",
+			lastFlag: "10",
+			tagFlags: []string{"security", "bugfix"},
+			notes: map[string][]byte{
+				"anchor1": createQueryTestEntryWithTags("anchor1", "first", now.Add(-4*time.Hour), []string{"security", "auth"}),
+				"anchor2": createQueryTestEntryWithTags("anchor2", "second", now.Add(-3*time.Hour), []string{"feature"}),
+				"anchor3": createQueryTestEntryWithTags("anchor3", "third", now.Add(-2*time.Hour), []string{"security"}),
+				"anchor4": createQueryTestEntry("anchor4", "fourth", now.Add(-1*time.Hour)),
+				"anchor5": createQueryTestEntryWithTags("anchor5", "fifth", now, []string{"bugfix"}),
+			},
+			wantErr:        false,
+			wantContains:   []string{"first", "third", "fifth"},
+			wantNotContain: []string{"second", "fourth"},
+		},
+		{
+			name:     "filter by tag with no matches",
+			lastFlag: "10",
+			tagFlags: []string{"nonexistent"},
+			notes: map[string][]byte{
+				"anchor1": createQueryTestEntryWithTags("anchor1", "first", now, []string{"security"}),
+				"anchor2": createQueryTestEntryWithTags("anchor2", "second", now, []string{"feature"}),
+			},
+			wantErr: false,
+		},
+		{
+			name:     "filter by tag with entries that have no tags",
+			lastFlag: "10",
+			tagFlags: []string{"security"},
+			notes: map[string][]byte{
+				"anchor1": createQueryTestEntry("anchor1", "first", now.Add(-1*time.Hour)),
+				"anchor2": createQueryTestEntryWithTags("anchor2", "second", now, []string{"security"}),
+			},
+			wantErr:        false,
+			wantContains:   []string{"second"},
+			wantNotContain: []string{"first"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -187,6 +240,11 @@ func TestQueryCommand(t *testing.T) {
 			if tt.onelineFlag {
 				if err := cmd.Flags().Set("oneline", "true"); err != nil {
 					t.Fatalf("failed to set oneline flag: %v", err)
+				}
+			}
+			for _, tag := range tt.tagFlags {
+				if err := cmd.Flags().Set("tag", tag); err != nil {
+					t.Fatalf("failed to set tag flag: %v", err)
 				}
 			}
 
@@ -225,6 +283,11 @@ func TestQueryCommand(t *testing.T) {
 
 // createQueryTestEntry creates a minimal valid entry for testing query command.
 func createQueryTestEntry(anchor, what string, created time.Time) []byte {
+	return createQueryTestEntryWithTags(anchor, what, created, nil)
+}
+
+// createQueryTestEntryWithTags creates a valid entry with tags for testing query command.
+func createQueryTestEntryWithTags(anchor, what string, created time.Time, tags []string) []byte {
 	entry := &ledger.Entry{
 		Schema:    ledger.SchemaVersion,
 		Kind:      ledger.KindEntry,
@@ -240,6 +303,7 @@ func createQueryTestEntry(anchor, what string, created time.Time) []byte {
 			Why:  "Testing query",
 			How:  "Via test",
 		},
+		Tags: tags,
 	}
 	data, _ := entry.ToJSON()
 	return data

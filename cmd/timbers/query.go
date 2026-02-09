@@ -24,6 +24,7 @@ func newQueryCmdInternal(storage *ledger.Storage) *cobra.Command {
 	var lastFlag string
 	var sinceFlag string
 	var untilFlag string
+	var tagFlags []string
 	var onelineFlag bool
 
 	cmd := &cobra.Command{
@@ -38,15 +39,18 @@ Examples:
   timbers query --since 2026-01-15            # Show entries since date
   timbers query --since 2026-01-01 --until 2026-01-15  # Date range
   timbers query --last 10 --json              # Show last 10 as JSON
-  timbers query --last 3 --oneline            # Show last 3 in compact format`,
+  timbers query --last 3 --oneline            # Show last 3 in compact format
+  timbers query --last 10 --tag security      # Show last 10 entries tagged with security
+  timbers query --since 7d --tag bug,fix      # Show entries from last week tagged with bug or fix`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runQuery(cmd, storage, lastFlag, sinceFlag, untilFlag, onelineFlag)
+			return runQuery(cmd, storage, lastFlag, sinceFlag, untilFlag, tagFlags, onelineFlag)
 		},
 	}
 
 	cmd.Flags().StringVar(&lastFlag, "last", "", "Retrieve last N entries")
 	cmd.Flags().StringVar(&sinceFlag, "since", "", "Retrieve entries since duration (24h, 7d) or date (2026-01-17)")
 	cmd.Flags().StringVar(&untilFlag, "until", "", "Retrieve entries until duration (24h, 7d) or date (2026-01-17)")
+	cmd.Flags().StringSliceVar(&tagFlags, "tag", []string{}, "Filter by tag (can specify multiple times or comma-separated)")
 	cmd.Flags().BoolVar(&onelineFlag, "oneline", false, "Show compact format: <id>  <what>")
 
 	return cmd
@@ -57,14 +61,18 @@ type queryParams struct {
 	count       int
 	sinceCutoff time.Time
 	untilCutoff time.Time
+	tags        []string
 }
 
 // runQuery executes the query command.
-func runQuery(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag, untilFlag string, onelineFlag bool) error {
+func runQuery(
+	cmd *cobra.Command, storage *ledger.Storage,
+	lastFlag, sinceFlag, untilFlag string, tagFlags []string, onelineFlag bool,
+) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	// Parse and validate flags
-	params, err := parseQueryFlags(lastFlag, sinceFlag, untilFlag)
+	params, err := parseQueryFlags(lastFlag, sinceFlag, untilFlag, tagFlags)
 	if err != nil {
 		printer.Error(err)
 		return err
@@ -77,7 +85,7 @@ func runQuery(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag, 
 	}
 
 	// Get entries based on filters
-	entries, err := getQueryEntries(storage, params.count, params.sinceCutoff, params.untilCutoff)
+	entries, err := getQueryEntries(storage, params.count, params.sinceCutoff, params.untilCutoff, params.tags)
 	if err != nil {
 		printer.Error(err)
 		return err
@@ -88,7 +96,7 @@ func runQuery(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag, 
 }
 
 // parseQueryFlags validates and parses the query flags.
-func parseQueryFlags(lastFlag, sinceFlag, untilFlag string) (*queryParams, error) {
+func parseQueryFlags(lastFlag, sinceFlag, untilFlag string, tagFlags []string) (*queryParams, error) {
 	if lastFlag == "" && sinceFlag == "" && untilFlag == "" {
 		return nil, output.NewUserError("specify --last N, --since <duration|date>, or --until <duration|date> to retrieve entries")
 	}
@@ -104,6 +112,7 @@ func parseQueryFlags(lastFlag, sinceFlag, untilFlag string) (*queryParams, error
 	if err := parseQueryLastFlag(lastFlag, params); err != nil {
 		return nil, err
 	}
+	parseQueryTagFlags(tagFlags, params)
 
 	return params, nil
 }
@@ -147,6 +156,15 @@ func parseQueryLastFlag(lastFlag string, params *queryParams) error {
 	return nil
 }
 
+// parseQueryTagFlags parses the --tag flags into params.
+// Tags are already split by cobra's StringSliceVar, which handles both
+// repeated flags (--tag foo --tag bar) and comma-separated values (--tag foo,bar).
+func parseQueryTagFlags(tagFlags []string, params *queryParams) {
+	if len(tagFlags) > 0 {
+		params.tags = tagFlags
+	}
+}
+
 // initQueryStorage initializes storage, checking for git repo if needed.
 func initQueryStorage(storage *ledger.Storage, printer *output.Printer) (*ledger.Storage, error) {
 	if storage == nil && !git.IsRepo() {
@@ -177,10 +195,10 @@ func outputQueryResults(printer *output.Printer, entries []*ledger.Entry, onelin
 	return nil
 }
 
-// getQueryEntries retrieves entries based on --last, --since, and --until filters.
-func getQueryEntries(storage *ledger.Storage, count int, sinceCutoff, untilCutoff time.Time) ([]*ledger.Entry, error) {
-	// If only --last is specified, use the optimized path
-	if sinceCutoff.IsZero() && untilCutoff.IsZero() && count > 0 {
+// getQueryEntries retrieves entries based on --last, --since, --until, and --tag filters.
+func getQueryEntries(storage *ledger.Storage, count int, sinceCutoff, untilCutoff time.Time, tags []string) ([]*ledger.Entry, error) {
+	// If only --last is specified with no other filters, use the optimized path
+	if canUseOptimizedPath(count, sinceCutoff, untilCutoff, tags) {
 		return storage.GetLastNEntries(count)
 	}
 
@@ -190,15 +208,8 @@ func getQueryEntries(storage *ledger.Storage, count int, sinceCutoff, untilCutof
 		return nil, err
 	}
 
-	// Filter by --since if specified
-	if !sinceCutoff.IsZero() {
-		entries = filterEntriesSince(entries, sinceCutoff)
-	}
-
-	// Filter by --until if specified
-	if !untilCutoff.IsZero() {
-		entries = filterEntriesUntil(entries, untilCutoff)
-	}
+	// Apply all filters
+	entries = applyQueryFilters(entries, sinceCutoff, untilCutoff, tags)
 
 	// Sort by created_at descending (most recent first)
 	sortEntriesByCreatedAt(entries)
@@ -209,6 +220,31 @@ func getQueryEntries(storage *ledger.Storage, count int, sinceCutoff, untilCutof
 	}
 
 	return entries, nil
+}
+
+// canUseOptimizedPath checks if we can use the optimized GetLastNEntries path.
+func canUseOptimizedPath(count int, sinceCutoff, untilCutoff time.Time, tags []string) bool {
+	return sinceCutoff.IsZero() && untilCutoff.IsZero() && len(tags) == 0 && count > 0
+}
+
+// applyQueryFilters applies all query filters to the entry list.
+func applyQueryFilters(entries []*ledger.Entry, sinceCutoff, untilCutoff time.Time, tags []string) []*ledger.Entry {
+	// Filter by --since if specified
+	if !sinceCutoff.IsZero() {
+		entries = filterEntriesSince(entries, sinceCutoff)
+	}
+
+	// Filter by --until if specified
+	if !untilCutoff.IsZero() {
+		entries = filterEntriesUntil(entries, untilCutoff)
+	}
+
+	// Filter by --tag if specified
+	if len(tags) > 0 {
+		entries = filterEntriesByTags(entries, tags)
+	}
+
+	return entries
 }
 
 // outputQueryJSON outputs the entries as JSON array.

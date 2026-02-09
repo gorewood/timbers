@@ -34,6 +34,32 @@ func filterEntriesUntil(entries []*ledger.Entry, cutoff time.Time) []*ledger.Ent
 	return result
 }
 
+// filterEntriesByTags filters entries to those that have at least one matching tag.
+// Uses OR logic: entries matching ANY of the specified tags are included.
+func filterEntriesByTags(entries []*ledger.Entry, tags []string) []*ledger.Entry {
+	if len(tags) == 0 {
+		return entries
+	}
+
+	var result []*ledger.Entry
+	for _, entry := range entries {
+		if entryHasAnyTag(entry, tags) {
+			result = append(result, entry)
+		}
+	}
+	return result
+}
+
+// entryHasAnyTag checks if the entry has any of the specified tags.
+func entryHasAnyTag(entry *ledger.Entry, tags []string) bool {
+	for _, entryTag := range entry.Tags {
+		if slices.Contains(tags, entryTag) {
+			return true
+		}
+	}
+	return false
+}
+
 // sortEntriesByCreatedAt sorts entries by created_at descending (most recent first).
 func sortEntriesByCreatedAt(entries []*ledger.Entry) {
 	sort.Slice(entries, func(i, j int) bool {
