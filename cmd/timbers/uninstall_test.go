@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gorewood/timbers/internal/setup"
 )
 
 func TestUninstallDryRunJSON(t *testing.T) {
@@ -271,7 +273,7 @@ func TestFindNotesConfigs(t *testing.T) {
 	runGit(t, tempDir, "config", "--add", "remote.origin.fetch", "+refs/notes/timbers:refs/notes/timbers")
 
 	runInDir(t, tempDir, func() {
-		configs := findNotesConfigs()
+		configs := setup.FindNotesConfigs()
 		if len(configs) != 1 || configs[0] != "origin" {
 			t.Errorf("configs = %v, want [origin]", configs)
 		}
