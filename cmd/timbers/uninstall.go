@@ -1,13 +1,8 @@
-// Package main provides the entry point for the timbers CLI.
-//
-//nolint:revive // file length unavoidable for comprehensive uninstall
 package main
 
 import (
 	"bufio"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -17,16 +12,6 @@ import (
 	"github.com/gorewood/timbers/internal/output"
 	"github.com/gorewood/timbers/internal/setup"
 )
-
-type uninstallResult struct {
-	BinaryPath, ClaudeScope, ClaudeHookPath          string
-	RepoName, PreCommitHookPath, PreCommitBackupPath string
-	ConfigsRemoved                                   []string
-	NotesEntryCount                                  int
-	BinaryRemoved, NotesRefRemoved, HooksRemoved     bool
-	HooksRestored, ClaudeRemoved, InRepo             bool
-	HooksInstalled, ClaudeInstalled, HooksHasBackup  bool
-}
 
 func newUninstallCmd() *cobra.Command {
 	var dryRun, force, removeBinary, keepNotes bool
@@ -47,112 +32,87 @@ Use --keep-notes to preserve ledger data. Use --binary to remove the binary.`,
 
 func runUninstall(cmd *cobra.Command, dryRun, force, removeBinary, keepNotes bool) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
-	result, err := gatherUninstallInfo(removeBinary)
+	info, err := gatherUninstallInfo(removeBinary)
 	if err != nil {
 		printer.Error(err)
 		return err
 	}
 	if dryRun {
-		return outputDryRunUninstall(printer, result, removeBinary, keepNotes)
+		return outputDryRunUninstall(printer, info, removeBinary, keepNotes)
 	}
-	if !force && !printer.IsJSON() && !confirmUninstall(cmd, result, removeBinary, keepNotes) {
+	if !force && !printer.IsJSON() && !confirmUninstall(cmd, info, removeBinary, keepNotes) {
 		printer.Println("Uninstall cancelled.")
 		return nil
 	}
-	return reportUninstallResult(printer, result, removeBinary, keepNotes, doUninstall(result, removeBinary, keepNotes))
+	errs := doUninstall(info, removeBinary, keepNotes)
+	return reportUninstallResult(printer, info, removeBinary, keepNotes, errs)
 }
 
-//nolint:nestif // gather function collects multiple info sources
-func gatherUninstallInfo(includeBinary bool) (*uninstallResult, error) {
-	result := &uninstallResult{ConfigsRemoved: []string{}}
+func gatherUninstallInfo(includeBinary bool) (*setup.UninstallInfo, error) {
+	info := &setup.UninstallInfo{ConfigsRemoved: []string{}}
 	if includeBinary {
-		execPath, err := os.Executable()
+		path, err := setup.GatherBinaryPath()
 		if err != nil {
-			return nil, output.NewSystemErrorWithCause("failed to determine binary location", err)
+			return nil, err
 		}
-		result.BinaryPath = execPath
+		info.BinaryPath = path
 	}
-	result.InRepo = git.IsRepo()
-	if result.InRepo {
-		if root, err := git.RepoRoot(); err == nil {
-			result.RepoName = filepath.Base(root)
-		}
-		if git.NotesRefExists() {
-			result.NotesRefRemoved = true
-			if commits, err := git.ListNotedCommits(); err == nil {
-				result.NotesEntryCount = len(commits)
-			}
-		}
-		result.ConfigsRemoved = findNotesConfigs()
-		if hooksDir, err := setup.GetHooksDir(); err == nil {
-			p := filepath.Join(hooksDir, "pre-commit")
-			result.HooksInstalled, result.HooksHasBackup = setup.CheckHookStatus(p).Installed, setup.HookExists(p+".backup")
-			result.PreCommitHookPath, result.PreCommitBackupPath = p, p+".backup"
-		}
+	info.InRepo = git.IsRepo()
+	if info.InRepo {
+		setup.GatherRepoInfo(info)
+		setup.GatherHookInfo(info)
 	}
-	globalPath, _, _ := setup.ResolveClaudeHookPath(false)
-	projectPath, _, _ := setup.ResolveClaudeHookPath(true)
-	if setup.IsTimbersSectionInstalled(projectPath) {
-		result.ClaudeInstalled, result.ClaudeScope, result.ClaudeHookPath = true, "project", projectPath
-	} else if setup.IsTimbersSectionInstalled(globalPath) {
-		result.ClaudeInstalled, result.ClaudeScope, result.ClaudeHookPath = true, "global", globalPath
-	}
-	return result, nil
+	setup.GatherClaudeInfo(info)
+	return info, nil
 }
 
-func findNotesConfigs() []string {
-	var configs []string
-	remotesOut, err := git.Run("remote")
-	if err != nil {
-		return configs
-	}
-	for remote := range strings.SplitSeq(strings.TrimSpace(remotesOut), "\n") {
-		if remote = strings.TrimSpace(remote); remote != "" && git.NotesConfigured(remote) {
-			configs = append(configs, remote)
-		}
-	}
-	return configs
-}
-
-func outputDryRunUninstall(printer *output.Printer, result *uninstallResult, binary, keep bool) error {
+func outputDryRunUninstall(printer *output.Printer, info *setup.UninstallInfo, binary, keep bool) error {
 	if printer.IsJSON() {
-		data := map[string]any{
-			"status": "dry_run", "in_repo": result.InRepo, "keep_notes": keep,
-			"notes_ref_exists": result.NotesRefRemoved && !keep, "notes_entry_count": result.NotesEntryCount,
-			"configs_to_remove": result.ConfigsRemoved, "hooks_installed": result.HooksInstalled,
-			"claude_installed": result.ClaudeInstalled,
-		}
-		if result.ClaudeInstalled {
-			data["claude_scope"] = result.ClaudeScope
-		}
-		if binary {
-			data["binary_path"] = result.BinaryPath
-		}
-		if result.RepoName != "" {
-			data["repo_name"] = result.RepoName
-		}
-		return printer.Success(data)
+		return outputDryRunJSON(printer, info, binary, keep)
 	}
+	return outputDryRunHuman(printer, info, binary, keep)
+}
+
+func outputDryRunJSON(printer *output.Printer, info *setup.UninstallInfo, binary, keep bool) error {
+	data := map[string]any{
+		"status": "dry_run", "in_repo": info.InRepo, "keep_notes": keep,
+		"notes_ref_exists": info.NotesRefRemoved && !keep, "notes_entry_count": info.NotesEntryCount,
+		"configs_to_remove": info.ConfigsRemoved, "hooks_installed": info.HooksInstalled,
+		"claude_installed": info.ClaudeInstalled,
+	}
+	if info.ClaudeInstalled {
+		data["claude_scope"] = info.ClaudeScope
+	}
+	if binary {
+		data["binary_path"] = info.BinaryPath
+	}
+	if info.RepoName != "" {
+		data["repo_name"] = info.RepoName
+	}
+	return printer.Success(data)
+}
+
+func outputDryRunHuman(printer *output.Printer, info *setup.UninstallInfo, binary, keep bool) error {
 	styles := uninstallStyles(printer.IsTTY())
 	msg := "Dry run: Would perform the following actions:"
-	if result.RepoName != "" {
-		msg = "Dry run: Would remove timbers from " + result.RepoName
+	if info.RepoName != "" {
+		msg = "Dry run: Would remove timbers from " + info.RepoName
 	}
 	printer.Println(styles.warning.Render(msg))
 	printer.Println()
-	if !result.InRepo {
+	if !info.InRepo {
 		printer.Println(styles.dim.Render("  (Not in a git repository)"))
 	} else {
-		printComponents(printer, styles, result, keep, binary, "  ")
+		printComponents(printer, styles, info, keep, binary, "  ")
 	}
-	if !hasAnyComponents(result, binary) {
+	if !hasAnyComponents(info, binary) {
 		printer.Println(styles.dim.Render("  (No timbers components found)"))
 	}
 	return nil
 }
 
-func hasAnyComponents(result *uninstallResult, binary bool) bool {
-	return result.NotesRefRemoved || len(result.ConfigsRemoved) > 0 || result.HooksInstalled || result.ClaudeInstalled || binary
+func hasAnyComponents(info *setup.UninstallInfo, binary bool) bool {
+	return info.NotesRefRemoved || len(info.ConfigsRemoved) > 0 || info.HooksInstalled || info.ClaudeInstalled || binary
 }
 
 func formatEntryCount(count int) string {
@@ -162,47 +122,47 @@ func formatEntryCount(count int) string {
 	return fmt.Sprintf("%d entries", count)
 }
 
-func printComponents(printer *output.Printer, styles uninstallStyleSet, result *uninstallResult, keep, binary bool, indent string) {
-	if result.NotesRefRemoved {
-		entry := formatEntryCount(result.NotesEntryCount)
+func printComponents(printer *output.Printer, styles uninstallStyleSet, info *setup.UninstallInfo, keep, binary bool, indent string) {
+	if info.NotesRefRemoved {
+		entry := formatEntryCount(info.NotesEntryCount)
 		if keep {
 			printer.Println(styles.dim.Render(indent + "• Git notes: " + entry + " (keeping)"))
 		} else {
 			printer.Println(styles.bullet.Render(indent+"• ") + "Git notes: " + entry)
 		}
 	}
-	for _, remote := range result.ConfigsRemoved {
+	for _, remote := range info.ConfigsRemoved {
 		if keep {
 			printer.Println(styles.dim.Render(indent + "• Notes config for " + remote + " (keeping)"))
 		} else {
 			printer.Println(styles.bullet.Render(indent+"• ") + "Notes config for remote: " + remote)
 		}
 	}
-	if result.HooksInstalled {
+	if info.HooksInstalled {
 		printer.Println(styles.bullet.Render(indent+"• ") + "Git hooks: pre-commit")
 	}
-	if result.ClaudeInstalled {
-		printer.Println(styles.bullet.Render(indent+"• ") + "Claude integration: " + result.ClaudeScope)
+	if info.ClaudeInstalled {
+		printer.Println(styles.bullet.Render(indent+"• ") + "Claude integration: " + info.ClaudeScope)
 	}
 	if binary {
-		printer.Println(styles.bullet.Render(indent+"• ") + "Binary: " + result.BinaryPath)
+		printer.Println(styles.bullet.Render(indent+"• ") + "Binary: " + info.BinaryPath)
 	}
 }
 
-func confirmUninstall(cmd *cobra.Command, result *uninstallResult, binary, keep bool) bool {
+func confirmUninstall(cmd *cobra.Command, info *setup.UninstallInfo, binary, keep bool) bool {
 	printer := output.NewPrinter(cmd.OutOrStdout(), false, output.IsTTY(cmd.OutOrStdout()))
 	styles := uninstallStyles(printer.IsTTY())
-	if result.RepoName != "" {
-		printer.Println(styles.warning.Render("Removing timbers from " + result.RepoName + "..."))
+	if info.RepoName != "" {
+		printer.Println(styles.warning.Render("Removing timbers from " + info.RepoName + "..."))
 	}
 	printer.Println()
 	printer.Println("  Components found:")
-	if !hasAnyComponents(result, binary) {
+	if !hasAnyComponents(info, binary) {
 		printer.Println(styles.dim.Render("    (No components found)"))
 		return false
 	}
-	if result.InRepo {
-		printComponents(printer, styles, result, keep, binary, "    ")
+	if info.InRepo {
+		printComponents(printer, styles, info, keep, binary, "    ")
 	}
 	printer.Println()
 	printer.Print("%s", "  ? Remove all components? [y/N] ")
@@ -215,119 +175,113 @@ func confirmUninstall(cmd *cobra.Command, result *uninstallResult, binary, keep 
 	return response == "y" || response == "yes"
 }
 
-//nolint:gocognit,revive,cyclop,nestif // orchestration function has inherent complexity
-func doUninstall(result *uninstallResult, binary, keep bool) []string {
+func doUninstall(info *setup.UninstallInfo, binary, keep bool) []string {
 	var errs []string
-	if result.ClaudeInstalled {
-		if err := setup.RemoveTimbersSectionFromHook(result.ClaudeHookPath); err != nil {
-			errs = append(errs, "claude: "+err.Error())
-		} else {
-			result.ClaudeRemoved = true
-		}
-	}
-	if result.InRepo && result.HooksInstalled {
-		if err := os.Remove(result.PreCommitHookPath); err != nil && !os.IsNotExist(err) {
-			errs = append(errs, "hooks: "+err.Error())
-		} else {
-			result.HooksRemoved = true
-			if result.HooksHasBackup {
-				if err := os.Rename(result.PreCommitBackupPath, result.PreCommitHookPath); err != nil {
-					errs = append(errs, "hooks restore: "+err.Error())
-				} else {
-					result.HooksRestored = true
-				}
-			}
-		}
-	}
+	errs = uninstallClaude(info, errs)
+	errs = uninstallHooks(info, errs)
 	if keep {
-		result.NotesRefRemoved, result.ConfigsRemoved = false, []string{}
+		info.NotesRefRemoved = false
+		info.ConfigsRemoved = []string{}
 		return errs
 	}
-	if result.InRepo && result.NotesRefRemoved {
-		if _, err := git.Run("update-ref", "-d", "refs/notes/timbers"); err != nil {
-			result.NotesRefRemoved = false
-			errs = append(errs, "notes ref: "+err.Error())
-		}
+	errs = uninstallNotes(info, errs)
+	errs = uninstallConfigs(info, errs)
+	errs = uninstallBinary(info, binary, errs)
+	return errs
+}
+
+func uninstallClaude(info *setup.UninstallInfo, errs []string) []string {
+	if !info.ClaudeInstalled {
+		return errs
 	}
-	removed := make([]string, 0, len(result.ConfigsRemoved))
-	for _, remote := range result.ConfigsRemoved {
-		if err := removeNotesConfig(remote); err != nil {
+	if err := setup.RemoveClaudeIntegration(info.ClaudeHookPath); err != nil {
+		return append(errs, "claude: "+err.Error())
+	}
+	info.ClaudeRemoved = true
+	return errs
+}
+
+func uninstallHooks(info *setup.UninstallInfo, errs []string) []string {
+	if !info.InRepo || !info.HooksInstalled {
+		return errs
+	}
+	removed, restored, err := setup.RemoveGitHook(info.PreCommitHookPath, info.HooksHasBackup, info.PreCommitBackupPath)
+	info.HooksRemoved = removed
+	info.HooksRestored = restored
+	if err != nil {
+		errs = append(errs, "hooks: "+err.Error())
+	}
+	return errs
+}
+
+func uninstallNotes(info *setup.UninstallInfo, errs []string) []string {
+	if !info.InRepo || !info.NotesRefRemoved {
+		return errs
+	}
+	if err := setup.RemoveNotesRef(); err != nil {
+		info.NotesRefRemoved = false
+		return append(errs, "notes ref: "+err.Error())
+	}
+	return errs
+}
+
+func uninstallConfigs(info *setup.UninstallInfo, errs []string) []string {
+	removed := make([]string, 0, len(info.ConfigsRemoved))
+	for _, remote := range info.ConfigsRemoved {
+		if err := setup.RemoveNotesConfig(remote); err != nil {
 			errs = append(errs, "config for "+remote+": "+err.Error())
 		} else {
 			removed = append(removed, remote)
 		}
 	}
-	result.ConfigsRemoved = removed
-	if binary {
-		if err := os.Remove(result.BinaryPath); err != nil {
-			errs = append(errs, "binary: "+err.Error())
-		} else {
-			result.BinaryRemoved = true
-		}
-	}
+	info.ConfigsRemoved = removed
 	return errs
 }
 
-func removeNotesConfig(remote string) error {
-	configKey := "remote." + remote + ".fetch"
-	out, err := git.Run("config", "--get-all", configKey)
-	if err != nil {
-		return nil //nolint:nilerr // expected when no config exists
+func uninstallBinary(info *setup.UninstallInfo, binary bool, errs []string) []string {
+	if !binary {
+		return errs
 	}
-	for line := range strings.SplitSeq(out, "\n") {
-		if line = strings.TrimSpace(line); strings.Contains(line, "refs/notes/timbers") {
-			if _, err := git.Run("config", "--unset", configKey, line); err != nil {
-				return err
-			}
-		}
+	if err := setup.RemoveBinary(info.BinaryPath); err != nil {
+		return append(errs, "binary: "+err.Error())
 	}
-	return nil
+	info.BinaryRemoved = true
+	return errs
 }
 
-//nolint:gocognit,cyclop // output function with multiple conditional sections
-func reportUninstallResult(printer *output.Printer, result *uninstallResult, binary, keep bool, errs []string) error {
+func reportUninstallResult(printer *output.Printer, info *setup.UninstallInfo, binary, keep bool, errs []string) error {
 	if printer.IsJSON() {
-		status := "ok"
-		if len(errs) > 0 {
-			status = "partial"
-		}
-		data := map[string]any{
-			"status": status, "claude_removed": result.ClaudeRemoved, "hooks_removed": result.HooksRemoved,
-			"hooks_restored": result.HooksRestored, "notes_removed": result.NotesRefRemoved && !keep,
-			"configs_removed": result.ConfigsRemoved, "keep_notes": keep,
-		}
-		if result.ClaudeRemoved && result.ClaudeScope != "" {
-			data["claude_scope"] = result.ClaudeScope
-		}
-		if len(errs) > 0 {
-			data["errors"], data["recovery_hint"] = errs, "Check permissions and try again."
-		}
-		if binary {
-			data["binary_removed"] = result.BinaryRemoved
-		}
-		return printer.Success(data)
+		return reportUninstallJSON(printer, info, binary, keep, errs)
 	}
+	return reportUninstallHuman(printer, info, binary, keep, errs)
+}
+
+func reportUninstallJSON(printer *output.Printer, info *setup.UninstallInfo, binary, keep bool, errs []string) error {
+	status := "ok"
+	if len(errs) > 0 {
+		status = "partial"
+	}
+	data := map[string]any{
+		"status": status, "claude_removed": info.ClaudeRemoved, "hooks_removed": info.HooksRemoved,
+		"hooks_restored": info.HooksRestored, "notes_removed": info.NotesRefRemoved && !keep,
+		"configs_removed": info.ConfigsRemoved, "keep_notes": keep,
+	}
+	if info.ClaudeRemoved && info.ClaudeScope != "" {
+		data["claude_scope"] = info.ClaudeScope
+	}
+	if len(errs) > 0 {
+		data["errors"], data["recovery_hint"] = errs, "Check permissions and try again."
+	}
+	if binary {
+		data["binary_removed"] = info.BinaryRemoved
+	}
+	return printer.Success(data)
+}
+
+func reportUninstallHuman(printer *output.Printer, info *setup.UninstallInfo, binary, keep bool, errs []string) error {
 	styles := uninstallStyles(printer.IsTTY())
 	printer.Println()
-	if result.ClaudeRemoved {
-		printer.Println(styles.success.Render("  ✓ ") + "Claude integration removed")
-	}
-	if result.HooksRemoved {
-		msg := "Git hooks removed"
-		if result.HooksRestored {
-			msg += " (original restored)"
-		}
-		printer.Println(styles.success.Render("  ✓ ") + msg)
-	}
-	if result.NotesRefRemoved && !keep {
-		printer.Println(styles.success.Render("  ✓ ") + "Git notes refs removed")
-	}
-	if len(result.ConfigsRemoved) > 0 && !keep {
-		printer.Println(styles.success.Render("  ✓ ") + "Git config cleaned")
-	}
-	if binary && result.BinaryRemoved {
-		printer.Println(styles.success.Render("  ✓ ") + "Binary removed")
-	}
+	printRemovalSummary(printer, styles, info, binary, keep)
 	printer.Println()
 	if len(errs) > 0 {
 		printer.Println(styles.warning.Render("Completed with errors: " + strings.Join(errs, "; ")))
@@ -339,6 +293,28 @@ func reportUninstallResult(printer *output.Printer, result *uninstallResult, bin
 	}
 	printer.Println(styles.dim.Render("  " + msg))
 	return nil
+}
+
+func printRemovalSummary(printer *output.Printer, styles uninstallStyleSet, info *setup.UninstallInfo, binary, keep bool) {
+	if info.ClaudeRemoved {
+		printer.Println(styles.success.Render("  ✓ ") + "Claude integration removed")
+	}
+	if info.HooksRemoved {
+		msg := "Git hooks removed"
+		if info.HooksRestored {
+			msg += " (original restored)"
+		}
+		printer.Println(styles.success.Render("  ✓ ") + msg)
+	}
+	if info.NotesRefRemoved && !keep {
+		printer.Println(styles.success.Render("  ✓ ") + "Git notes refs removed")
+	}
+	if len(info.ConfigsRemoved) > 0 && !keep {
+		printer.Println(styles.success.Render("  ✓ ") + "Git config cleaned")
+	}
+	if binary && info.BinaryRemoved {
+		printer.Println(styles.success.Render("  ✓ ") + "Binary removed")
+	}
 }
 
 type uninstallStyleSet struct{ warning, success, dim, bullet lipgloss.Style }
