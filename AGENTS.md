@@ -2,6 +2,55 @@
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
+## Session Orientation
+
+Before starting any work, verify your context:
+
+1. **Branch:** `git branch --show-current` — confirm you're on the expected branch
+2. **Worktree:** `git worktree list` — are you in a worktree or the main repo?
+3. **Confirm with user:** "I'm on branch X in [worktree/main]. Is this where you want me working?"
+4. **Check beads:** `bd ready` — what work is available?
+
+**NEVER skip orientation.** Working on the wrong branch wastes entire sessions silently.
+
+---
+
+## Settled Decisions
+
+Do NOT revisit items marked SETTLED without explicit user request.
+
+<!-- Add decisions as they're made:
+| Decision | Date | Rationale | Status |
+|----------|------|-----------|--------|
+| Example: Auth uses JWT | 2025-01-15 | See docs/plans/auth.md | SETTLED |
+-->
+
+---
+
+## Quality Gates
+
+Before every commit, run the appropriate quality gate:
+
+```bash
+just check          # If justfile exists
+npm run check       # If package.json with check script
+```
+
+**Do not commit if checks fail.**
+
+---
+
+## Worktree Guardrails
+
+When using git worktrees for feature development:
+
+1. Create worktree and implement feature
+2. Run quality gates
+3. **STOP AND GET USER SIGN-OFF** before merging
+4. Only after explicit approval: merge to main, sync beads, push, cleanup worktree
+
+---
+
 ## Quick Reference
 
 ```bash
