@@ -296,9 +296,9 @@ func getPromptEntries(
 		return getEntriesByRangeWithFilters(printer, storage, rangeFlag, sinceCutoff, untilCutoff)
 	}
 	if !sinceCutoff.IsZero() || !untilCutoff.IsZero() {
-		return getEntriesByTimeRange(printer, storage, sinceCutoff, untilCutoff, lastFlag)
+		return getEntriesByTimeRange(printer, storage, sinceCutoff, untilCutoff, lastFlag, nil)
 	}
-	return getEntriesByLast(printer, storage, lastFlag)
+	return getEntriesByLast(printer, storage, lastFlag, nil)
 }
 
 // parseTimeCutoffs parses --since and --until flags into time cutoffs.

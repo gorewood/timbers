@@ -414,8 +414,175 @@ func TestExportMarkdownToDirectory(t *testing.T) {
 	}
 }
 
+// TestExportWithTagFiltering tests export command with --tag flag.
+func TestExportWithTagFiltering(t *testing.T) {
+	now := time.Date(2026, 1, 15, 15, 4, 5, 0, time.UTC)
+
+	// Create entries with different tags
+	entry1 := createExportTestEntryWithTags("anchor1", "security fix", now.Add(-3*time.Hour), []string{"security", "bugfix"})
+	entry2 := createExportTestEntryWithTags("anchor2", "new feature", now.Add(-2*time.Hour), []string{"feature"})
+	entry3 := createExportTestEntryWithTags("anchor3", "auth improvement", now.Add(-1*time.Hour), []string{"security", "auth"})
+	entry4 := createExportTestEntryWithTags("anchor4", "docs update", now, []string{"docs"})
+
+	tests := []struct {
+		name         string
+		lastFlag     string
+		tagFlags     []string
+		wantContains []string
+		wantExclude  []string
+	}{
+		{
+			name:         "single tag filter",
+			lastFlag:     "10",
+			tagFlags:     []string{"security"},
+			wantContains: []string{"security fix", "auth improvement"},
+			wantExclude:  []string{"new feature", "docs update"},
+		},
+		{
+			name:         "multiple tags (OR logic)",
+			lastFlag:     "10",
+			tagFlags:     []string{"security", "docs"},
+			wantContains: []string{"security fix", "auth improvement", "docs update"},
+			wantExclude:  []string{"new feature"},
+		},
+		{
+			name:         "tag with --last limit",
+			lastFlag:     "1",
+			tagFlags:     []string{"security"},
+			wantContains: []string{"auth improvement"},
+			wantExclude:  []string{"security fix", "new feature", "docs update"},
+		},
+		{
+			name:         "no matching tags",
+			lastFlag:     "10",
+			tagFlags:     []string{"nonexistent"},
+			wantContains: []string{},
+			wantExclude:  []string{"security fix", "new feature", "auth improvement", "docs update"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			notes := map[string][]byte{
+				"anchor1": entry1,
+				"anchor2": entry2,
+				"anchor3": entry3,
+				"anchor4": entry4,
+			}
+
+			storage := ledger.NewStorage(&mockGitOpsForExport{
+				notes:   notes,
+				commits: map[string]git.Commit{},
+			})
+
+			cmd := newExportCmdInternal(storage)
+			cmd.PersistentFlags().Bool("json", false, "")
+			_ = cmd.PersistentFlags().Set("json", "true")
+
+			if err := cmd.Flags().Set("last", tt.lastFlag); err != nil {
+				t.Fatalf("failed to set last flag: %v", err)
+			}
+
+			// Set tag flags
+			for _, tag := range tt.tagFlags {
+				if err := cmd.Flags().Set("tag", tag); err != nil {
+					t.Fatalf("failed to set tag flag: %v", err)
+				}
+			}
+
+			var buf strings.Builder
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+
+			output := buf.String()
+
+			// Check expected content is present
+			for _, want := range tt.wantContains {
+				if !strings.Contains(output, want) {
+					t.Errorf("output missing expected content %q\noutput: %s", want, output)
+				}
+			}
+
+			// Check excluded content is not present
+			for _, exclude := range tt.wantExclude {
+				if strings.Contains(output, exclude) {
+					t.Errorf("output contains excluded content %q\noutput: %s", exclude, output)
+				}
+			}
+		})
+	}
+}
+
+// TestExportTagFilteringWithTimeRange tests tag filtering combined with time filters.
+func TestExportTagFilteringWithTimeRange(t *testing.T) {
+	// Create entries with different tags and times
+	// Use absolute dates to avoid relative time calculation issues
+	oldDate := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	recentDate := time.Date(2026, 1, 14, 12, 0, 0, 0, time.UTC)
+	newestDate := time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC)
+
+	entry1 := createExportTestEntryWithTags("anchor1", "old security fix", oldDate, []string{"security"})
+	entry2 := createExportTestEntryWithTags("anchor2", "recent security fix", recentDate, []string{"security"})
+	entry3 := createExportTestEntryWithTags("anchor3", "recent feature", newestDate, []string{"feature"})
+
+	notes := map[string][]byte{
+		"anchor1": entry1,
+		"anchor2": entry2,
+		"anchor3": entry3,
+	}
+
+	storage := ledger.NewStorage(&mockGitOpsForExport{
+		notes:   notes,
+		commits: map[string]git.Commit{},
+	})
+
+	cmd := newExportCmdInternal(storage)
+	cmd.PersistentFlags().Bool("json", false, "")
+	_ = cmd.PersistentFlags().Set("json", "true")
+
+	// Filter by tag and time: should get only entries since 2026-01-10 with security tag
+	if err := cmd.Flags().Set("since", "2026-01-10"); err != nil {
+		t.Fatalf("failed to set since flag: %v", err)
+	}
+	if err := cmd.Flags().Set("tag", "security"); err != nil {
+		t.Fatalf("failed to set tag flag: %v", err)
+	}
+
+	var buf strings.Builder
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	output := buf.String()
+
+	// Should contain recent security fix
+	if !strings.Contains(output, "recent security fix") {
+		t.Errorf("output missing recent security fix\noutput: %s", output)
+	}
+
+	// Should not contain old security fix or recent feature
+	if strings.Contains(output, "old security fix") {
+		t.Errorf("output contains old security fix (should be filtered by time)\noutput: %s", output)
+	}
+	if strings.Contains(output, "recent feature") {
+		t.Errorf("output contains recent feature (should be filtered by tag)\noutput: %s", output)
+	}
+}
+
 // createExportTestEntry creates a minimal valid entry for testing export command.
 func createExportTestEntry(anchor, what string, created time.Time) []byte {
+	return createExportTestEntryWithTags(anchor, what, created, []string{"test"})
+}
+
+// createExportTestEntryWithTags creates an entry with custom tags for testing.
+func createExportTestEntryWithTags(anchor, what string, created time.Time, tags []string) []byte {
 	entry := &ledger.Entry{
 		Schema:    ledger.SchemaVersion,
 		Kind:      ledger.KindEntry,
@@ -437,7 +604,7 @@ func createExportTestEntry(anchor, what string, created time.Time) []byte {
 			Why:  "Testing export",
 			How:  "Via test",
 		},
-		Tags: []string{"test"},
+		Tags: tags,
 	}
 	data, _ := entry.ToJSON()
 	return data

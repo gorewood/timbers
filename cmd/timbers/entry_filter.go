@@ -2,6 +2,7 @@
 package main
 
 import (
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,10 +41,10 @@ func sortEntriesByCreatedAt(entries []*ledger.Entry) {
 	})
 }
 
-// getEntriesByTimeRange retrieves entries within the time range, with optional limit.
+// getEntriesByTimeRange retrieves entries within the time range, with optional limit and tag filtering.
 func getEntriesByTimeRange(
 	printer *output.Printer, storage *ledger.Storage,
-	sinceCutoff, untilCutoff time.Time, lastFlag string,
+	sinceCutoff, untilCutoff time.Time, lastFlag string, tagFlags []string,
 ) ([]*ledger.Entry, error) {
 	entries, err := storage.ListEntries()
 	if err != nil {
@@ -56,6 +57,9 @@ func getEntriesByTimeRange(
 	}
 	if !untilCutoff.IsZero() {
 		entries = filterEntriesUntil(entries, untilCutoff)
+	}
+	if len(tagFlags) > 0 {
+		entries = filterEntriesByTags(entries, tagFlags)
 	}
 
 	sortEntriesByCreatedAt(entries)
@@ -70,8 +74,8 @@ func getEntriesByTimeRange(
 	return entries, nil
 }
 
-// getEntriesByLast retrieves the last N entries.
-func getEntriesByLast(printer *output.Printer, storage *ledger.Storage, lastFlag string) ([]*ledger.Entry, error) {
+// getEntriesByLast retrieves the last N entries with optional tag filtering.
+func getEntriesByLast(printer *output.Printer, storage *ledger.Storage, lastFlag string, tagFlags []string) ([]*ledger.Entry, error) {
 	count, parseErr := strconv.Atoi(lastFlag)
 	if parseErr != nil || count <= 0 {
 		err := output.NewUserError("--last must be a positive integer")
@@ -79,6 +83,22 @@ func getEntriesByLast(printer *output.Printer, storage *ledger.Storage, lastFlag
 		return nil, err
 	}
 
+	// If tag filtering is needed, we can't use the optimized path
+	if len(tagFlags) > 0 {
+		entries, err := storage.ListEntries()
+		if err != nil {
+			printer.Error(err)
+			return nil, err
+		}
+		entries = filterEntriesByTags(entries, tagFlags)
+		sortEntriesByCreatedAt(entries)
+		if len(entries) > count {
+			entries = entries[:count]
+		}
+		return entries, nil
+	}
+
+	// Optimized path when no tag filtering
 	entries, err := storage.GetLastNEntries(count)
 	if err != nil {
 		printer.Error(err)
@@ -133,6 +153,32 @@ func filterEntriesByCommits(allEntries []*ledger.Entry, commitSet map[string]boo
 func entryInCommitSet(entry *ledger.Entry, commitSet map[string]bool) bool {
 	for _, commitSHA := range entry.Workset.Commits {
 		if commitSet[commitSHA] {
+			return true
+		}
+	}
+	return false
+}
+
+// filterEntriesByTags filters entries to those that have at least one matching tag.
+// Uses OR logic: entries matching ANY of the specified tags are included.
+func filterEntriesByTags(entries []*ledger.Entry, tags []string) []*ledger.Entry {
+	if len(tags) == 0 {
+		return entries
+	}
+
+	var result []*ledger.Entry
+	for _, entry := range entries {
+		if entryHasAnyTag(entry, tags) {
+			result = append(result, entry)
+		}
+	}
+	return result
+}
+
+// entryHasAnyTag checks if the entry has any of the specified tags.
+func entryHasAnyTag(entry *ledger.Entry, tags []string) bool {
+	for _, entryTag := range entry.Tags {
+		if slices.Contains(tags, entryTag) {
 			return true
 		}
 	}

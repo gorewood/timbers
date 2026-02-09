@@ -28,6 +28,7 @@ func newExportCmdInternal(storage *ledger.Storage) *cobra.Command {
 	var rangeFlag string
 	var formatFlag string
 	var outFlag string
+	var tagFlags []string
 
 	cmd := &cobra.Command{
 		Use:   "export",
@@ -41,9 +42,11 @@ Examples:
   timbers export --since 2026-01-01 --until 2026-01-15  # Date range
   timbers export --last 5 --out ./exports/          # Export last 5 as JSON files to directory
   timbers export --range v1.0.0..v1.1.0 --json      # Export range as JSON
-  timbers export --last 10 --format md --out ./notes/ # Export last 10 as markdown files`,
+  timbers export --last 10 --format md --out ./notes/ # Export last 10 as markdown files
+  timbers export --last 10 --tag security           # Export last 10 security-tagged entries
+  timbers export --since 7d --tag feature,bugfix    # Export feature or bugfix entries from last 7 days`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runExport(cmd, storage, lastFlag, sinceFlag, untilFlag, rangeFlag, formatFlag, outFlag)
+			return runExport(cmd, storage, lastFlag, sinceFlag, untilFlag, rangeFlag, formatFlag, outFlag, tagFlags)
 		},
 	}
 
@@ -51,6 +54,7 @@ Examples:
 	cmd.Flags().StringVar(&sinceFlag, "since", "", "Export entries since duration (24h, 7d) or date (2026-01-17)")
 	cmd.Flags().StringVar(&untilFlag, "until", "", "Export entries until duration (24h, 7d) or date (2026-01-17)")
 	cmd.Flags().StringVar(&rangeFlag, "range", "", "Export entries in commit range (A..B)")
+	cmd.Flags().StringSliceVar(&tagFlags, "tag", []string{}, "Filter by tag (can specify multiple times or comma-separated)")
 	cmd.Flags().StringVar(&formatFlag, "format", "", "Output format: json or md (default: json for stdout, md for --out)")
 	cmd.Flags().StringVar(&outFlag, "out", "", "Output directory (if omitted, writes to stdout)")
 
@@ -58,7 +62,10 @@ Examples:
 }
 
 // runExport executes the export command.
-func runExport(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag, untilFlag, rangeFlag, formatFlag, outFlag string) error {
+func runExport(
+	cmd *cobra.Command, storage *ledger.Storage,
+	lastFlag, sinceFlag, untilFlag, rangeFlag, formatFlag, outFlag string, tagFlags []string,
+) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	if err := validateExportFlags(printer, lastFlag, sinceFlag, untilFlag, rangeFlag); err != nil {
@@ -99,7 +106,7 @@ func runExport(cmd *cobra.Command, storage *ledger.Storage, lastFlag, sinceFlag,
 		return err
 	}
 
-	entries, err := getExportEntries(printer, storage, lastFlag, sinceCutoff, untilCutoff, rangeFlag)
+	entries, err := getExportEntries(printer, storage, lastFlag, sinceCutoff, untilCutoff, rangeFlag, tagFlags)
 	if err != nil {
 		return err
 	}
@@ -154,9 +161,9 @@ func ensureStorage(printer *output.Printer, storage *ledger.Storage) (*ledger.St
 	return ledger.NewStorage(nil), nil
 }
 
-// getExportEntries retrieves entries based on --last, --since, --until, or --range flags.
+// getExportEntries retrieves entries based on --last, --since, --until, --range, or --tag flags.
 func getExportEntries(
-	printer *output.Printer, storage *ledger.Storage, lastFlag string, sinceCutoff, untilCutoff time.Time, rangeFlag string,
+	printer *output.Printer, storage *ledger.Storage, lastFlag string, sinceCutoff, untilCutoff time.Time, rangeFlag string, tagFlags []string,
 ) ([]*ledger.Entry, error) {
 	// If --range is specified, use commit-based filtering
 	if rangeFlag != "" {
@@ -172,16 +179,20 @@ func getExportEntries(
 		if !untilCutoff.IsZero() {
 			entries = filterEntriesUntil(entries, untilCutoff)
 		}
+		// Apply --tag filter if specified
+		if len(tagFlags) > 0 {
+			entries = filterEntriesByTags(entries, tagFlags)
+		}
 		return entries, nil
 	}
 
 	// If --since or --until is specified, filter by time
 	if !sinceCutoff.IsZero() || !untilCutoff.IsZero() {
-		return getEntriesByTimeRange(printer, storage, sinceCutoff, untilCutoff, lastFlag)
+		return getEntriesByTimeRange(printer, storage, sinceCutoff, untilCutoff, lastFlag, tagFlags)
 	}
 
 	// Otherwise use --last
-	return getEntriesByLast(printer, storage, lastFlag)
+	return getEntriesByLast(printer, storage, lastFlag, tagFlags)
 }
 
 // writeExportOutput writes entries to stdout or directory based on flags.
