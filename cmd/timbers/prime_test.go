@@ -86,8 +86,11 @@ func TestPrimeCommand(t *testing.T) {
 					{SHA: "def456789012", Short: "def4567", Subject: "Second commit"},
 				},
 			},
-			lastN:        3,
-			wantContains: []string{"Timbers Session Context", "2 undocumented", "(no entries)", "Session Close Protocol", "Core Rules"},
+			lastN: 3,
+			wantContains: []string{
+				"Timbers Session Context", "2 undocumented", "(no entries)",
+				"Session Close Protocol", "Core Rules", "Writing Good Why Fields",
+			},
 		},
 		{
 			name: "has entries and pending",
@@ -104,7 +107,7 @@ func TestPrimeCommand(t *testing.T) {
 			lastN: 3,
 			wantContains: []string{
 				"Timbers Session Context", "Entries: 2", "1 undocumented commit",
-				"Fixed bug", "Added feature", "Essential Commands",
+				"Fixed bug", "Added feature", "Essential Commands", "commit code FIRST",
 			},
 		},
 		{

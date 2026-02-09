@@ -12,9 +12,12 @@ import (
 	"github.com/gorewood/timbers/internal/output"
 )
 
+// dirtyChecker abstracts working-tree dirty detection for testability.
+type dirtyChecker func() bool
+
 // newLogCmd creates the log command.
 func newLogCmd() *cobra.Command {
-	return newLogCmdInternal(nil)
+	return newLogCmdInternal(nil, nil)
 }
 
 // logFlags holds all flag values for the log command.
@@ -33,9 +36,10 @@ type logFlags struct {
 	batch     bool
 }
 
-// newLogCmdInternal creates the log command with optional storage injection.
+// newLogCmdInternal creates the log command with optional storage and dirty checker injection.
 // If storage is nil, a real storage is created when the command runs.
-func newLogCmdInternal(storage *ledger.Storage) *cobra.Command {
+// If isDirty is nil, git.HasUncommittedChanges is used.
+func newLogCmdInternal(storage *ledger.Storage, isDirty dirtyChecker) *cobra.Command {
 	vars := newLogFlagVars()
 
 	cmd := &cobra.Command{
@@ -44,7 +48,7 @@ func newLogCmdInternal(storage *ledger.Storage) *cobra.Command {
 		Long:  logCmdLongHelp,
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runLog(cmd, storage, args, vars.toLogFlags())
+			return runLog(cmd, storage, isDirty, args, vars.toLogFlags())
 		},
 	}
 
@@ -78,12 +82,20 @@ type logContext struct {
 }
 
 // runLog executes the log command.
-func runLog(cmd *cobra.Command, storage *ledger.Storage, args []string, flags logFlags) error {
+func runLog(cmd *cobra.Command, storage *ledger.Storage, isDirty dirtyChecker, args []string, flags logFlags) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	storage, err := initLogStorage(storage, printer)
 	if err != nil {
 		return err
+	}
+
+	// Warn if working tree has uncommitted changes — risk of documenting uncommitted work
+	if isDirty == nil {
+		isDirty = git.HasUncommittedChanges
+	}
+	if isDirty() {
+		printer.Warn("working tree has uncommitted changes; commit first to avoid phantom entries")
 	}
 
 	// Dispatch to batch mode if --batch is set

@@ -133,6 +133,36 @@ func TestPrinter_IsJSON(t *testing.T) {
 	}
 }
 
+func TestPrinter_Warn_Human(t *testing.T) {
+	var buf bytes.Buffer
+	printer := NewPrinter(&buf, false, false)
+
+	printer.Warn("working tree has %s", "uncommitted changes")
+
+	output := buf.String()
+	if !strings.Contains(output, "Warning") {
+		t.Errorf("output should contain 'Warning': %q", output)
+	}
+	if !strings.Contains(output, "uncommitted changes") {
+		t.Errorf("output should contain message: %q", output)
+	}
+}
+
+func TestPrinter_Warn_JSON(t *testing.T) {
+	var buf bytes.Buffer
+	printer := NewPrinter(&buf, true, false)
+
+	printer.Warn("dirty tree")
+
+	var result map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("Failed to parse JSON: %v\nOutput: %s", err, buf.String())
+	}
+	if result["warning"] != "dirty tree" {
+		t.Errorf("warning = %v, want %q", result["warning"], "dirty tree")
+	}
+}
+
 func TestErrorJSON_Format(t *testing.T) {
 	// Verify ErrorJSON produces exact format from spec
 	result := ErrorJSON("test error", ExitUserError)

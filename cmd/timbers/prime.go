@@ -15,12 +15,32 @@ import (
 // defaultWorkflowContent is the default workflow instructions for agent onboarding.
 // This can be overridden by placing a .timbers/PRIME.md file in the repo root.
 const defaultWorkflowContent = `# Session Close Protocol
+- [ ] git add && git commit (commit code FIRST)
 - [ ] timbers pending (check for undocumented work)
-- [ ] timbers log "what" --why "why" --how "how" (document work)
+- [ ] timbers log "what" --why "why" --how "how" (document committed work)
 - [ ] timbers notes push (sync to remote)
 
+IMPORTANT: Always commit code before running timbers log. Entries must
+describe committed work, not work-in-progress. Timbers will warn if
+the working tree is dirty.
+
+# Writing Good Why Fields
+The --why flag captures *design decisions*, not feature descriptions.
+
+BAD (feature description):
+  --why "Users needed tag filtering for queries"
+  --why "Added amend command for modifying entries"
+
+GOOD (design decision):
+  --why "OR semantics chosen over AND because users filter by any-of, not all-of"
+  --why "Partial updates via amend avoid re-entering unchanged fields"
+  --why "Chose warning over hard error for dirty-tree check to avoid blocking CI"
+
+Ask yourself: why THIS approach over alternatives? What trade-off did you make?
+
 # Core Rules
-- Document work with what/why/how before session end
+- Commit code first, then document with timbers log
+- Capture design decisions in --why, not feature summaries
 - Use ` + "`timbers pending`" + ` to check for undocumented commits
 - Run ` + "`timbers notes push`" + ` to sync ledger to remote
 

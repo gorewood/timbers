@@ -82,3 +82,12 @@ func HEAD() (string, error) {
 	}
 	return sha, nil
 }
+
+// HasUncommittedChanges returns true if the working tree has staged or unstaged changes.
+func HasUncommittedChanges() bool {
+	out, err := Run("status", "--porcelain")
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(out) != ""
+}

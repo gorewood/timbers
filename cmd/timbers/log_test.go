@@ -516,8 +516,53 @@ func TestValidateRangeFormat(t *testing.T) {
 }
 
 // newLogCmdWithStorage is a helper for tests that injects a storage.
+// Dirty checker defaults to always-clean for unit tests.
 func newLogCmdWithStorage(storage *ledger.Storage) *cobra.Command {
-	return newLogCmdInternal(storage)
+	return newLogCmdInternal(storage, func() bool { return false })
+}
+
+func TestLogDirtyTreeWarning(t *testing.T) {
+	mock := newMockGitOpsForLog()
+	mock.head = "abc123def456789"
+	mock.reachableResult = []git.Commit{
+		{SHA: "abc123def456789", Short: "abc123d", Subject: "Latest commit"},
+	}
+	mock.diffstat = git.Diffstat{Files: 1, Insertions: 10, Deletions: 0}
+
+	storage := ledger.NewStorage(mock)
+
+	// Test with dirty tree
+	cmd := newLogCmdInternal(storage, func() bool { return true })
+	cmd.SetArgs([]string{"Test entry", "--why", "Testing", "--how", "Via test"})
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	_ = cmd.Execute()
+	out := buf.String()
+
+	if !strings.Contains(out, "Warning") || !strings.Contains(out, "uncommitted changes") {
+		t.Errorf("expected dirty-tree warning in output, got: %s", out)
+	}
+
+	// Test with clean tree
+	cmd2 := newLogCmdInternal(storage, func() bool { return false })
+	cmd2.SetArgs([]string{"Test entry 2", "--why", "Testing", "--how", "Via test"})
+
+	var buf2 bytes.Buffer
+	cmd2.SetOut(&buf2)
+	cmd2.SetErr(&buf2)
+
+	// Reset mock to allow a second write (different anchor needed)
+	mock.writtenNotes = make(map[string]string)
+
+	_ = cmd2.Execute()
+	out2 := buf2.String()
+
+	if strings.Contains(out2, "Warning") {
+		t.Errorf("expected no warning with clean tree, got: %s", out2)
+	}
 }
 
 func TestExtractAutoContent(t *testing.T) {

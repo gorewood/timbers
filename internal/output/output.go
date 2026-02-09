@@ -130,6 +130,19 @@ func (p *Printer) Error(err error) {
 	mustWrite(fmt.Fprintf(p.w, "%s: %s\n", p.styles.Error.Render("Error"), exitErr.Message))
 }
 
+// Warn outputs a warning message.
+// For JSON mode, outputs {"warning": "..."}.
+// For human mode, outputs a styled warning.
+func (p *Printer) Warn(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	if p.json {
+		data := map[string]any{"warning": msg}
+		_ = p.writeJSON(data)
+		return
+	}
+	mustWrite(fmt.Fprintf(p.w, "%s: %s\n", p.styles.Warning.Render("Warning"), msg))
+}
+
 // Print formats and writes to the output without a newline.
 func (p *Printer) Print(format string, args ...any) {
 	mustWrite(fmt.Fprintf(p.w, format, args...))
