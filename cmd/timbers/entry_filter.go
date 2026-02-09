@@ -68,6 +68,8 @@ func sortEntriesByCreatedAt(entries []*ledger.Entry) {
 }
 
 // getEntriesByTimeRange retrieves entries within the time range, with optional limit and tag filtering.
+//
+//nolint:unparam // tagFlags will be used by callers beyond export
 func getEntriesByTimeRange(
 	printer *output.Printer, storage *ledger.Storage,
 	sinceCutoff, untilCutoff time.Time, lastFlag string, tagFlags []string,
@@ -179,32 +181,6 @@ func filterEntriesByCommits(allEntries []*ledger.Entry, commitSet map[string]boo
 func entryInCommitSet(entry *ledger.Entry, commitSet map[string]bool) bool {
 	for _, commitSHA := range entry.Workset.Commits {
 		if commitSet[commitSHA] {
-			return true
-		}
-	}
-	return false
-}
-
-// filterEntriesByTags filters entries to those that have at least one matching tag.
-// Uses OR logic: entries matching ANY of the specified tags are included.
-func filterEntriesByTags(entries []*ledger.Entry, tags []string) []*ledger.Entry {
-	if len(tags) == 0 {
-		return entries
-	}
-
-	var result []*ledger.Entry
-	for _, entry := range entries {
-		if entryHasAnyTag(entry, tags) {
-			result = append(result, entry)
-		}
-	}
-	return result
-}
-
-// entryHasAnyTag checks if the entry has any of the specified tags.
-func entryHasAnyTag(entry *ledger.Entry, tags []string) bool {
-	for _, entryTag := range entry.Tags {
-		if slices.Contains(tags, entryTag) {
 			return true
 		}
 	}
