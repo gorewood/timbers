@@ -124,9 +124,9 @@ func addCommands(cmd *cobra.Command) {
 	// Sync commands: notes
 	addGroupedCommand(cmd, newNotesCmd(), "sync")
 
-	// Agent commands: prime, prompt, generate, catchup
+	// Agent commands: prime, draft, generate, catchup
 	addGroupedCommand(cmd, newPrimeCmd(), "agent")
-	addGroupedCommand(cmd, newPromptCmd(), "agent")
+	addGroupedCommand(cmd, newPromptCmd(), "agent") // "draft" command (uses prompt infrastructure)
 	addGroupedCommand(cmd, newGenerateCmd(), "agent")
 	addGroupedCommand(cmd, newCatchupCmd(), "agent")
 

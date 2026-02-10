@@ -53,6 +53,11 @@ Ask yourself: why THIS approach over alternatives? What trade-off did you make?
 - ` + "`timbers query --last 5`" + ` - Recent entries
 - ` + "`timbers show <id>`" + ` - Single entry details
 
+### Generating Documents
+- ` + "`timbers draft --list`" + ` - List available templates
+- ` + "`timbers draft release-notes --last 10`" + ` - Render for piping to LLM
+- ` + "`timbers draft devblog --since 7d --model opus`" + ` - Generate directly
+
 ### Sync
 - ` + "`timbers notes push`" + ` - Push notes to remote
 - ` + "`timbers notes fetch`" + ` - Fetch notes from remote

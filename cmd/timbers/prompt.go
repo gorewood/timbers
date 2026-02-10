@@ -28,18 +28,20 @@ func newPromptCmd() *cobra.Command {
 	var withFrontmatterFlag bool
 
 	cmd := &cobra.Command{
-		Use:   "prompt <template>",
-		Short: "Render a template with entries for LLM piping",
-		Long: `Render a template with ledger entries for piping to an LLM.
+		Use:   "draft <template>",
+		Short: "Generate documents from entries (release notes, changelog, blog posts)",
+		Long: `Generate documents from ledger entries using prompt templates.
 
 Templates resolve: project (.timbers/templates/) → global → built-in.
-Use --model to execute via built-in LLM client directly.
+Use --model to generate directly, or pipe output to your preferred LLM.
 
 Examples:
-  timbers prompt changelog --since 7d                  # For piping
-  timbers prompt changelog --since 7d --model haiku    # Direct LLM
-  timbers prompt --list                                # List templates
-  timbers prompt devblog --since 7d --model haiku --with-frontmatter`,
+  timbers draft release-notes --since 7d               # Render prompt for piping
+  timbers draft changelog --last 10 --model opus       # Generate with built-in LLM
+  timbers draft devblog --since 7d --model opus --with-frontmatter
+  timbers draft decision-log --last 20                 # ADR-style decision log
+  timbers draft --list                                 # List available templates
+  timbers draft release-notes --last 5 --append "Focus on security changes"`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			flags := promptFlags{
@@ -76,7 +78,7 @@ func runPrompt(cmd *cobra.Command, args []string, flags promptFlags) error {
 
 	// Template name required for other operations
 	if len(args) == 0 {
-		err := output.NewUserError("template name required. Use 'timbers prompt --list'")
+		err := output.NewUserError("template name required. Use 'timbers draft --list'")
 		printer.Error(err)
 		return err
 	}
