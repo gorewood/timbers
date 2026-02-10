@@ -124,11 +124,6 @@ draft-model model +args:
 # RELEASE (goreleaser)
 # =============================================================================
 
-# Build local dev binary with version info (use bin/timbers for testing)
-# The goreleaser install.sh puts the release binary in ~/.local/bin/
-# Dev builds stay in bin/ to avoid shadowing the release binary
-install-local: build-local
-
 # Tag and push a release (triggers GitHub Actions)
 # Usage: just release 0.1.0
 release version:
