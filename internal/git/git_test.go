@@ -2,13 +2,36 @@
 package git
 
 import (
+	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gorewood/timbers/internal/output"
 )
+
+// chdirToRepoRoot changes to the git repo root and returns a cleanup function.
+// Skips the test if not running inside a git repository.
+func chdirToRepoRoot(t *testing.T) {
+	t.Helper()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	out, err := exec.CommandContext(context.Background(), "git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		t.Skip("not running inside a git repository")
+	}
+	root := strings.TrimSpace(string(out))
+	if err := os.Chdir(root); err != nil {
+		t.Skipf("cannot change to repo root: %v", err)
+	}
+}
 
 func TestRun(t *testing.T) {
 	tests := []struct {
@@ -64,17 +87,7 @@ func TestRun(t *testing.T) {
 func TestIsRepo(t *testing.T) {
 	// Test in the current directory (which should be a git repo based on context)
 	t.Run("in git repo", func(t *testing.T) {
-		// Save current dir and change to repo root
-		origDir, getWdErr := os.Getwd()
-		if getWdErr != nil {
-			t.Fatalf("failed to get current dir: %v", getWdErr)
-		}
-		defer func() { _ = os.Chdir(origDir) }()
-
-		// The timbers project is a git repo
-		if chdirErr := os.Chdir("/Users/bob/Projects/agent/timbers"); chdirErr != nil {
-			t.Skipf("cannot change to test repo: %v", chdirErr)
-		}
+		chdirToRepoRoot(t)
 
 		if !IsRepo() {
 			t.Error("IsRepo() = false, expected true in git repo")
@@ -102,15 +115,7 @@ func TestIsRepo(t *testing.T) {
 
 func TestRepoRoot(t *testing.T) {
 	t.Run("in git repo", func(t *testing.T) {
-		origDir, getWdErr := os.Getwd()
-		if getWdErr != nil {
-			t.Fatalf("failed to get current dir: %v", getWdErr)
-		}
-		defer func() { _ = os.Chdir(origDir) }()
-
-		if chdirErr := os.Chdir("/Users/bob/Projects/agent/timbers"); chdirErr != nil {
-			t.Skipf("cannot change to test repo: %v", chdirErr)
-		}
+		chdirToRepoRoot(t)
 
 		root, rootErr := RepoRoot()
 		if rootErr != nil {
@@ -157,15 +162,7 @@ func TestRepoRoot(t *testing.T) {
 
 func TestCurrentBranch(t *testing.T) {
 	t.Run("in git repo", func(t *testing.T) {
-		origDir, getWdErr := os.Getwd()
-		if getWdErr != nil {
-			t.Fatalf("failed to get current dir: %v", getWdErr)
-		}
-		defer func() { _ = os.Chdir(origDir) }()
-
-		if chdirErr := os.Chdir("/Users/bob/Projects/agent/timbers"); chdirErr != nil {
-			t.Skipf("cannot change to test repo: %v", chdirErr)
-		}
+		chdirToRepoRoot(t)
 
 		branch, branchErr := CurrentBranch()
 		if branchErr != nil {
@@ -198,15 +195,7 @@ func TestCurrentBranch(t *testing.T) {
 
 func TestHEAD(t *testing.T) {
 	t.Run("in git repo", func(t *testing.T) {
-		origDir, getWdErr := os.Getwd()
-		if getWdErr != nil {
-			t.Fatalf("failed to get current dir: %v", getWdErr)
-		}
-		defer func() { _ = os.Chdir(origDir) }()
-
-		if chdirErr := os.Chdir("/Users/bob/Projects/agent/timbers"); chdirErr != nil {
-			t.Skipf("cannot change to test repo: %v", chdirErr)
-		}
+		chdirToRepoRoot(t)
 
 		sha, headErr := HEAD()
 		if headErr != nil {

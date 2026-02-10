@@ -65,15 +65,7 @@ func TestDiffstatStruct(t *testing.T) {
 
 func TestLog(t *testing.T) {
 	t.Run("in git repo with commits", func(t *testing.T) {
-		origDir, getWdErr := os.Getwd()
-		if getWdErr != nil {
-			t.Fatalf("failed to get current dir: %v", getWdErr)
-		}
-		defer func() { _ = os.Chdir(origDir) }()
-
-		if chdirErr := os.Chdir("/Users/bob/Projects/agent/timbers"); chdirErr != nil {
-			t.Skipf("cannot change to test repo: %v", chdirErr)
-		}
+		chdirToRepoRoot(t)
 
 		// Get last 3 commits using HEAD~2..HEAD
 		commits, logErr := Log("HEAD~2", "HEAD")
@@ -130,15 +122,7 @@ func TestLog(t *testing.T) {
 	})
 
 	t.Run("invalid range", func(t *testing.T) {
-		origDir, getWdErr := os.Getwd()
-		if getWdErr != nil {
-			t.Fatalf("failed to get current dir: %v", getWdErr)
-		}
-		defer func() { _ = os.Chdir(origDir) }()
-
-		if chdirErr := os.Chdir("/Users/bob/Projects/agent/timbers"); chdirErr != nil {
-			t.Skipf("cannot change to test repo: %v", chdirErr)
-		}
+		chdirToRepoRoot(t)
 
 		_, logErr := Log("nonexistent-ref", "HEAD")
 		if logErr == nil {
@@ -149,15 +133,7 @@ func TestLog(t *testing.T) {
 
 func TestCommitsReachableFrom(t *testing.T) {
 	t.Run("in git repo", func(t *testing.T) {
-		origDir, getWdErr := os.Getwd()
-		if getWdErr != nil {
-			t.Fatalf("failed to get current dir: %v", getWdErr)
-		}
-		defer func() { _ = os.Chdir(origDir) }()
-
-		if chdirErr := os.Chdir("/Users/bob/Projects/agent/timbers"); chdirErr != nil {
-			t.Skipf("cannot change to test repo: %v", chdirErr)
-		}
+		chdirToRepoRoot(t)
 
 		// Get all commits from HEAD
 		commits, reachErr := CommitsReachableFrom("HEAD")
@@ -191,15 +167,7 @@ func TestCommitsReachableFrom(t *testing.T) {
 
 func TestDiffstat(t *testing.T) {
 	t.Run("in git repo", func(t *testing.T) {
-		origDir, getWdErr := os.Getwd()
-		if getWdErr != nil {
-			t.Fatalf("failed to get current dir: %v", getWdErr)
-		}
-		defer func() { _ = os.Chdir(origDir) }()
-
-		if chdirErr := os.Chdir("/Users/bob/Projects/agent/timbers"); chdirErr != nil {
-			t.Skipf("cannot change to test repo: %v", chdirErr)
-		}
+		chdirToRepoRoot(t)
 
 		// Get diffstat for a small range
 		stat, diffErr := GetDiffstat("HEAD~1", "HEAD")
@@ -233,15 +201,7 @@ func TestDiffstat(t *testing.T) {
 }
 
 func TestResolveRefOrEmptyTree(t *testing.T) {
-	origDir, getWdErr := os.Getwd()
-	if getWdErr != nil {
-		t.Fatalf("failed to get current dir: %v", getWdErr)
-	}
-	defer func() { _ = os.Chdir(origDir) }()
-
-	if chdirErr := os.Chdir("/Users/bob/Projects/agent/timbers"); chdirErr != nil {
-		t.Skipf("cannot change to test repo: %v", chdirErr)
-	}
+	chdirToRepoRoot(t)
 
 	tests := []struct {
 		name     string
@@ -279,15 +239,7 @@ func TestResolveRefOrEmptyTree(t *testing.T) {
 }
 
 func TestGetDiffstatRootCommit(t *testing.T) {
-	origDir, getWdErr := os.Getwd()
-	if getWdErr != nil {
-		t.Fatalf("failed to get current dir: %v", getWdErr)
-	}
-	defer func() { _ = os.Chdir(origDir) }()
-
-	if chdirErr := os.Chdir("/Users/bob/Projects/agent/timbers"); chdirErr != nil {
-		t.Skipf("cannot change to test repo: %v", chdirErr)
-	}
+	chdirToRepoRoot(t)
 
 	// Find the root commit
 	rootSHA, err := Run("rev-list", "--max-parents=0", "HEAD")
