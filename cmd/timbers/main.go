@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
+	"github.com/gorewood/timbers/internal/config"
 	"github.com/gorewood/timbers/internal/envfile"
 	"github.com/gorewood/timbers/internal/output"
 )
@@ -119,8 +120,8 @@ func loadEnvFiles() {
 	_ = envfile.Load(".env.local")
 	_ = envfile.Load(".env")
 
-	if home, err := os.UserHomeDir(); err == nil {
-		_ = envfile.Load(filepath.Join(home, ".config", "timbers", "env"))
+	if dir := config.Dir(); dir != "" {
+		_ = envfile.Load(filepath.Join(dir, "env"))
 	}
 }
 

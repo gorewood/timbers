@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/gorewood/timbers/internal/config"
 )
 
 // Template represents a prompt template with metadata and content.
@@ -102,11 +104,10 @@ func projectTemplatesDir() string {
 
 // globalTemplatesDir returns the user's global templates directory.
 func globalTemplatesDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
+	if dir := config.Dir(); dir != "" {
+		return filepath.Join(dir, "templates")
 	}
-	return filepath.Join(home, ".config", "timbers", "templates")
+	return ""
 }
 
 // loadFromPath attempts to load a template from a directory.

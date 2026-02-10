@@ -79,6 +79,55 @@ The decision-log template is particularly valuable — it extracts the *why* beh
 
 **Model guidance:** For best output quality, use `opus`. For routine generation at lower cost, `haiku` or `local` models work well. Experiment to find the model that gives you the best output at your preferred price point.
 
+## Configuration
+
+Timbers uses `~/.config/timbers/` as its global configuration directory (`%AppData%\timbers` on Windows, or `$XDG_CONFIG_HOME/timbers` if set).
+
+```
+~/.config/timbers/
+├── env              # API keys (loaded as fallback when not in environment)
+├── templates/       # Global custom templates (available in all repos)
+```
+
+### API Keys
+
+For LLM-powered commands (`draft --model`, `generate`, `catchup`), set API keys in `~/.config/timbers/env`:
+
+```bash
+mkdir -p ~/.config/timbers
+cat > ~/.config/timbers/env << 'EOF'
+ANTHROPIC_API_KEY=sk-ant-...
+# OPENAI_API_KEY=sk-...
+# GOOGLE_API_KEY=...
+EOF
+```
+
+Env file resolution (first match wins, environment variables always take precedence):
+
+1. `$CWD/.env.local` — per-repo override
+2. `$CWD/.env` — per-repo
+3. `~/.config/timbers/env` — global fallback
+
+### Custom Templates
+
+Create custom templates for project-specific or personal reporting needs:
+
+```bash
+# Global (available in all repos)
+mkdir -p ~/.config/timbers/templates
+cat > ~/.config/timbers/templates/weekly-standup.md << 'EOF'
+Summarize this week's work for a standup meeting.
+Format as Completed / In Progress / Blockers (3-5 bullets each).
+## Entries
+EOF
+
+# Per-repo (takes precedence over global)
+mkdir -p .timbers/templates
+# Same format, placed in .timbers/templates/<name>.md
+```
+
+Template resolution: `.timbers/templates/` → `~/.config/timbers/templates/` → built-in.
+
 ## Agent Integration
 
 Timbers is designed for agents to use directly:
