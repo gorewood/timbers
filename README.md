@@ -146,7 +146,17 @@ timbers notes push
 
 Agent-friendly features: `--json` everywhere, `prime` for context injection, `pending` for clear signals, structured errors with recovery hints.
 
-**Agent environment support:** Timbers is currently tested with [Claude Code](https://claude.ai/claude-code). The CLI itself is agent-agnostic (any tool that can run shell commands works), but the `setup` and `doctor` commands currently target Claude Code hooks. Support for Gemini CLI, Codex CLI, and other agent environments will be added as demand warrants.
+**Agent environment support:** Timbers is built and tested with [Claude Code](https://claude.ai/claude-code), which has the deepest integration via hooks that auto-inject `timbers prime` at session start. The CLI itself is agent-agnostic — any agent that can run shell commands can use timbers.
+
+For **non-Claude agents** (Gemini CLI, Cursor, Windsurf, Codex, Kilo Code, Continue, Aider, etc.), add this to your agent's instruction file (`AGENTS.md`, `GEMINI.md`, `.cursor/rules/`, `.windsurfrules`, etc.):
+
+```
+At the start of every session, run `timbers prime` and follow the workflow it describes.
+After completing work, run `timbers pending` to check for undocumented commits,
+then `timbers log "what" --why "why" --how "how"` to document your work.
+```
+
+Native hooks and setup commands for additional agent environments are planned for a future release.
 
 ## Documentation
 
