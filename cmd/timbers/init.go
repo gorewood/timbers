@@ -4,6 +4,7 @@ package main
 import (
 	"path/filepath"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
 	"github.com/gorewood/timbers/internal/git"
@@ -14,7 +15,7 @@ import (
 // initFlags holds the command-line flags for the init command.
 type initFlags struct {
 	yes      bool
-	noHooks  bool
+	hooks    bool
 	noClaude bool
 	dryRun   bool
 }
@@ -32,6 +33,31 @@ type initState struct {
 	remoteConfigured bool
 	hooksInstalled   bool
 	claudeInstalled  bool
+}
+
+// initStyleSet holds lipgloss styles for init output.
+type initStyleSet struct {
+	heading lipgloss.Style
+	pass    lipgloss.Style
+	warn    lipgloss.Style
+	fail    lipgloss.Style
+	dim     lipgloss.Style
+	accent  lipgloss.Style
+}
+
+// initStyles returns a TTY-aware style set.
+func initStyles(isTTY bool) initStyleSet {
+	if !isTTY {
+		return initStyleSet{}
+	}
+	return initStyleSet{
+		heading: lipgloss.NewStyle().Bold(true),
+		pass:    lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
+		warn:    lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+		fail:    lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
+		dim:     lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+		accent:  lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
+	}
 }
 
 // newInitCmd creates the init command.
@@ -54,7 +80,7 @@ The command is idempotent - safe to run multiple times.
 Examples:
   timbers init              # Interactive setup
   timbers init --yes        # Accept all defaults, no prompts
-  timbers init --no-hooks   # Skip git hook installation
+  timbers init --hooks      # Also install git hooks
   timbers init --no-claude  # Skip Claude integration
   timbers init --dry-run    # Show what would be done`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -63,7 +89,7 @@ Examples:
 	}
 
 	cmd.Flags().BoolVarP(&flags.yes, "yes", "y", false, "Accept all defaults, no prompts")
-	cmd.Flags().BoolVar(&flags.noHooks, "no-hooks", false, "Skip git hook installation")
+	cmd.Flags().BoolVar(&flags.hooks, "hooks", false, "Install git hooks (pre-commit)")
 	cmd.Flags().BoolVar(&flags.noClaude, "no-claude", false, "Skip Claude integration prompt")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Show what would be done without doing it")
 
@@ -73,6 +99,7 @@ Examples:
 // runInit executes the init command.
 func runInit(cmd *cobra.Command, flags *initFlags) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	styles := initStyles(printer.IsTTY())
 
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")
@@ -84,10 +111,10 @@ func runInit(cmd *cobra.Command, flags *initFlags) error {
 	state := gatherInitState()
 
 	if flags.dryRun {
-		return handleInitDryRun(printer, repoName, state, flags)
+		return handleInitDryRun(printer, styles, repoName, state, flags)
 	}
 
-	return performInit(cmd, printer, repoName, state, flags)
+	return performInit(cmd, printer, styles, repoName, state, flags)
 }
 
 // gatherInitState checks the current timbers setup state.
@@ -111,7 +138,7 @@ func gatherInitState() *initState {
 }
 
 // handleInitDryRun outputs what would be done without making changes.
-func handleInitDryRun(printer *output.Printer, repoName string, state *initState, flags *initFlags) error {
+func handleInitDryRun(printer *output.Printer, styles initStyleSet, repoName string, state *initState, flags *initFlags) error {
 	steps := buildDryRunSteps(state, flags)
 
 	if printer.IsJSON() {
@@ -122,60 +149,63 @@ func handleInitDryRun(printer *output.Printer, repoName string, state *initState
 		})
 	}
 
-	outputDryRunHumanInit(printer, repoName, steps)
+	outputDryRunHumanInit(printer, styles, repoName, steps)
 	return nil
 }
 
 // outputDryRunHumanInit prints dry-run output in human format.
-func outputDryRunHumanInit(printer *output.Printer, repoName string, steps []initStepResult) {
+func outputDryRunHumanInit(printer *output.Printer, styles initStyleSet, repoName string, steps []initStepResult) {
 	printer.Println()
-	printer.Print("Dry run: timbers init in %s\n", repoName)
+	printer.Print("%s %s\n", styles.heading.Render("Dry run: timbers init in"), styles.dim.Render(repoName))
 	printer.Println()
 
 	for _, step := range steps {
-		icon := dryRunIcon(step.Status)
+		icon := styledDryRunIcon(styles, step.Status)
 		printer.Print("  %s %s: %s\n", icon, step.Name, step.Message)
 	}
 }
 
-// dryRunIcon returns the icon for a dry-run step status.
-func dryRunIcon(status string) string {
+// styledDryRunIcon returns a styled icon for a dry-run step status.
+func styledDryRunIcon(styles initStyleSet, status string) string {
 	switch status {
 	case "skipped":
-		return "-"
+		return styles.dim.Render("--")
 	case "dry_run":
-		return ">"
+		return styles.accent.Render(">")
 	default:
 		return "?"
 	}
 }
 
 // performInit runs the actual initialization steps.
-func performInit(cmd *cobra.Command, printer *output.Printer, repoName string, state *initState, flags *initFlags) error {
+func performInit(
+	cmd *cobra.Command, printer *output.Printer, styles initStyleSet,
+	repoName string, state *initState, flags *initFlags,
+) error {
 	if isAlreadyInitialized(state, flags) {
-		return outputAlreadyInitialized(printer, repoName)
+		return outputAlreadyInitialized(printer, styles, repoName)
 	}
 
 	if !printer.IsJSON() {
 		printer.Println()
-		printer.Print("Initializing timbers in %s...\n", repoName)
+		printer.Print("%s %s...\n", styles.heading.Render("Initializing timbers in"), styles.dim.Render(repoName))
 		printer.Println()
 	}
 
-	steps := executeInitSteps(cmd, printer, state, flags)
-	return outputInitResult(printer, repoName, state, steps)
+	steps := executeInitSteps(cmd, printer, styles, state, flags)
+	return outputInitResult(printer, styles, repoName, state, steps)
 }
 
 // isAlreadyInitialized checks if timbers is fully initialized.
 func isAlreadyInitialized(state *initState, flags *initFlags) bool {
 	return state.notesRefExists &&
 		state.remoteConfigured &&
-		(flags.noHooks || state.hooksInstalled) &&
+		(!flags.hooks || state.hooksInstalled) &&
 		(flags.noClaude || state.claudeInstalled)
 }
 
 // outputAlreadyInitialized handles the already-initialized case.
-func outputAlreadyInitialized(printer *output.Printer, repoName string) error {
+func outputAlreadyInitialized(printer *output.Printer, styles initStyleSet, repoName string) error {
 	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status":              "ok",
@@ -184,14 +214,14 @@ func outputAlreadyInitialized(printer *output.Printer, repoName string) error {
 		})
 	}
 	printer.Println()
-	printer.Print("Timbers is already initialized in %s\n", repoName)
+	printer.Print("%s %s\n", styles.pass.Render("Timbers is already initialized in"), repoName)
 	printer.Println()
-	printer.Print("Run 'timbers doctor' to check health.\n")
+	printer.Print("Run '%s' to check health.\n", styles.accent.Render("timbers doctor"))
 	return nil
 }
 
 // outputInitResult outputs the final initialization result.
-func outputInitResult(printer *output.Printer, repoName string, state *initState, steps []initStepResult) error {
+func outputInitResult(printer *output.Printer, styles initStyleSet, repoName string, state *initState, steps []initStepResult) error {
 	remoteConfigured := stepHasStatus(steps, "remote_config", "ok")
 	hooksInstalled := stepHasStatus(steps, "hooks", "ok")
 	claudeInstalled := stepHasStatus(steps, "claude", "ok")
@@ -209,7 +239,7 @@ func outputInitResult(printer *output.Printer, repoName string, state *initState
 		})
 	}
 
-	printNextSteps(printer)
+	printNextSteps(printer, styles)
 	return nil
 }
 
@@ -224,41 +254,41 @@ func stepHasStatus(steps []initStepResult, name, status string) bool {
 }
 
 // printNextSteps outputs the next steps message.
-func printNextSteps(printer *output.Printer) {
+func printNextSteps(printer *output.Printer, styles initStyleSet) {
 	printer.Println()
-	printer.Print("Timbers initialized!\n")
+	printer.Print("%s\n", styles.heading.Render(styles.pass.Render("Timbers initialized!")))
 	printer.Println()
 	printer.Print("Next steps:\n")
-	printer.Print("  1. Add the timbers snippet to CLAUDE.md:\n")
-	printer.Print("     timbers onboard >> CLAUDE.md\n")
+	printer.Print("  1. %s\n", styles.dim.Render("Add the timbers snippet to CLAUDE.md:"))
+	printer.Print("     %s\n", styles.accent.Render("timbers onboard >> CLAUDE.md"))
 	printer.Println()
-	printer.Print("  2. Start documenting work:\n")
-	printer.Print("     timbers log \"what\" --why \"why\" --how \"how\"\n")
+	printer.Print("  2. %s\n", styles.dim.Render("Start documenting work:"))
+	printer.Print("     %s\n", styles.accent.Render("timbers log \"what\" --why \"why\" --how \"how\""))
 	printer.Println()
-	printer.Print("  3. Verify setup:\n")
-	printer.Print("     timbers doctor\n")
+	printer.Print("  3. %s\n", styles.dim.Render("Verify setup:"))
+	printer.Print("     %s\n", styles.accent.Render("timbers doctor"))
 }
 
 // printStepResult prints a single step result in human format.
-func printStepResult(printer *output.Printer, step initStepResult) {
-	icon := stepIcon(step.Status)
+func printStepResult(printer *output.Printer, styles initStyleSet, step initStepResult) {
+	icon := styledStepIcon(styles, step.Status)
 	name := formatStepName(step.Name)
 	printer.Print("  %s %s", icon, name)
 	if step.Message != "" {
-		printer.Print(" (%s)", step.Message)
+		printer.Print(" %s", styles.dim.Render("("+step.Message+")"))
 	}
 	printer.Println()
 }
 
-// stepIcon returns the icon for a step status.
-func stepIcon(status string) string {
+// styledStepIcon returns a styled icon for a step status.
+func styledStepIcon(styles initStyleSet, status string) string {
 	switch status {
 	case "ok":
-		return "ok"
+		return styles.pass.Render("ok")
 	case "skipped":
-		return "--"
+		return styles.warn.Render("--")
 	case "failed":
-		return "XX"
+		return styles.fail.Render("XX")
 	default:
 		return "??"
 	}

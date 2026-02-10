@@ -147,6 +147,14 @@ func runPrime(cmd *cobra.Command, storage *ledger.Storage, lastN int, verbose bo
 		return err
 	}
 
+	// Skip uninitiated repos — timbers only activates after 'timbers init'
+	if storage == nil && !git.NotesRefExists() {
+		if verbose {
+			printer.Stderr("timbers not initialized in this repo; run 'timbers init' to activate")
+		}
+		return nil
+	}
+
 	// Create storage if not injected
 	if storage == nil {
 		storage = ledger.NewStorage(nil)

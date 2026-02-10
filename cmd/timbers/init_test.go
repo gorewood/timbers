@@ -42,8 +42,8 @@ func TestInitCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "dry-run with --no-hooks skips hooks",
-			args: []string{"init", "--dry-run", "--no-hooks", "--json"},
+			name: "dry-run without --hooks skips hooks",
+			args: []string{"init", "--dry-run", "--json"},
 			wantFields: map[string]any{
 				"status": "dry_run",
 			},
@@ -320,7 +320,7 @@ func TestInitWithExistingHook(t *testing.T) {
 		cmd := newTestRootCmdWithInit()
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
-		cmd.SetArgs([]string{"init", "--yes", "--no-claude", "--json"})
+		cmd.SetArgs([]string{"init", "--yes", "--hooks", "--no-claude", "--json"})
 
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("command failed: %v\nOutput: %s", err, buf.String())
@@ -343,7 +343,7 @@ func TestInitWithExistingHook(t *testing.T) {
 	})
 }
 
-func TestInitNoHooksFlag(t *testing.T) {
+func TestInitDefaultNoHooks(t *testing.T) {
 	tempDir := t.TempDir()
 
 	runGit(t, tempDir, "init")
@@ -363,7 +363,7 @@ func TestInitNoHooksFlag(t *testing.T) {
 		cmd := newTestRootCmdWithInit()
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
-		cmd.SetArgs([]string{"init", "--yes", "--no-hooks", "--no-claude", "--json"})
+		cmd.SetArgs([]string{"init", "--yes", "--no-claude", "--json"})
 
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("command failed: %v\nOutput: %s", err, buf.String())
@@ -374,15 +374,15 @@ func TestInitNoHooksFlag(t *testing.T) {
 			t.Fatalf("failed to parse JSON: %v\nOutput: %s", err, buf.String())
 		}
 
-		// Check hooks_installed is false
+		// Check hooks_installed is false (hooks are opt-in)
 		if hooksInstalled, ok := result["hooks_installed"].(bool); ok && hooksInstalled {
-			t.Error("hooks should not be installed with --no-hooks flag")
+			t.Error("hooks should not be installed by default")
 		}
 
 		// Verify no hook file was created
 		hookPath := filepath.Join(tempDir, ".git", "hooks", "pre-commit")
 		if _, err := os.Stat(hookPath); err == nil {
-			t.Error("hook file should not exist with --no-hooks flag")
+			t.Error("hook file should not exist by default")
 		}
 	})
 }

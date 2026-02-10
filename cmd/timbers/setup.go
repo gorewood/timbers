@@ -33,8 +33,8 @@ Flags:
 
 Examples:
   timbers setup --list           # List available integrations
-  timbers setup claude           # Install Claude Code integration globally
-  timbers setup claude --project # Install for current project only
+  timbers setup claude           # Install Claude integration for this project
+  timbers setup claude --global  # Install globally (~/.claude/hooks/)
   timbers setup claude --check   # Check installation status
   timbers setup claude --remove  # Remove integration`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -54,10 +54,10 @@ Examples:
 // newSetupClaudeCmd creates the claude subcommand for setup.
 func newSetupClaudeCmd() *cobra.Command {
 	var (
-		projectFlag bool
-		checkFlag   bool
-		removeFlag  bool
-		dryRunFlag  bool
+		globalFlag bool
+		checkFlag  bool
+		removeFlag bool
+		dryRunFlag bool
 	)
 
 	cmd := &cobra.Command{
@@ -68,21 +68,21 @@ func newSetupClaudeCmd() *cobra.Command {
 Creates a hook that runs 'timbers prime' at the start of each Claude Code session,
 injecting development context into the conversation.
 
-By default, installs globally to ~/.claude/hooks/. Use --project to install
-for the current repository only.
+By default, installs to the current project's .claude/hooks/ directory.
+Use --global to install to ~/.claude/hooks/ instead.
 
 Examples:
-  timbers setup claude           # Install globally
-  timbers setup claude --project # Install for this project
+  timbers setup claude           # Install for this project
+  timbers setup claude --global  # Install globally
   timbers setup claude --check   # Check if installed
   timbers setup claude --remove  # Uninstall
   timbers setup claude --dry-run # Show what would be done`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runSetupClaude(cmd, projectFlag, checkFlag, removeFlag, dryRunFlag)
+			return runSetupClaude(cmd, !globalFlag, checkFlag, removeFlag, dryRunFlag)
 		},
 	}
 
-	cmd.Flags().BoolVar(&projectFlag, "project", false, "Install for this project only")
+	cmd.Flags().BoolVar(&globalFlag, "global", false, "Install globally to ~/.claude/hooks/")
 	cmd.Flags().BoolVar(&checkFlag, "check", false, "Check installation status without changes")
 	cmd.Flags().BoolVar(&removeFlag, "remove", false, "Remove the integration")
 	cmd.Flags().BoolVar(&dryRunFlag, "dry-run", false, "Show what would be done without doing it")

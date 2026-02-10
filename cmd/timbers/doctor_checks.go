@@ -163,10 +163,10 @@ func checkRecentEntries() checkResult {
 }
 
 // runIntegrationChecks performs integration-related checks.
-func runIntegrationChecks() []checkResult {
+func runIntegrationChecks(flags *doctorFlags) []checkResult {
 	checks := make([]checkResult, 0, 2)
 	checks = append(checks, checkGitHooks())
-	checks = append(checks, checkClaudeIntegration())
+	checks = append(checks, checkClaudeIntegration(flags))
 	return checks
 }
 
@@ -185,9 +185,8 @@ func checkGitHooks() checkResult {
 	if !setup.HookExists(preCommitPath) {
 		return checkResult{
 			Name:    "Git Hooks",
-			Status:  checkWarn,
-			Message: "pre-commit hook not installed",
-			Hint:    "Consider adding timbers to your pre-commit workflow",
+			Status:  checkPass,
+			Message: "not installed (optional, use 'timbers init --hooks')",
 		}
 	}
 
@@ -202,14 +201,13 @@ func checkGitHooks() checkResult {
 
 	return checkResult{
 		Name:    "Git Hooks",
-		Status:  checkWarn,
-		Message: "pre-commit hook exists but does not reference timbers",
-		Hint:    "Consider adding timbers to your pre-commit workflow",
+		Status:  checkPass,
+		Message: "pre-commit hook present (no timbers integration)",
 	}
 }
 
 // checkClaudeIntegration checks if Claude Code hooks are configured.
-func checkClaudeIntegration() checkResult {
+func checkClaudeIntegration(flags *doctorFlags) checkResult {
 	// Check project-scope Claude hook first, then global.
 	for _, projectScope := range []bool{true, false} {
 		hookPath, _, err := setup.ResolveClaudeHookPath(projectScope)
@@ -225,10 +223,23 @@ func checkClaudeIntegration() checkResult {
 		}
 	}
 
+	if flags.fix {
+		hookPath, _, err := setup.ResolveClaudeHookPath(true) // project-level
+		if err == nil {
+			if err := setup.InstallTimbersSection(hookPath); err == nil {
+				return checkResult{
+					Name:    "Claude Integration",
+					Status:  checkPass,
+					Message: "timbers configured in Claude hooks (auto-fixed)",
+				}
+			}
+		}
+	}
+
 	return checkResult{
 		Name:    "Claude Integration",
 		Status:  checkWarn,
 		Message: "Claude hooks not configured for timbers",
-		Hint:    "Run 'timbers setup claude' to install (if available)",
+		Hint:    "Run 'timbers setup claude' or 'timbers doctor --fix'",
 	}
 }

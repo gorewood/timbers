@@ -43,8 +43,8 @@ func buildRemoteConfigStep(state *initState) initStepResult {
 // buildHooksStep creates the dry-run step for hooks.
 func buildHooksStep(state *initState, flags *initFlags) initStepResult {
 	switch {
-	case flags.noHooks:
-		return initStepResult{Name: "hooks", Status: "skipped", Message: "disabled via --no-hooks"}
+	case !flags.hooks:
+		return initStepResult{Name: "hooks", Status: "skipped", Message: "not requested (use --hooks)"}
 	case state.hooksInstalled:
 		return initStepResult{Name: "hooks", Status: "skipped", Message: "already installed"}
 	default:
@@ -67,25 +67,28 @@ func buildClaudeStep(state *initState, flags *initFlags) initStepResult {
 }
 
 // executeInitSteps runs all initialization steps and returns results.
-func executeInitSteps(cmd *cobra.Command, printer *output.Printer, state *initState, flags *initFlags) []initStepResult {
+func executeInitSteps(
+	cmd *cobra.Command, printer *output.Printer, styles initStyleSet,
+	state *initState, flags *initFlags,
+) []initStepResult {
 	steps := make([]initStepResult, 0, 3)
 
 	step := performNotesInit(state)
 	steps = append(steps, step)
 	if !printer.IsJSON() {
-		printStepResult(printer, step)
+		printStepResult(printer, styles, step)
 	}
 
 	step = executeHooksStep(state, flags)
 	steps = append(steps, step)
 	if !printer.IsJSON() {
-		printStepResult(printer, step)
+		printStepResult(printer, styles, step)
 	}
 
-	step = executeClaudeStep(cmd, printer, state, flags)
+	step = executeClaudeStep(cmd, printer, styles, state, flags)
 	steps = append(steps, step)
 	if !printer.IsJSON() {
-		printStepResult(printer, step)
+		printStepResult(printer, styles, step)
 	}
 
 	return steps
@@ -93,18 +96,21 @@ func executeInitSteps(cmd *cobra.Command, printer *output.Printer, state *initSt
 
 // executeHooksStep runs the hooks installation step.
 func executeHooksStep(state *initState, flags *initFlags) initStepResult {
-	if flags.noHooks {
-		return initStepResult{Name: "hooks", Status: "skipped", Message: "disabled via --no-hooks"}
+	if !flags.hooks {
+		return initStepResult{Name: "hooks", Status: "skipped", Message: "not requested (use --hooks)"}
 	}
 	return performHooksInstall(state)
 }
 
 // executeClaudeStep runs the Claude integration step.
-func executeClaudeStep(cmd *cobra.Command, printer *output.Printer, state *initState, flags *initFlags) initStepResult {
+func executeClaudeStep(
+	cmd *cobra.Command, printer *output.Printer, styles initStyleSet,
+	state *initState, flags *initFlags,
+) initStepResult {
 	if flags.noClaude {
 		return initStepResult{Name: "claude", Status: "skipped", Message: "disabled via --no-claude"}
 	}
-	return performClaudeSetup(cmd, printer, state, flags)
+	return performClaudeSetup(cmd, printer, styles, state, flags)
 }
 
 // performNotesInit configures notes fetch for origin.
@@ -154,7 +160,10 @@ func performHooksInstall(state *initState) initStepResult {
 }
 
 // performClaudeSetup handles Claude integration setup.
-func performClaudeSetup(cmd *cobra.Command, printer *output.Printer, state *initState, flags *initFlags) initStepResult {
+func performClaudeSetup(
+	cmd *cobra.Command, printer *output.Printer, styles initStyleSet,
+	state *initState, flags *initFlags,
+) initStepResult {
 	if state.claudeInstalled {
 		return initStepResult{Name: "claude", Status: "skipped", Message: "already installed"}
 	}
@@ -164,17 +173,17 @@ func performClaudeSetup(cmd *cobra.Command, printer *output.Printer, state *init
 	}
 
 	if !printer.IsJSON() && output.IsTTY(cmd.OutOrStdout()) {
-		return promptClaudeInstall(printer)
+		return promptClaudeInstall(printer, styles)
 	}
 
 	return initStepResult{Name: "claude", Status: "skipped", Message: "non-interactive mode"}
 }
 
 // promptClaudeInstall prompts the user for Claude integration.
-func promptClaudeInstall(printer *output.Printer) initStepResult {
+func promptClaudeInstall(printer *output.Printer, styles initStyleSet) initStepResult {
 	printer.Println()
-	printer.Print("Optional integrations:\n")
-	printer.Print("  Install Claude Code integration? [Y/n] ")
+	printer.Print("%s\n", styles.dim.Render("Optional integrations:"))
+	printer.Print("  Install %s? [Y/n] ", styles.accent.Render("Claude Code integration"))
 
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
@@ -190,9 +199,9 @@ func promptClaudeInstall(printer *output.Printer) initStepResult {
 	return initStepResult{Name: "claude", Status: "skipped", Message: "user declined"}
 }
 
-// installClaudeIntegration installs the Claude hook globally.
+// installClaudeIntegration installs the Claude hook at project level.
 func installClaudeIntegration() initStepResult {
-	hookPath, _, err := setup.ResolveClaudeHookPath(false)
+	hookPath, _, err := setup.ResolveClaudeHookPath(true)
 	if err != nil {
 		return initStepResult{Name: "claude", Status: "failed", Message: err.Error()}
 	}
@@ -201,5 +210,5 @@ func installClaudeIntegration() initStepResult {
 		return initStepResult{Name: "claude", Status: "failed", Message: err.Error()}
 	}
 
-	return initStepResult{Name: "claude", Status: "ok", Message: "installed globally"}
+	return initStepResult{Name: "claude", Status: "ok", Message: "installed in .claude/hooks/"}
 }

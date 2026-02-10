@@ -2,6 +2,7 @@
 package main
 
 import (
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
 	"github.com/gorewood/timbers/internal/git"
@@ -112,9 +113,9 @@ func gatherDoctorChecks(flags *doctorFlags) *doctorResult {
 	result := &doctorResult{
 		Version:     version,
 		Core:        runCoreChecks(flags),
-		Config:      runConfigChecks(),
+		Config:      runConfigChecks(flags),
 		Workflow:    runWorkflowChecks(),
-		Integration: runIntegrationChecks(),
+		Integration: runIntegrationChecks(flags),
 		Summary:     &doctorSummary{},
 	}
 
@@ -151,35 +152,62 @@ func outputDoctorJSON(printer *output.Printer, result *doctorResult) error {
 	return printer.WriteJSON(data)
 }
 
+// doctorStyleSet holds lipgloss styles for doctor output.
+type doctorStyleSet struct {
+	heading lipgloss.Style
+	section lipgloss.Style
+	pass    lipgloss.Style
+	warn    lipgloss.Style
+	fail    lipgloss.Style
+	hint    lipgloss.Style
+	dim     lipgloss.Style
+}
+
+// doctorStyles returns a TTY-aware style set.
+func doctorStyles(isTTY bool) doctorStyleSet {
+	if !isTTY {
+		return doctorStyleSet{}
+	}
+	return doctorStyleSet{
+		heading: lipgloss.NewStyle().Bold(true),
+		section: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12")),
+		pass:    lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
+		warn:    lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
+		fail:    lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
+		hint:    lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+		dim:     lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+	}
+}
+
 // outputDoctorHuman outputs the doctor result in human-readable format.
 func outputDoctorHuman(printer *output.Printer, result *doctorResult, quiet bool) {
+	styles := doctorStyles(printer.IsTTY())
+
 	// Header
 	printer.Println()
-	printer.Print("timbers doctor v%s\n", result.Version)
+	ver := result.Version
+	if ver != "" && ver[0] != 'v' {
+		ver = "v" + ver
+	}
+	printer.Println(styles.heading.Render("timbers doctor") + " " + styles.dim.Render(ver))
 
-	// Core checks
-	printCheckSection(printer, "CORE", result.Core, quiet)
-
-	// Config checks
-	printCheckSection(printer, "CONFIG", result.Config, quiet)
-
-	// Workflow checks
-	printCheckSection(printer, "WORKFLOW", result.Workflow, quiet)
-
-	// Integration checks
-	printCheckSection(printer, "INTEGRATION", result.Integration, quiet)
+	// Sections
+	printCheckSection(printer, styles, "CORE", result.Core, quiet)
+	printCheckSection(printer, styles, "CONFIG", result.Config, quiet)
+	printCheckSection(printer, styles, "WORKFLOW", result.Workflow, quiet)
+	printCheckSection(printer, styles, "INTEGRATION", result.Integration, quiet)
 
 	// Summary
 	printer.Println()
 	printer.Print("%s %d passed  %s %d warnings  %s %d failed\n",
-		statusIcon(checkPass), result.Summary.Passed,
-		statusIcon(checkWarn), result.Summary.Warnings,
-		statusIcon(checkFail), result.Summary.Failed,
+		styles.pass.Render("ok"), result.Summary.Passed,
+		styles.warn.Render("!!"), result.Summary.Warnings,
+		styles.fail.Render("XX"), result.Summary.Failed,
 	)
 }
 
 // printCheckSection prints a section of checks.
-func printCheckSection(printer *output.Printer, title string, checks []checkResult, quiet bool) {
+func printCheckSection(printer *output.Printer, styles doctorStyleSet, title string, checks []checkResult, quiet bool) {
 	// In quiet mode, skip sections with only passing checks
 	if quiet {
 		hasNonPass := false
@@ -195,7 +223,7 @@ func printCheckSection(printer *output.Printer, title string, checks []checkResu
 	}
 
 	printer.Println()
-	printer.Println(title)
+	printer.Println(styles.section.Render(title))
 
 	for _, check := range checks {
 		// In quiet mode, skip passing checks
@@ -203,28 +231,24 @@ func printCheckSection(printer *output.Printer, title string, checks []checkResu
 			continue
 		}
 
-		printer.Print("  %s  %s %s\n", statusIcon(check.Status), check.Name, check.Message)
+		icon := styledIcon(styles, check.Status)
+		printer.Print("  %s  %s %s\n", icon, check.Name, styles.dim.Render(check.Message))
 		if check.Hint != "" {
-			printer.Print("     %s %s\n", hintPrefix(), check.Hint)
+			printer.Print("     %s %s\n", styles.hint.Render("->"), check.Hint)
 		}
 	}
 }
 
-// statusIcon returns the icon for a check status.
-func statusIcon(status checkStatus) string {
+// styledIcon returns the styled icon for a check status.
+func styledIcon(styles doctorStyleSet, status checkStatus) string {
 	switch status {
 	case checkPass:
-		return "ok"
+		return styles.pass.Render("ok")
 	case checkWarn:
-		return "!!"
+		return styles.warn.Render("!!")
 	case checkFail:
-		return "XX"
+		return styles.fail.Render("XX")
 	default:
 		return "??"
 	}
-}
-
-// hintPrefix returns the prefix for hint lines.
-func hintPrefix() string {
-	return "->"
 }

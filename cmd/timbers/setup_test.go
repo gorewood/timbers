@@ -52,14 +52,14 @@ func TestSetupClaudeCheck(t *testing.T) {
 				}
 			}
 
-			// Test JSON output
+			// Test JSON output (use --global to check global scope)
 			t.Run("json", func(t *testing.T) {
 				var buf bytes.Buffer
 				cmd := newSetupCmd()
 				cmd.PersistentFlags().Bool("json", false, "")
 				_ = cmd.PersistentFlags().Set("json", "true")
 				cmd.SetOut(&buf)
-				cmd.SetArgs([]string{"claude", "--check"})
+				cmd.SetArgs([]string{"claude", "--global", "--check"})
 
 				err := cmd.Execute()
 				if err != nil {
@@ -82,12 +82,12 @@ func TestSetupClaudeCheck(t *testing.T) {
 				}
 			})
 
-			// Test human output
+			// Test human output (use --global to check global scope)
 			t.Run("human", func(t *testing.T) {
 				var buf bytes.Buffer
 				cmd := newSetupCmd()
 				cmd.SetOut(&buf)
-				cmd.SetArgs([]string{"claude", "--check"})
+				cmd.SetArgs([]string{"claude", "--global", "--check"})
 
 				err := cmd.Execute()
 				if err != nil {
@@ -105,7 +105,7 @@ func TestSetupClaudeCheck(t *testing.T) {
 
 // TestSetupClaudeInstall verifies hook installation.
 func TestSetupClaudeInstall(t *testing.T) {
-	t.Run("install creates hook", func(t *testing.T) {
+	t.Run("install creates hook globally", func(t *testing.T) {
 		tmpHome := t.TempDir()
 		t.Setenv("HOME", tmpHome)
 
@@ -114,7 +114,7 @@ func TestSetupClaudeInstall(t *testing.T) {
 		var buf bytes.Buffer
 		cmd := newSetupCmd()
 		cmd.SetOut(&buf)
-		cmd.SetArgs([]string{"claude"})
+		cmd.SetArgs([]string{"claude", "--global"})
 
 		err := cmd.Execute()
 		if err != nil {
@@ -151,12 +151,12 @@ func TestSetupClaudeInstall(t *testing.T) {
 
 		hookPath := filepath.Join(tmpHome, ".claude", "hooks", "user_prompt_submit.sh")
 
-		// Run install twice
+		// Run install twice (global scope)
 		for i := range 2 {
 			var buf bytes.Buffer
 			cmd := newSetupCmd()
 			cmd.SetOut(&buf)
-			cmd.SetArgs([]string{"claude"})
+			cmd.SetArgs([]string{"claude", "--global"})
 
 			err := cmd.Execute()
 			if err != nil {
@@ -196,7 +196,7 @@ func TestSetupClaudeInstall(t *testing.T) {
 		var buf bytes.Buffer
 		cmd := newSetupCmd()
 		cmd.SetOut(&buf)
-		cmd.SetArgs([]string{"claude"})
+		cmd.SetArgs([]string{"claude", "--global"})
 
 		err := cmd.Execute()
 		if err != nil {
@@ -248,7 +248,7 @@ echo 'after'
 		var buf bytes.Buffer
 		cmd := newSetupCmd()
 		cmd.SetOut(&buf)
-		cmd.SetArgs([]string{"claude", "--remove"})
+		cmd.SetArgs([]string{"claude", "--global", "--remove"})
 
 		err := cmd.Execute()
 		if err != nil {
@@ -279,7 +279,7 @@ echo 'after'
 		var buf bytes.Buffer
 		cmd := newSetupCmd()
 		cmd.SetOut(&buf)
-		cmd.SetArgs([]string{"claude", "--remove"})
+		cmd.SetArgs([]string{"claude", "--global", "--remove"})
 
 		err := cmd.Execute()
 		if err != nil {
@@ -304,7 +304,7 @@ func TestSetupClaudeDryRun(t *testing.T) {
 	var buf bytes.Buffer
 	cmd := newSetupCmd()
 	cmd.SetOut(&buf)
-	cmd.SetArgs([]string{"claude", "--dry-run"})
+	cmd.SetArgs([]string{"claude", "--global", "--dry-run"})
 
 	err := cmd.Execute()
 	if err != nil {
@@ -323,9 +323,9 @@ func TestSetupClaudeDryRun(t *testing.T) {
 	}
 }
 
-// TestSetupClaudeProject verifies project-level installation.
+// TestSetupClaudeDefaultIsProject verifies default installs to project level.
 // Note: Cannot use t.Parallel() due to os.Chdir() usage.
-func TestSetupClaudeProject(t *testing.T) {
+func TestSetupClaudeDefaultIsProject(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
 
@@ -349,14 +349,14 @@ func TestSetupClaudeProject(t *testing.T) {
 	var buf bytes.Buffer
 	cmd := newSetupCmd()
 	cmd.SetOut(&buf)
-	cmd.SetArgs([]string{"claude", "--project"})
+	cmd.SetArgs([]string{"claude"})
 
 	err := cmd.Execute()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Should create hook in project directory
+	// Should create hook in project directory (default)
 	projectHookPath := filepath.Join(tmpProject, ".claude", "hooks", "user_prompt_submit.sh")
 	if _, err := os.Stat(projectHookPath); os.IsNotExist(err) {
 		t.Error("project hook was not created")
@@ -365,7 +365,7 @@ func TestSetupClaudeProject(t *testing.T) {
 	// Should NOT create hook in global directory
 	globalHookPath := filepath.Join(tmpHome, ".claude", "hooks", "user_prompt_submit.sh")
 	if _, err := os.Stat(globalHookPath); !os.IsNotExist(err) {
-		t.Error("global hook should not be created with --project")
+		t.Error("global hook should not be created by default")
 	}
 }
 

@@ -84,16 +84,16 @@ func fetchLatestVersion() (string, error) {
 }
 
 // runConfigChecks performs configuration-related checks.
-func runConfigChecks() []checkResult {
+func runConfigChecks(flags *doctorFlags) []checkResult {
 	checks := make([]checkResult, 0, 3)
-	checks = append(checks, checkConfigDir())
+	checks = append(checks, checkConfigDir(flags))
 	checks = append(checks, checkEnvFiles())
 	checks = append(checks, checkTemplates())
 	return checks
 }
 
 // checkConfigDir reports the resolved configuration directory.
-func checkConfigDir() checkResult {
+func checkConfigDir(flags *doctorFlags) checkResult {
 	dir := config.Dir()
 	if dir == "" {
 		return checkResult{
@@ -111,11 +111,21 @@ func checkConfigDir() checkResult {
 		}
 	}
 
+	if flags.fix {
+		if err := os.MkdirAll(dir, 0o755); err == nil {
+			return checkResult{
+				Name:    "Config Dir",
+				Status:  checkPass,
+				Message: dir + " (created)",
+			}
+		}
+	}
+
 	return checkResult{
 		Name:    "Config Dir",
 		Status:  checkPass,
 		Message: dir + " (not created yet)",
-		Hint:    "mkdir -p " + dir,
+		Hint:    "mkdir -p " + dir + " or 'timbers doctor --fix'",
 	}
 }
 
