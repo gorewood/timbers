@@ -58,6 +58,7 @@ Desktop.ini
 # Config files
 !.golangci.yml
 !.mise.toml
+!.env.example
 !.envrc.example
 !.goreleaser.yaml
 

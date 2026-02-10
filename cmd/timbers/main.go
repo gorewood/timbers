@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
+	"github.com/gorewood/timbers/internal/envfile"
 	"github.com/gorewood/timbers/internal/output"
 )
 
@@ -86,6 +87,13 @@ All commands support --json for structured output.`,
 		},
 	}
 
+	// Load .env.local (then .env) for API keys that can't be exported to env.
+	// Environment variables always take precedence over file values.
+	cmd.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
+		loadEnvFiles()
+		return nil
+	}
+
 	// Add persistent --json flag (available to all subcommands)
 	cmd.PersistentFlags().Bool("json", false, "Output in JSON format")
 
@@ -97,6 +105,15 @@ All commands support --json for structured output.`,
 	addCommands(cmd)
 
 	return cmd
+}
+
+// loadEnvFiles loads .env.local and .env from the current directory.
+// Env vars already set take precedence. Errors are silently ignored
+// (missing files, non-repo contexts, etc.).
+func loadEnvFiles() {
+	// Prefer .env.local over .env (local overrides are more specific)
+	_ = envfile.Load(".env.local")
+	_ = envfile.Load(".env")
 }
 
 // addCommandGroups defines the command groups for help output.

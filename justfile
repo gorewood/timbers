@@ -184,17 +184,20 @@ blog:
 blog-serve:
     cd site && hugo server -D
 
-# Generate changelog draft
-changelog-draft:
+# Generate CHANGELOG.md from ledger (run before release, review before committing)
+# Usage: just changelog              # defaults to opus
+#        just changelog haiku         # use a cheaper model
+changelog model="opus":
     #!/usr/bin/env bash
     set -euo pipefail
     PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
     if [ -n "$PREV_TAG" ]; then
-        timbers draft changelog --range "$PREV_TAG"..HEAD --model haiku
+        timbers draft changelog --range "$PREV_TAG"..HEAD --model {{model}}
     else
-        timbers draft changelog --last 50 --model haiku
+        timbers draft changelog --last 50 --model {{model}}
     fi > CHANGELOG-draft.md
-    echo "Created: CHANGELOG-draft.md (review before committing)"
+    echo "Created: CHANGELOG-draft.md"
+    echo "Review it, then: mv CHANGELOG-draft.md CHANGELOG.md && git add CHANGELOG.md"
 
 # =============================================================================
 # CLEANUP
