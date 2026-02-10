@@ -173,17 +173,17 @@ func TestResolveModelAlias(t *testing.T) {
 		// Anthropic aliases
 		{name: "anthropic haiku alias", model: "haiku", provider: ProviderAnthropic, wantModel: "claude-haiku-4-5-20251001"},
 		{name: "anthropic sonnet alias", model: "sonnet", provider: ProviderAnthropic, wantModel: "claude-sonnet-4-5-20250929"},
-		{name: "anthropic opus alias", model: "opus", provider: ProviderAnthropic, wantModel: "claude-opus-4-5-20251101"},
+		{name: "anthropic opus alias", model: "opus", provider: ProviderAnthropic, wantModel: "claude-opus-4-6"},
 
 		// OpenAI aliases
 		{name: "openai nano alias", model: "nano", provider: ProviderOpenAI, wantModel: "gpt-5-nano"},
 		{name: "openai mini alias", model: "mini", provider: ProviderOpenAI, wantModel: "gpt-5-mini"},
-		{name: "openai gpt-5 alias", model: "gpt-5", provider: ProviderOpenAI, wantModel: "gpt-5"},
+		{name: "openai gpt-5 alias", model: "gpt-5", provider: ProviderOpenAI, wantModel: "gpt-5.2"},
 
 		// Google aliases
-		{name: "google flash alias", model: "flash", provider: ProviderGoogle, wantModel: "gemini-2.5-flash"},
+		{name: "google flash alias", model: "flash", provider: ProviderGoogle, wantModel: "gemini-3-flash-preview"},
 		{name: "google flash-lite alias", model: "flash-lite", provider: ProviderGoogle, wantModel: "gemini-2.5-flash-lite"},
-		{name: "google pro alias", model: "pro", provider: ProviderGoogle, wantModel: "gemini-2.5-pro"},
+		{name: "google pro alias", model: "pro", provider: ProviderGoogle, wantModel: "gemini-3-pro-preview"},
 
 		// Local aliases
 		{name: "local alias", model: "local", provider: ProviderLocal, wantModel: "default"},

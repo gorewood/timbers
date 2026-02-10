@@ -15,7 +15,7 @@ Agent Trace is an open specification for documenting AI-generated code within ve
 
 - **Line-level attribution**: Tracks which lines came from which contributor (human/ai/mixed/unknown)
 - **Conversation references**: Links code to the AI conversation that generated it
-- **Model identification**: Records which AI model (e.g., `anthropic/claude-opus-4-5-20251101`)
+- **Model identification**: Records which AI model (e.g., `anthropic/claude-opus-4-6`)
 - **Content hashing**: Tracks code movement across files via hashes
 - **VCS-agnostic**: Supports Git, Jujutsu, Mercurial, Subversion
 - **Extensible metadata**: Vendor-specific fields via reverse-domain notation
@@ -77,7 +77,7 @@ When an agent logs work, it could record which files had AI contributions:
         "conversations": [{
           "url": "claude://session/abc123",
           "contributor": "ai",
-          "model": "anthropic/claude-opus-4-5-20251101",
+          "model": "anthropic/claude-opus-4-6",
           "ranges": [{ "start": 45, "end": 67 }]
         }]
       }

@@ -164,17 +164,17 @@ var modelAliases = map[Provider]map[string]string{
 	ProviderAnthropic: {
 		"haiku":  "claude-haiku-4-5-20251001",
 		"sonnet": "claude-sonnet-4-5-20250929",
-		"opus":   "claude-opus-4-5-20251101",
+		"opus":   "claude-opus-4-6",
 	},
 	ProviderOpenAI: {
 		"nano":  "gpt-5-nano",
 		"mini":  "gpt-5-mini",
-		"gpt-5": "gpt-5",
+		"gpt-5": "gpt-5.2",
 	},
 	ProviderGoogle: {
-		"flash":      "gemini-2.5-flash",
+		"flash":      "gemini-3-flash-preview",
 		"flash-lite": "gemini-2.5-flash-lite",
-		"pro":        "gemini-2.5-pro",
+		"pro":        "gemini-3-pro-preview",
 	},
 	ProviderLocal: {
 		"local": "default",
