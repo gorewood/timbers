@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/charmbracelet/fang"
 	"github.com/charmbracelet/lipgloss"
@@ -107,13 +108,20 @@ All commands support --json for structured output.`,
 	return cmd
 }
 
-// loadEnvFiles loads .env.local and .env from the current directory.
-// Env vars already set take precedence. Errors are silently ignored
-// (missing files, non-repo contexts, etc.).
+// loadEnvFiles loads env files in priority order. First match for each
+// variable wins; environment variables already set always take precedence.
+//
+// Resolution order:
+//  1. $CWD/.env.local   (per-repo override, gitignored)
+//  2. $CWD/.env         (per-repo)
+//  3. ~/.config/timbers/env (global fallback — set once, works everywhere)
 func loadEnvFiles() {
-	// Prefer .env.local over .env (local overrides are more specific)
 	_ = envfile.Load(".env.local")
 	_ = envfile.Load(".env")
+
+	if home, err := os.UserHomeDir(); err == nil {
+		_ = envfile.Load(filepath.Join(home, ".config", "timbers", "env"))
+	}
 }
 
 // addCommandGroups defines the command groups for help output.
