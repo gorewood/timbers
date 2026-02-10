@@ -15,6 +15,7 @@ import (
 // It supports both JSON and human-readable output modes.
 type Printer struct {
 	w      io.Writer
+	errW   io.Writer
 	json   bool
 	isTTY  bool
 	styles *Styles
@@ -70,10 +71,19 @@ func NewPrinter(writer io.Writer, jsonMode bool, isTTY bool) *Printer {
 
 	return &Printer{
 		w:      writer,
+		errW:   writer,
 		json:   jsonMode,
 		isTTY:  isTTY,
 		styles: styles,
 	}
+}
+
+// WithStderr sets a separate writer for errors and warnings in human mode.
+// In JSON mode, errors still go to the main writer (structured protocol).
+// Returns the printer for chaining.
+func (p *Printer) WithStderr(w io.Writer) *Printer {
+	p.errW = w
+	return p
 }
 
 // IsJSON returns true if the printer is in JSON mode.
@@ -108,8 +118,8 @@ func (p *Printer) Success(data map[string]any) error {
 }
 
 // Error outputs an error.
-// For JSON mode, outputs {"error": "...", "code": N}.
-// For human mode, outputs a styled error message.
+// For JSON mode, outputs {"error": "...", "code": N} to stdout.
+// For human mode, outputs a styled error message to stderr (if set).
 func (p *Printer) Error(err error) {
 	exitErr := &ExitError{}
 	ok := errors.As(err, &exitErr)
@@ -126,13 +136,13 @@ func (p *Printer) Error(err error) {
 		return
 	}
 
-	// Human-readable error
-	mustWrite(fmt.Fprintf(p.w, "%s: %s\n", p.styles.Error.Render("Error"), exitErr.Message))
+	// Human-readable error goes to errW (stderr when set)
+	mustWrite(fmt.Fprintf(p.errW, "%s: %s\n", p.styles.Error.Render("Error"), exitErr.Message))
 }
 
 // Warn outputs a warning message.
-// For JSON mode, outputs {"warning": "..."}.
-// For human mode, outputs a styled warning.
+// For JSON mode, outputs {"warning": "..."} to stdout.
+// For human mode, outputs a styled warning to stderr (if set).
 func (p *Printer) Warn(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	if p.json {
@@ -140,7 +150,16 @@ func (p *Printer) Warn(format string, args ...any) {
 		_ = p.writeJSON(data)
 		return
 	}
-	mustWrite(fmt.Fprintf(p.w, "%s: %s\n", p.styles.Warning.Render("Warning"), msg))
+	mustWrite(fmt.Fprintf(p.errW, "%s: %s\n", p.styles.Warning.Render("Warning"), msg))
+}
+
+// Stderr writes a message to the error writer (for status hints when piped).
+// No-op in JSON mode (structured protocol handles metadata).
+func (p *Printer) Stderr(format string, args ...any) {
+	if p.json {
+		return
+	}
+	mustWrite(fmt.Fprintf(p.errW, format, args...))
 }
 
 // Print formats and writes to the output without a newline.

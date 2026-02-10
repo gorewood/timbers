@@ -163,6 +163,73 @@ func TestPrinter_Warn_JSON(t *testing.T) {
 	}
 }
 
+func TestPrinter_WithStderr_Error(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	printer := NewPrinter(&stdout, false, false).WithStderr(&stderr)
+
+	printer.Error(NewUserError("something broke"))
+
+	if stdout.Len() > 0 {
+		t.Errorf("error should not go to stdout, got: %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "something broke") {
+		t.Errorf("error should go to stderr, got: %q", stderr.String())
+	}
+}
+
+func TestPrinter_WithStderr_Warn(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	printer := NewPrinter(&stdout, false, false).WithStderr(&stderr)
+
+	printer.Warn("check your config")
+
+	if stdout.Len() > 0 {
+		t.Errorf("warning should not go to stdout, got: %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "check your config") {
+		t.Errorf("warning should go to stderr, got: %q", stderr.String())
+	}
+}
+
+func TestPrinter_WithStderr_JSON_Error_StaysOnStdout(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	printer := NewPrinter(&stdout, true, false).WithStderr(&stderr)
+
+	printer.Error(NewUserError("json error"))
+
+	if stderr.Len() > 0 {
+		t.Errorf("JSON error should not go to stderr, got: %q", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "json error") {
+		t.Errorf("JSON error should go to stdout, got: %q", stdout.String())
+	}
+}
+
+func TestPrinter_Stderr(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	printer := NewPrinter(&stdout, false, false).WithStderr(&stderr)
+
+	printer.Stderr("timbers: rendered %q with %d entries\n", "changelog", 5)
+
+	if stdout.Len() > 0 {
+		t.Errorf("stderr hint should not go to stdout, got: %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), `rendered "changelog" with 5 entries`) {
+		t.Errorf("stderr should contain hint, got: %q", stderr.String())
+	}
+}
+
+func TestPrinter_Stderr_NoopInJSON(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	printer := NewPrinter(&stdout, true, false).WithStderr(&stderr)
+
+	printer.Stderr("should not appear")
+
+	if stderr.Len() > 0 {
+		t.Errorf("Stderr should be no-op in JSON mode, got: %q", stderr.String())
+	}
+}
+
 func TestErrorJSON_Format(t *testing.T) {
 	// Verify ErrorJSON produces exact format from spec
 	result := ErrorJSON("test error", ExitUserError)

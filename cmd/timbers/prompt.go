@@ -69,7 +69,8 @@ Examples:
 
 // runPrompt executes the prompt command.
 func runPrompt(cmd *cobra.Command, args []string, flags promptFlags) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout())).
+		WithStderr(cmd.ErrOrStderr())
 
 	// Handle --list
 	if flags.list {
@@ -149,6 +150,11 @@ func runPromptRender(
 			"entry_count":   len(entries),
 			"entries":       entries,
 		})
+	}
+
+	// When piped, emit a status hint to stderr so the user gets feedback
+	if !printer.IsTTY() {
+		printer.Stderr("timbers: rendered %q with %d entries\n", templateName, len(entries))
 	}
 
 	printer.Print("%s\n", rendered)
