@@ -6,7 +6,19 @@
 
 **Git knows what changed. Timbers captures why.**
 
-A development ledger that pairs Git commits with structured rationale — what you did, why you did it, how you approached it — stored as portable Git notes.
+AI agents write more code every day. Git tracks what they changed. Commit messages hint at how. But the *why* — the reasoning, trade-offs, and decisions — lives in session logs that get compacted and PR comments nobody reads twice. Six months later, you're staring at agent-written code with no idea why it was done that way.
+
+Timbers is a development ledger that captures what/why/how as structured records stored in Git notes — portable, queryable, and durable. Agents document their reasoning at the moment it exists. Humans harvest insights whenever they need them.
+
+```bash
+# Record work (agents or humans)
+timbers log "Fixed auth bypass" \
+  --why "User input wasn't sanitized before JWT validation" \
+  --how "Added validation middleware before auth handler"
+
+# Generate artifacts from your ledger
+timbers draft decision-log --last 20 --model opus
+```
 
 ## Installation
 
@@ -21,25 +33,11 @@ go install github.com/gorewood/timbers/cmd/timbers@latest
 ## Quick Start
 
 ```bash
-# Initialize (one-time)
-timbers init
-
-# Record work
-timbers log "Fixed auth bypass" \
-  --why "User input wasn't sanitized before JWT validation" \
-  --how "Added validation middleware before auth handler"
-
-# Query your ledger
-timbers query --last 10
+timbers init              # One-time setup
+timbers log "what" \      # Record work
+  --why "why" --how "how"
+timbers query --last 10   # Query your ledger
 ```
-
-## Why Timbers?
-
-As AI agents take on more development work, human oversight becomes harder and more critical. Git history shows *what* changed. Commit messages hint at *how*. But the *why* — the reasoning, constraints, decisions, context — lives in agent session logs that get compacted, Slack threads that scroll away, and PR comments that nobody reads twice.
-
-Six months later, you're staring at agent-written code wondering "why did it do it this way?" The answer is gone.
-
-Timbers captures that context at the moment it exists and stores it durably alongside your code. The ledger grows as agents document their work. Humans harvest insights when they need them — executive summaries, decision logs, queryable history.
 
 ## Core Commands
 

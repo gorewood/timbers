@@ -1,9 +1,10 @@
 name: Generate Dev Blog Post
 
 on:
-  schedule:
-    - cron: '0 9 * * 1'  # Monday 9am UTC
   workflow_dispatch:
+  # Enable schedule after GitHub Pages is configured:
+  # schedule:
+  #   - cron: '0 9 * * 1'  # Monday 9am UTC
 
 permissions:
   contents: write
