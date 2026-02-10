@@ -9,8 +9,8 @@ import (
 	"github.com/gorewood/timbers/internal/prompt"
 )
 
-// promptFlags holds all prompt command flags.
-type promptFlags struct {
+// draftFlags holds all draft command flags.
+type draftFlags struct {
 	last            string
 	since           string
 	until           string
@@ -23,8 +23,8 @@ type promptFlags struct {
 	withFrontmatter bool
 }
 
-// promptSelectionFlags holds the entry selection flags for metadata.
-type promptSelectionFlags struct {
+// draftSelectionFlags holds the entry selection flags for metadata.
+type draftSelectionFlags struct {
 	last  string
 	since string
 	until string
@@ -45,7 +45,7 @@ type generationMetadata struct {
 func buildGenerationMetadata(
 	templateName string, tmpl *prompt.Template,
 	entries []*ledger.Entry, model string,
-	selFlags promptSelectionFlags,
+	selFlags draftSelectionFlags,
 ) generationMetadata {
 	// Collect entry IDs
 	entryIDs := make([]string, len(entries))

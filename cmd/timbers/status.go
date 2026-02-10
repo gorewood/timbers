@@ -27,10 +27,9 @@ type statusResult struct {
 	ParseErrors     int    `json:"parse_errors,omitempty"`
 }
 
-var verboseFlag bool
-
 // newStatusCmd creates the status command.
 func newStatusCmd() *cobra.Command {
+	var verboseFlag bool
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show repository and notes state",
@@ -43,14 +42,16 @@ Examples:
   timbers status            # Show human-readable status
   timbers status --verbose  # Show detailed notes statistics
   timbers status --json     # Output status as JSON for scripting`,
-		RunE: runStatus,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runStatus(cmd, args, verboseFlag)
+		},
 	}
 	cmd.Flags().BoolVarP(&verboseFlag, "verbose", "v", false, "Show detailed notes statistics")
 	return cmd
 }
 
 // runStatus executes the status command.
-func runStatus(cmd *cobra.Command, _ []string) error {
+func runStatus(cmd *cobra.Command, _ []string, verbose bool) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	// Check if we're in a git repo
@@ -61,7 +62,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Gather status information
-	result, err := gatherStatus(verboseFlag)
+	result, err := gatherStatus(verbose)
 	if err != nil {
 		printer.Error(err)
 		return err
@@ -78,7 +79,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 			"entry_count":      result.EntryCount,
 		}
 		// Add verbose stats if present
-		if verboseFlag {
+		if verbose {
 			data["notes_total"] = result.NotesTotal
 			data["notes_skipped"] = result.NotesSkipped
 			data["not_timbers"] = result.NotTimbers
@@ -95,7 +96,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Human-readable output
-	printHumanStatus(printer, result, verboseFlag)
+	printHumanStatus(printer, result, verbose)
 	return nil
 }
 

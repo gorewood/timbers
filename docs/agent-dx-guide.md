@@ -89,6 +89,28 @@ Quick commands:
 - `prime` restores workflow state in one call
 - Include in shell hooks or CLAUDE.md instructions
 
+### 1.3.1 Verbose Context for Design History
+
+**Context injection should have a verbose mode that gives agents decision history, not just status.**
+
+Standard prime output shows *what* happened. Verbose mode shows *why* decisions were made, enabling agents to make informed choices that are consistent with prior design decisions.
+
+```bash
+$ mytool prime --verbose
+# ...standard output...
+
+Recent Work
+-----------
+  tb_2026-02-09_abc123  Added tag-based query filtering
+    Why: OR semantics chosen over AND because users filter by any-of, not all-of
+    How: Extended query parser with --tag flag accepting comma-separated values
+```
+
+**Why this matters:**
+- Without design history, agents repeat mistakes or contradict prior decisions
+- Why/how context is the highest-signal data for continuity across sessions
+- Default mode stays compact (token-efficient); verbose is opt-in when agents need design context
+
 ### 1.4 JSON Everywhere
 
 **Every command supports `--json` for structured output.**
@@ -229,7 +251,39 @@ done
 - Support stdin for batch input where sensible
 - Exit codes follow conventions (0=success, 1=user error, 2=system error)
 
-### 3.2 Output Destination Control
+### 3.2 Stderr Routing for Pipe Ergonomics
+
+**Separate data from diagnostics when piped.**
+
+Agents frequently pipe CLI output directly to LLMs. Any diagnostic noise — warnings, progress messages, status hints — on stdout breaks downstream parsing. Route all non-data output to stderr.
+
+```go
+// Create printer with stderr for diagnostics
+printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout())).
+    WithStderr(cmd.ErrOrStderr())
+
+// Errors and warnings automatically route to stderr in human mode
+printer.Error(err)   // → stderr (human), stdout (JSON protocol)
+printer.Warn("...")  // → stderr (human), stdout (JSON protocol)
+
+// Explicit stderr for status hints when piped
+if !printer.IsTTY() {
+    printer.Stderr("mytool: rendered %q with %d entries\n", templateName, len(entries))
+}
+```
+
+**The pattern:**
+1. Data (entries, rendered output, query results) always goes to stdout.
+2. Errors and warnings go to stderr in human mode, stdout in JSON mode (structured protocol).
+3. Status hints (e.g., "rendered template with N entries") go to stderr only when piped.
+4. In JSON mode, all structured output goes to stdout (the JSON envelope is the protocol).
+
+**Why this matters:**
+- `mytool draft changelog --last 10 | claude "Summarize"` must not include "Warning: 3 entries lack tags" in the LLM prompt
+- Agents parsing JSON output get clean data without interleaved diagnostics
+- Users still see warnings — they just arrive on the right file descriptor
+
+### 3.3 Output Destination Control
 
 **Separate stdout behavior from file output.**
 
@@ -241,7 +295,7 @@ mytool export --json
 mytool export --json --out ./exports/
 ```
 
-Don't conflate these—agents need both patterns.
+Don't conflate these — agents need both patterns.
 
 ---
 
@@ -324,6 +378,37 @@ A `skill` command that outputs static documentation seems useful, but in practic
 
 The exception: if your tool is designed to generate plugin/skill files for agent frameworks, a `skill --emit-plugin` command may be warranted. But don't conflate "self-documenting" with "agent-friendly."
 
+### 5.3 Input Coaching
+
+**Don't just tell agents what flags exist — coach them on what good input looks like.**
+
+Agents are surprisingly bad at generating high-quality input without examples. If a flag expects nuanced content (like a "why" field), include concrete BAD/GOOD examples in context injection output.
+
+```
+# Writing Good Why Fields
+The --why flag captures *design decisions*, not feature descriptions.
+
+BAD (feature description):
+  --why "Users needed tag filtering for queries"
+  --why "Added amend command for modifying entries"
+
+GOOD (design decision):
+  --why "OR semantics chosen over AND because users filter by any-of, not all-of"
+  --why "Partial updates via amend avoid re-entering unchanged fields"
+
+Ask yourself: why THIS approach over alternatives? What trade-off did you make?
+```
+
+**Where to put coaching:**
+- In `prime` output (seen at every session start)
+- In `--help` for the specific command
+- **Not** in static docs that agents won't read
+
+**Why this matters:**
+- Without coaching, agents produce shallow input ("Added feature X" instead of "Chose X over Y because Z")
+- The difference between good and bad input determines whether the captured data has long-term value
+- Coaching in `prime` output works because it's injected automatically — agents can't skip it
+
 ---
 
 ## 6. Agent Execution Contract
@@ -360,6 +445,8 @@ The agent had access to `mytool prime` and `mytool pending`. The CLAUDE.md even 
 
 **The fix: automatic injection.** Don't rely on agents reading documentation and remembering to run commands. Wire the tool into the environment so context flows automatically.
 
+**Measured impact:** In dogfood testing, documentation-only integration achieved **0% agent adoption** of the workflow. Adding session-start hook injection achieved **100% adoption** — same agents, same tool, same docs. The only difference was automatic `prime` injection at session start. This isn't a small improvement; it's the difference between a tool that works and one that doesn't.
+
 ### 7.2 The Integration Stack
 
 A complete agent-oriented CLI provides four layers of integration:
@@ -381,27 +468,42 @@ Each layer reinforces the others. If hooks fail, doctor catches it. If setup is 
 $ mytool doctor
 
 CORE
-  ✓  Storage initialized
-  ✓  Remote configured
+  ok  Storage initialized
+  ok  Remote configured
+  !!  Version 0.1.5 (latest: 0.2.0)
+     -> Update: curl -fsSL .../install.sh | bash
+
+CONFIG
+  ok  Config Dir ~/.config/mytool
+  ok  Env Files local (.env.local) | keys: anthropic
+  ok  Custom Templates none (7 built-in available)
 
 WORKFLOW
-  ⚠  Pending 3 undocumented items
-     └─ Run 'mytool pending' to review
+  !!  Pending 3 undocumented items
+     -> Run 'mytool pending' to review
 
 INTEGRATION
-  ✓  Git hooks installed
-  ⚠  Claude integration not configured
-     └─ Run 'mytool setup claude' to install
+  ok  Git hooks installed
+  !!  Claude integration not configured
+     -> Run 'mytool setup claude' to install
 
-✓ 3 passed  ⚠ 2 warnings  ✖ 0 failed
+ok 5 passed  !! 2 warnings  XX 0 failed
 ```
 
 **Design principles:**
-- Categorize checks (Core, Workflow, Integration, etc.)
+- Categorize checks (Core, Config, Workflow, Integration)
 - Show pass/warn/fail with visual indicators
 - Provide specific fix commands for each issue
 - Support `--fix` to auto-remediate where possible
 - Support `--json` for programmatic checking
+
+**Check the full operational environment, not just basics.** Beyond storage and hooks, doctor should verify:
+- **Config directory** resolution (does it exist? which path was resolved?)
+- **Env files** (which are loaded? which API keys are available?)
+- **Templates** (custom project-local or global templates found?)
+- **Version staleness** (is the installed binary current with the latest release?)
+
+These checks catch real operational issues: missing API keys that cause `--model` failures, stale binaries that lack new features, config directories that were never created.
 
 ### 7.4 Git Hooks: `hooks install/uninstall`
 
@@ -409,8 +511,8 @@ INTEGRATION
 
 ```bash
 $ mytool hooks install
-✓ Installed pre-commit hook
-  └─ Warns about undocumented work (non-blocking)
+ok Installed pre-commit hook
+  -> Warns about undocumented work (non-blocking)
 ```
 
 **Key design decisions:**
@@ -444,8 +546,8 @@ $ mytool hooks install
 
 ```bash
 $ mytool setup claude
-✓ Claude Code hook installed
-  └─ Will inject 'mytool prime' at session start
+ok Claude Code hook installed
+  -> Will inject 'mytool prime' at session start
 ```
 
 **Supported patterns:**
@@ -497,13 +599,13 @@ $ mytool init
 
 Initializing mytool in my-project...
 
-  ✓ Storage created
-  ✓ Remote configured
-  ✓ Git hooks installed (pre-commit)
+  ok Storage created
+  ok Remote configured
+  ok Git hooks installed (pre-commit)
 
 Optional integrations:
   ? Install Claude Code integration? [Y/n] y
-  ✓ Claude hook installed
+  ok Claude hook installed
 
 Next steps:
   1. Add workflow snippet to CLAUDE.md:
@@ -528,16 +630,16 @@ Next steps:
 $ mytool uninstall
 
 Components found:
-  • Storage: 16 entries
-  • Git hooks: pre-commit
-  • Claude integration: installed
+  - Storage: 16 entries
+  - Git hooks: pre-commit
+  - Claude integration: installed
 
 ? Remove all components? [y/N] y
 
-  ✓ Claude integration removed
-  ✓ Git hooks removed
-  ✓ Storage refs removed
-  ✓ Config cleaned
+  ok Claude integration removed
+  ok Git hooks removed
+  ok Storage refs removed
+  ok Config cleaned
 
 Mytool removed. Your git history is unchanged.
 ```
@@ -550,7 +652,110 @@ Mytool removed. Your git history is unchanged.
 
 ---
 
-## 8. Checklist
+## 8. Configuration
+
+### 8.1 Config Directory Resolution
+
+**Centralize config directory resolution with an explicit override hierarchy.**
+
+```
+1. $MYTOOL_CONFIG_HOME       (explicit override — CI, testing, custom setups)
+2. $XDG_CONFIG_HOME/mytool   (XDG standard on any platform)
+3. %AppData%/mytool           (Windows native)
+4. ~/.config/mytool            (macOS/Linux default)
+```
+
+```go
+func Dir() string {
+    if dir := os.Getenv("MYTOOL_CONFIG_HOME"); dir != "" {
+        return dir
+    }
+    if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+        return filepath.Join(xdg, "mytool")
+    }
+    if runtime.GOOS == "windows" {
+        if appData := os.Getenv("APPDATA"); appData != "" {
+            return filepath.Join(appData, "mytool")
+        }
+    }
+    home, _ := os.UserHomeDir()
+    return filepath.Join(home, ".config", "mytool")
+}
+```
+
+**Guidelines:**
+- Always provide an env var override (`MYTOOL_CONFIG_HOME`) for CI and testing
+- Respect XDG on all platforms (some macOS/Windows users set it)
+- Never hardcode `~/.mytool` — use standard config locations
+- `doctor` should report which directory was resolved and whether it exists
+
+### 8.2 Env File Loading Chain
+
+**Layer env files for API key management without committing secrets.**
+
+```
+Resolution order (first value wins per variable):
+  1. Environment variables (always take precedence)
+  2. .env.local          (per-repo override, gitignored)
+  3. .env                (per-repo defaults)
+  4. ~/.config/mytool/env (global fallback — set once, works everywhere)
+```
+
+```go
+func loadEnvFiles() {
+    _ = envfile.Load(".env.local")
+    _ = envfile.Load(".env")
+    if dir := config.Dir(); dir != "" {
+        _ = envfile.Load(filepath.Join(dir, "env"))
+    }
+}
+```
+
+**Guidelines:**
+- Environment variables always win (no surprises in CI)
+- `.env.local` is gitignored — safe for per-developer API keys
+- Global config fallback means developers set keys once, not per-repo
+- Silently skip missing files (all env files are optional)
+- `doctor` should report which env files are loaded and which API keys are available
+
+### 8.3 Template-Based Document Generation
+
+**Use templates instead of building separate static commands for each output type.**
+
+When your tool generates documents from structured data (changelogs, release notes, reports), use a template system rather than a dedicated command per document type.
+
+```bash
+# Template-based (one command, many outputs):
+mytool draft changelog --last 10
+mytool draft release-notes --since 7d
+mytool draft devblog --since 7d --model opus
+mytool draft decision-log --last 20
+mytool draft --list
+
+# vs. Static commands (one command per type — doesn't scale):
+mytool changelog --last 10
+mytool release-notes --since 7d
+```
+
+**Why templates win:**
+- Adding a new document type is adding a template file, not writing a new command
+- Users can override built-in templates (project-local > global > built-in)
+- Built-in templates can be tightly prompt-engineered for quality
+- The LLM integration (`--model`) works identically across all templates
+- `--show` lets users inspect templates before rendering
+
+**Template resolution order:**
+```
+1. .mytool/templates/    (project-local overrides)
+2. ~/.config/mytool/templates/  (global custom templates)
+3. Built-in templates    (shipped with binary)
+```
+
+**Anti-pattern learned the hard way:** We built a standalone `changelog` command, then realized `draft changelog` was strictly better — same output quality, but composable with `--model`, `--append`, pipe-to-LLM workflows, and custom template overrides. The standalone command was dropped.
+
+---
+
+## 9. Checklist
 
 Use this checklist when designing agent-oriented CLIs:
 
@@ -559,7 +764,7 @@ Use this checklist when designing agent-oriented CLIs:
 - [ ] Structured error output with codes
 - [ ] `prime` or equivalent context injection command
 - [ ] `pending` or equivalent "what needs attention" command
-- [ ] Sensible defaults—works without config
+- [ ] Sensible defaults — works without config
 - [ ] `--dry-run` on write operations
 
 ### Essential (Integration)
@@ -569,13 +774,24 @@ Use this checklist when designing agent-oriented CLIs:
 - [ ] `init` that orchestrates full setup
 - [ ] `uninstall` that reverses all setup
 
+### Essential (Pipe Ergonomics)
+- [ ] Errors and warnings route to stderr in human mode
+- [ ] Status hints to stderr when output is piped
+- [ ] JSON mode keeps all structured output on stdout
+- [ ] No diagnostic noise on stdout when piped
+
 ### Recommended
 - [ ] `--batch` mode for multi-item operations
 - [ ] `--oneline` / `--ids-only` for compact output
 - [ ] `onboard` command for documentation snippets
+- [ ] `prime --verbose` for design decision history
+- [ ] Input coaching (BAD/GOOD examples) in context injection
 - [ ] Suggested next commands in output
 - [ ] Recoverable error messages with hints
 - [ ] `doctor --fix` for auto-remediation
+- [ ] Config directory with env var override
+- [ ] Env file loading chain for API key management
+- [ ] Template-based document generation
 
 ### Bonus
 - [ ] Stdin support for batch input
@@ -583,10 +799,12 @@ Use this checklist when designing agent-oriented CLIs:
 - [ ] `hooks install --chain` to preserve existing hooks
 - [ ] `setup --check` and `setup --remove` flags
 - [ ] Multiple editor integrations (claude, cursor, gemini, etc.)
+- [ ] `doctor` checks config dir, env files, API keys, templates, version staleness
+- [ ] Template resolution: project-local > global > built-in
 
 ---
 
-## 9. Examples in the Wild
+## 10. Examples in the Wild
 
 ### Beads (Issue Tracking)
 
@@ -606,23 +824,38 @@ Use this checklist when designing agent-oriented CLIs:
 ### Timbers (Development Ledger)
 
 **Core DX:**
-- `timbers prime` — Context injection with pending count
+- `timbers prime` — Context injection with pending count and workflow coaching
+- `timbers prime --verbose` — Design decision history (why/how in recent entries)
 - `timbers pending` — Clear next action
 - `timbers log "what" --why "why" --how "how"` — Single command capture
+- `timbers draft <template>` — Template-based document generation (changelog, release-notes, devblog, decision-log, adr, exec-summary, standup)
+- `timbers draft --list` — Discover available templates
+- `timbers draft release-notes --last 10 --model opus` — Generate with built-in LLM
 - `timbers export --json | claude "..."` — Unix composability
 - `--batch` mode for efficiency
 
 **Integration stack:**
-- `timbers doctor` — Health check for notes, hooks, integrations
+- `timbers doctor` — Health check across CORE, CONFIG, WORKFLOW, INTEGRATION
+  - CONFIG checks: config dir, env files, API keys, custom templates, version staleness
 - `timbers hooks install` — Pre-commit warning for undocumented work
 - `timbers setup claude` — Session-start prime injection
-- `timbers onboard` — Minimal CLAUDE.md snippet
+- `timbers onboard` — Minimal CLAUDE.md/AGENTS.md snippet
 - `timbers init` — Full setup with optional Claude integration
 - `timbers uninstall` — Clean removal of all components
 
+**Pipe ergonomics:**
+- Errors/warnings route to stderr in human mode
+- Status hints to stderr when piped (`timbers: rendered "changelog" with 10 entries`)
+- JSON mode: all structured output on stdout
+
+**Configuration:**
+- Config dir: `$TIMBERS_CONFIG_HOME` > `$XDG_CONFIG_HOME/timbers` > `%AppData%/timbers` > `~/.config/timbers`
+- Env chain: `.env.local` > `.env` > `~/.config/timbers/env` (env vars always win)
+- Templates: `.timbers/templates/` > `~/.config/timbers/templates/` > built-in
+
 ---
 
-## 10. Anti-Patterns
+## 11. Anti-Patterns
 
 ### Configuration-First
 Requiring config files before any command works. Agents struggle with multi-step setup.
@@ -643,7 +876,13 @@ Generic error messages without codes or recovery hints. Agents need structured f
 Commands that require "run anything" permissions. Allowlist-friendly commands can be pre-approved.
 
 ### Documentation-Only Integration
-Relying on CLAUDE.md or AGENTS.md instructions without automatic injection. Agents don't reliably read and follow documentation—they jump into tasks. If your only integration is "add this to your CLAUDE.md", agents will skip the workflow steps. Wire integration into hooks so context flows automatically.
+Relying on CLAUDE.md or AGENTS.md instructions without automatic injection. Agents don't reliably read and follow documentation — they jump into tasks. If your only integration is "add this to your CLAUDE.md", agents will skip the workflow steps. Wire integration into hooks so context flows automatically. **Measured: 0% adoption without injection, 100% with injection.** This isn't a minor optimization — it's the make-or-break pattern.
 
 ### Blocking Git Hooks
-Pre-commit hooks that fail and block commits. Developers disable blocking hooks. Use warnings instead—inform without obstructing. The goal is awareness, not enforcement.
+Pre-commit hooks that fail and block commits. Developers disable blocking hooks. Use warnings instead — inform without obstructing. The goal is awareness, not enforcement.
+
+### One Command Per Output Type
+Building a separate command for each document type (changelog, release-notes, etc.) instead of using a template system. This creates maintenance burden, inconsistent flags across commands, and limits user extensibility. Use `draft <template>` with a resolution chain (project > global > built-in) instead.
+
+### Stdout Pollution When Piped
+Mixing diagnostic output (warnings, progress, hints) with data on stdout. When agents pipe output to LLMs or other tools, diagnostic noise breaks parsing. Route all non-data output to stderr.

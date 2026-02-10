@@ -86,15 +86,31 @@ func ListTemplates() ([]TemplateInfo, error) {
 	}
 
 	// Add built-ins, marking overrides
+	templates = mergeBuiltins(templates, seen)
+
+	return templates, nil
+}
+
+// mergeBuiltins adds built-in templates to the list, marking any that are overridden.
+func mergeBuiltins(templates []TemplateInfo, seen map[string]string) []TemplateInfo {
 	for _, info := range listBuiltins() {
-		if overrideSource, exists := seen[info.Name]; exists {
-			info.Overrides = overrideSource
+		if _, exists := seen[info.Name]; exists {
+			markOverride(templates, info.Name)
 		} else {
 			templates = append(templates, info)
 		}
 	}
+	return templates
+}
 
-	return templates, nil
+// markOverride sets Overrides="built-in" on the template with the given name.
+func markOverride(templates []TemplateInfo, name string) {
+	for i := range templates {
+		if templates[i].Name == name {
+			templates[i].Overrides = "built-in"
+			return
+		}
+	}
 }
 
 // projectTemplatesDir returns the project-local templates directory.

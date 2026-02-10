@@ -242,7 +242,7 @@ func outputAmendSuccess(printer *output.Printer, entry *ledger.Entry) error {
 		})
 	}
 
-	_ = printer.Success(map[string]any{"message": "Entry amended successfully"})
+	printer.Println("Entry amended successfully")
 	printer.Println()
 	printer.KeyValue("Entry ID", entry.ID)
 	printer.KeyValue("Updated", entry.UpdatedAt.Format("2006-01-02 15:04:05 UTC"))

@@ -20,7 +20,8 @@ func buildRenderContext(entries []*ledger.Entry, appendFlag string) *prompt.Rend
 	branch, _ := git.CurrentBranch()
 
 	// Get total entries and check if this batch includes the earliest
-	totalEntries, isFirstBatch := computeFirstBatchInfo(entries)
+	storage := ledger.NewStorage(nil)
+	totalEntries, isFirstBatch := computeFirstBatchInfo(storage, entries)
 
 	// Get project description from CLAUDE.md or default
 	projectDesc := getProjectDescription()
@@ -37,8 +38,7 @@ func buildRenderContext(entries []*ledger.Entry, appendFlag string) *prompt.Rend
 }
 
 // computeFirstBatchInfo returns total entry count and whether entries include the earliest.
-func computeFirstBatchInfo(entries []*ledger.Entry) (int, bool) {
-	storage := ledger.NewStorage(nil)
+func computeFirstBatchInfo(storage *ledger.Storage, entries []*ledger.Entry) (int, bool) {
 	allEntries, err := storage.ListEntries()
 	if err != nil || len(allEntries) == 0 {
 		return len(entries), len(entries) > 0

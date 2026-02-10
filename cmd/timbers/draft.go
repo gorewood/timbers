@@ -14,8 +14,8 @@ import (
 	"github.com/gorewood/timbers/internal/prompt"
 )
 
-// newPromptCmd creates the prompt command.
-func newPromptCmd() *cobra.Command {
+// newDraftCmd creates the draft command.
+func newDraftCmd() *cobra.Command {
 	var lastFlag string
 	var sinceFlag string
 	var untilFlag string
@@ -44,12 +44,12 @@ Examples:
   timbers draft release-notes --last 5 --append "Focus on security changes"`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			flags := promptFlags{
+			flags := draftFlags{
 				last: lastFlag, since: sinceFlag, until: untilFlag, rng: rangeFlag,
 				appendText: appendFlag, list: listFlag, show: showFlag,
 				model: modelFlag, provider: providerFlag, withFrontmatter: withFrontmatterFlag,
 			}
-			return runPrompt(cmd, args, flags)
+			return runDraft(cmd, args, flags)
 		},
 	}
 
@@ -67,14 +67,14 @@ Examples:
 	return cmd
 }
 
-// runPrompt executes the prompt command.
-func runPrompt(cmd *cobra.Command, args []string, flags promptFlags) error {
+// runDraft executes the draft command.
+func runDraft(cmd *cobra.Command, args []string, flags draftFlags) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout())).
 		WithStderr(cmd.ErrOrStderr())
 
 	// Handle --list
 	if flags.list {
-		return runPromptList(printer)
+		return runDraftList(printer)
 	}
 
 	// Template name required for other operations
@@ -95,16 +95,16 @@ func runPrompt(cmd *cobra.Command, args []string, flags promptFlags) error {
 
 	// Handle --show
 	if flags.show {
-		return runPromptShow(printer, tmpl)
+		return runDraftShow(printer, tmpl)
 	}
 
-	return runPromptRender(cmd, printer, tmpl, templateName, flags)
+	return runDraftRender(cmd, printer, tmpl, templateName, flags)
 }
 
-// runPromptRender renders the template with entries and outputs the result.
-func runPromptRender(
+// runDraftRender renders the template with entries and outputs the result.
+func runDraftRender(
 	_ *cobra.Command, printer *output.Printer,
-	tmpl *prompt.Template, templateName string, flags promptFlags,
+	tmpl *prompt.Template, templateName string, flags draftFlags,
 ) error {
 	// Validate entry selection flags
 	if flags.last == "" && flags.since == "" && flags.until == "" && flags.rng == "" {
@@ -114,7 +114,7 @@ func runPromptRender(
 	}
 
 	// Get entries
-	entries, err := getPromptEntries(printer, flags.last, flags.since, flags.until, flags.rng)
+	entries, err := getDraftEntries(printer, flags.last, flags.since, flags.until, flags.rng)
 	if err != nil {
 		return err
 	}
@@ -132,10 +132,10 @@ func runPromptRender(
 
 	// If --model is specified, pipe through LLM client
 	if flags.model != "" {
-		selFlags := promptSelectionFlags{
+		selFlags := draftSelectionFlags{
 			last: flags.last, since: flags.since, until: flags.until, rng: flags.rng,
 		}
-		return runPromptWithLLM(
+		return runDraftWithLLM(
 			printer, rendered, templateName, tmpl, entries,
 			flags.model, flags.provider, flags.withFrontmatter, selFlags,
 		)
@@ -161,12 +161,12 @@ func runPromptRender(
 	return nil
 }
 
-// runPromptWithLLM sends the rendered prompt to an LLM and outputs the response.
-func runPromptWithLLM(
+// runDraftWithLLM sends the rendered prompt to an LLM and outputs the response.
+func runDraftWithLLM(
 	printer *output.Printer, rendered, templateName string,
 	tmpl *prompt.Template, entries []*ledger.Entry,
 	modelFlag, providerFlag string,
-	withFrontmatter bool, selFlags promptSelectionFlags,
+	withFrontmatter bool, selFlags draftSelectionFlags,
 ) error {
 	// Create LLM client
 	client, err := llm.New(modelFlag, llm.Provider(providerFlag))
@@ -218,8 +218,8 @@ func runPromptWithLLM(
 	return nil
 }
 
-// runPromptList lists available templates.
-func runPromptList(printer *output.Printer) error {
+// runDraftList lists available templates.
+func runDraftList(printer *output.Printer) error {
 	templates, err := prompt.ListTemplates()
 	if err != nil {
 		sysErr := output.NewSystemError(fmt.Sprintf("failed to list templates: %v", err))
@@ -266,8 +266,8 @@ func runPromptList(printer *output.Printer) error {
 	return nil
 }
 
-// runPromptShow shows template content without rendering.
-func runPromptShow(printer *output.Printer, tmpl *prompt.Template) error {
+// runDraftShow shows template content without rendering.
+func runDraftShow(printer *output.Printer, tmpl *prompt.Template) error {
 	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"name":        tmpl.Name,
@@ -284,8 +284,8 @@ func runPromptShow(printer *output.Printer, tmpl *prompt.Template) error {
 	return nil
 }
 
-// getPromptEntries retrieves entries based on flags.
-func getPromptEntries(
+// getDraftEntries retrieves entries based on flags.
+func getDraftEntries(
 	printer *output.Printer, lastFlag, sinceFlag, untilFlag, rangeFlag string,
 ) ([]*ledger.Entry, error) {
 	if !git.IsRepo() {

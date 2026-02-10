@@ -297,23 +297,23 @@ func reportUninstallHuman(printer *output.Printer, info *setup.UninstallInfo, bi
 
 func printRemovalSummary(printer *output.Printer, styles uninstallStyleSet, info *setup.UninstallInfo, binary, keep bool) {
 	if info.ClaudeRemoved {
-		printer.Println(styles.success.Render("  ✓ ") + "Claude integration removed")
+		printer.Println(styles.success.Render("  ok ") + "Claude integration removed")
 	}
 	if info.HooksRemoved {
 		msg := "Git hooks removed"
 		if info.HooksRestored {
 			msg += " (original restored)"
 		}
-		printer.Println(styles.success.Render("  ✓ ") + msg)
+		printer.Println(styles.success.Render("  ok ") + msg)
 	}
 	if info.NotesRefRemoved && !keep {
-		printer.Println(styles.success.Render("  ✓ ") + "Git notes refs removed")
+		printer.Println(styles.success.Render("  ok ") + "Git notes refs removed")
 	}
 	if len(info.ConfigsRemoved) > 0 && !keep {
-		printer.Println(styles.success.Render("  ✓ ") + "Git config cleaned")
+		printer.Println(styles.success.Render("  ok ") + "Git config cleaned")
 	}
 	if binary && info.BinaryRemoved {
-		printer.Println(styles.success.Render("  ✓ ") + "Binary removed")
+		printer.Println(styles.success.Render("  ok ") + "Binary removed")
 	}
 }
 
