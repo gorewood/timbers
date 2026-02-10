@@ -39,7 +39,7 @@ type initState struct {
 type initStyleSet struct {
 	heading lipgloss.Style
 	pass    lipgloss.Style
-	warn    lipgloss.Style
+	skip    lipgloss.Style
 	fail    lipgloss.Style
 	dim     lipgloss.Style
 	accent  lipgloss.Style
@@ -53,7 +53,7 @@ func initStyles(isTTY bool) initStyleSet {
 	return initStyleSet{
 		heading: lipgloss.NewStyle().Bold(true),
 		pass:    lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
-		warn:    lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+		skip:    lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
 		fail:    lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 		dim:     lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
 		accent:  lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
@@ -286,7 +286,7 @@ func styledStepIcon(styles initStyleSet, status string) string {
 	case "ok":
 		return styles.pass.Render("ok")
 	case "skipped":
-		return styles.warn.Render("--")
+		return styles.skip.Render("--")
 	case "failed":
 		return styles.fail.Render("XX")
 	default:

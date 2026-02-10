@@ -270,6 +270,77 @@ func TestDoctorQuietMode(t *testing.T) {
 	})
 }
 
+func TestDoctorFixClaudeIntegration(t *testing.T) {
+	tempDir := t.TempDir()
+
+	runGit(t, tempDir, "init")
+	runGit(t, tempDir, "config", "user.email", "test@test.com")
+	runGit(t, tempDir, "config", "user.name", "Test User")
+
+	testFile := filepath.Join(tempDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test content"), 0o600); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	runGit(t, tempDir, "add", "test.txt")
+	runGit(t, tempDir, "commit", "-m", "Initial commit")
+
+	// Set HOME to temp so global check doesn't find existing installs
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+
+	runInDir(t, tempDir, func() {
+		var buf bytes.Buffer
+
+		cmd := newTestRootCmdWithDoctor()
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"doctor", "--fix", "--json"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command failed: %v", err)
+		}
+
+		var result map[string]any
+		if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+			t.Fatalf("failed to parse JSON: %v\nOutput: %s", err, buf.String())
+		}
+
+		// Find Claude Integration check in integration results
+		integration, ok := result["integration"].([]any)
+		if !ok {
+			t.Fatalf("integration is not an array: %T", result["integration"])
+		}
+
+		var claudeCheck map[string]any
+		for _, item := range integration {
+			check, checkOK := item.(map[string]any)
+			if checkOK && check["name"] == "Claude Integration" {
+				claudeCheck = check
+				break
+			}
+		}
+
+		if claudeCheck == nil {
+			t.Fatal("did not find Claude Integration check")
+		}
+
+		if claudeCheck["status"] != "pass" {
+			t.Errorf("claude check status = %v, want pass (auto-fixed)", claudeCheck["status"])
+		}
+
+		// Verify hook was installed at project level, not global
+		projectHookPath := filepath.Join(tempDir, ".claude", "hooks", "user_prompt_submit.sh")
+		if _, err := os.Stat(projectHookPath); os.IsNotExist(err) {
+			t.Error("--fix should install Claude hook at project level")
+		}
+
+		globalHookPath := filepath.Join(tmpHome, ".claude", "hooks", "user_prompt_submit.sh")
+		if _, err := os.Stat(globalHookPath); !os.IsNotExist(err) {
+			t.Error("--fix should not install Claude hook at global level")
+		}
+	})
+}
+
 func TestDoctorWithConfiguredNotes(t *testing.T) {
 	tempDir := t.TempDir()
 

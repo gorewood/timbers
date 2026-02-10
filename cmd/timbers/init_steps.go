@@ -71,9 +71,15 @@ func executeInitSteps(
 	cmd *cobra.Command, printer *output.Printer, styles initStyleSet,
 	state *initState, flags *initFlags,
 ) []initStepResult {
-	steps := make([]initStepResult, 0, 3)
+	steps := make([]initStepResult, 0, 4)
 
-	step := performNotesInit(state)
+	step := performNotesRefInit(state)
+	steps = append(steps, step)
+	if !printer.IsJSON() {
+		printStepResult(printer, styles, step)
+	}
+
+	step = performRemoteConfig(state)
 	steps = append(steps, step)
 	if !printer.IsJSON() {
 		printStepResult(printer, styles, step)
@@ -113,8 +119,21 @@ func executeClaudeStep(
 	return performClaudeSetup(cmd, printer, styles, state, flags)
 }
 
-// performNotesInit configures notes fetch for origin.
-func performNotesInit(state *initState) initStepResult {
+// performNotesRefInit creates the notes ref if it doesn't exist.
+func performNotesRefInit(state *initState) initStepResult {
+	if state.notesRefExists {
+		return initStepResult{Name: "notes_ref", Status: "skipped", Message: "already exists"}
+	}
+
+	if err := git.InitNotesRef(); err != nil {
+		return initStepResult{Name: "notes_ref", Status: "failed", Message: err.Error()}
+	}
+
+	return initStepResult{Name: "notes_ref", Status: "ok", Message: "created refs/notes/timbers"}
+}
+
+// performRemoteConfig configures notes fetch for origin.
+func performRemoteConfig(state *initState) initStepResult {
 	if state.remoteConfigured {
 		return initStepResult{Name: "remote_config", Status: "skipped", Message: "already configured"}
 	}

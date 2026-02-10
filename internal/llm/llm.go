@@ -167,9 +167,9 @@ var modelAliases = map[Provider]map[string]string{
 		"opus":   "claude-opus-4-6",
 	},
 	ProviderOpenAI: {
-		"nano":  "gpt-5-nano",
-		"mini":  "gpt-5-mini",
-		"gpt-5": "gpt-5.2",
+		"nano": "gpt-5-nano",
+		"mini": "gpt-5-mini",
+		"gpt":  "gpt-5.2",
 	},
 	ProviderGoogle: {
 		"flash":      "gemini-3-flash-preview",

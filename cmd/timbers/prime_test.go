@@ -4,6 +4,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -415,6 +417,39 @@ func TestPrimeVerboseFlag(t *testing.T) {
 	if !strings.Contains(out2, "How: Via test") {
 		t.Errorf("expected 'How: Via test' in verbose output, got: %s", out2)
 	}
+}
+
+func TestPrimeSilentInUninitRepo(t *testing.T) {
+	tempDir := t.TempDir()
+
+	runGit(t, tempDir, "init")
+	runGit(t, tempDir, "config", "user.email", "test@test.com")
+	runGit(t, tempDir, "config", "user.name", "Test User")
+
+	testFile := filepath.Join(tempDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test"), 0o600); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	runGit(t, tempDir, "add", ".")
+	runGit(t, tempDir, "commit", "-m", "initial")
+
+	// No timbers init — notes ref does not exist
+	runInDir(t, tempDir, func() {
+		cmd := newPrimeCmdInternal(nil)
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Fatalf("prime should not error in uninitiated repo: %v", err)
+		}
+
+		// Should produce no stdout output (silent exit)
+		if buf.Len() > 0 {
+			t.Errorf("prime should be silent in uninitiated repo, got: %s", buf.String())
+		}
+	})
 }
 
 func TestPrimeVerboseJSON(t *testing.T) {

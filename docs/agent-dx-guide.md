@@ -87,7 +87,9 @@ Quick commands:
 - Agents lose context on session boundaries
 - `/clear` and compaction wipe working memory
 - `prime` restores workflow state in one call
-- Include in shell hooks or CLAUDE.md instructions
+- Include in editor hooks (project-level `.claude/hooks/`) for automatic injection
+
+**Opt-in activation:** Prime should be silent in repos that haven't been initialized. Use a predicate (e.g., check for a storage ref or config marker) to guard against noise in non-participating repos. With `--verbose`, output a stderr hint directing users to the init command.
 
 ### 1.3.1 Verbose Context for Design History
 
@@ -507,13 +509,16 @@ These checks catch real operational issues: missing API keys that cause `--model
 
 ### 7.4 Git Hooks: `hooks install/uninstall`
 
-**Git hooks provide passive enforcement** without blocking developer workflow.
+**Git hooks are opt-in** — available but not installed by default.
 
 ```bash
-$ mytool hooks install
+$ mytool init --hooks      # Opt-in during init
+$ mytool hooks install     # Or install separately
 ok Installed pre-commit hook
   -> Warns about undocumented work (non-blocking)
 ```
+
+**Why opt-in?** Git hooks are a shared resource. If multiple tools (issue trackers, linters, formatters) each install their own hooks, they displace each other. Advisory hooks (warnings, reminders) should never be installed by default when they might conflict with other tools' critical hooks (data flushing, validation). Let users opt in explicitly.
 
 **Key design decisions:**
 
@@ -540,29 +545,37 @@ ok Installed pre-commit hook
 
 5. **Clean uninstall.** `mytool hooks uninstall` should restore any backed-up hooks and leave no traces.
 
+6. **Doctor treats missing hooks as pass.** Since hooks are opt-in, `doctor` should report missing hooks as "not installed (optional)" with `pass` status, not a warning.
+
 ### 7.5 Editor Integration: `setup <editor>`
 
 **Editor-specific hooks inject context at session start** without requiring the agent to remember.
 
 ```bash
-$ mytool setup claude
-ok Claude Code hook installed
+$ mytool setup claude           # Install for this project (default)
+$ mytool setup claude --global  # Install globally (~/.claude/hooks/)
+ok Claude Code hook installed in .claude/hooks/
   -> Will inject 'mytool prime' at session start
 ```
+
+**Project-level by default.** Editor hooks should install to the project directory (e.g., `.claude/hooks/`) rather than globally. This matches the opt-in activation model: if your tool requires per-repo init to activate, a global hook adds noise to every repo without providing value. Project-level hooks are created naturally during `init` and only affect repos that have opted in.
+
+The `--global` flag provides an escape hatch for users who prefer a single installation.
 
 **Supported patterns:**
 
 ```bash
-mytool setup claude          # Install Claude Code integration
-mytool setup claude --check  # Verify installation
-mytool setup claude --remove # Uninstall
-mytool setup claude --print  # Show what would be installed (dry-run)
-mytool setup --list          # Show available integrations
+mytool setup claude           # Install for current project
+mytool setup claude --global  # Install globally
+mytool setup claude --check   # Verify installation
+mytool setup claude --remove  # Uninstall
+mytool setup claude --dry-run # Show what would be installed
+mytool setup --list           # Show available integrations
 ```
 
 **What setup installs:**
 
-For Claude Code, this typically means adding a `SessionStart` hook that runs `mytool prime` and injects the output into the session context. The agent starts every session with workflow state already loaded.
+For Claude Code, this typically means adding a `user_prompt_submit` hook that runs `mytool prime` and injects the output into the session context. The agent starts every session with workflow state already loaded. The hook uses `BEGIN/END` markers for safe append/remove without disturbing other tools' hook sections.
 
 **Future integrations** might include: Cursor, Windsurf, Aider, Gemini CLI, Copilot.
 
@@ -599,13 +612,13 @@ $ mytool init
 
 Initializing mytool in my-project...
 
-  ok Storage created
+  ok Storage ref created
   ok Remote configured
-  ok Git hooks installed (pre-commit)
 
 Optional integrations:
   ? Install Claude Code integration? [Y/n] y
-  ok Claude hook installed
+  ok Claude hook installed in .claude/hooks/
+  -- Git hooks not requested (use --hooks)
 
 Next steps:
   1. Add workflow snippet to CLAUDE.md:
@@ -617,10 +630,12 @@ Next steps:
 
 **Design principles:**
 - Single entry point for new users
-- Interactive prompts for optional integrations
+- Core setup (storage, remote) always runs; integrations are opt-in or prompted
+- `--hooks` for git hook installation (opt-in, avoids conflicts with other tools)
 - `--yes` flag for scripted/automated setup
 - Idempotent (safe to run again)
 - Clear next-steps guidance
+- Init creates the storage ref immediately so `prime` recognizes the repo
 
 ### 7.8 Clean Removal: `uninstall`
 
@@ -768,10 +783,10 @@ Use this checklist when designing agent-oriented CLIs:
 - [ ] `--dry-run` on write operations
 
 ### Essential (Integration)
-- [ ] `doctor` command for health checking
-- [ ] `hooks install/uninstall` for git integration
-- [ ] `setup <editor>` for editor-specific hooks
-- [ ] `init` that orchestrates full setup
+- [ ] `doctor` command for health checking (with `--fix` auto-remediation)
+- [ ] `hooks install/uninstall` for git integration (opt-in, not default)
+- [ ] `setup <editor>` for editor-specific hooks (project-level by default)
+- [ ] `init` that orchestrates full setup (creates storage ref immediately)
 - [ ] `uninstall` that reverses all setup
 
 ### Essential (Pipe Ergonomics)
@@ -837,10 +852,11 @@ Use this checklist when designing agent-oriented CLIs:
 **Integration stack:**
 - `timbers doctor` — Health check across CORE, CONFIG, WORKFLOW, INTEGRATION
   - CONFIG checks: config dir, env files, API keys, custom templates, version staleness
-- `timbers hooks install` — Pre-commit warning for undocumented work
-- `timbers setup claude` — Session-start prime injection
+  - `--fix` auto-remediates: remote config, config dir, Claude hooks (project-level)
+- `timbers hooks install` — Opt-in pre-commit warning for undocumented work
+- `timbers setup claude` — Session-start prime injection (project-level by default, `--global` available)
 - `timbers onboard` — Minimal CLAUDE.md/AGENTS.md snippet
-- `timbers init` — Full setup with optional Claude integration
+- `timbers init` — Full setup: notes ref, remote config, optional Claude; git hooks via `--hooks`
 - `timbers uninstall` — Clean removal of all components
 
 **Pipe ergonomics:**
@@ -880,6 +896,9 @@ Relying on CLAUDE.md or AGENTS.md instructions without automatic injection. Agen
 
 ### Blocking Git Hooks
 Pre-commit hooks that fail and block commits. Developers disable blocking hooks. Use warnings instead — inform without obstructing. The goal is awareness, not enforcement.
+
+### Default Git Hook Installation
+Installing git hooks by default during `init`. Git hooks are a shared resource — multiple tools (issue trackers, linters, formatters) compete for the same hook slots. Advisory hooks should be opt-in (`--hooks`) to avoid displacing other tools' critical hooks. If your hook is purely advisory (warnings, reminders), it should never silently replace another tool's hook that performs essential operations (data flushing, validation).
 
 ### One Command Per Output Type
 Building a separate command for each document type (changelog, release-notes, etc.) instead of using a template system. This creates maintenance burden, inconsistent flags across commands, and limits user extensibility. Use `draft <template>` with a resolution chain (project > global > built-in) instead.

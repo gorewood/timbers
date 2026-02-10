@@ -102,6 +102,33 @@ func ListNotedCommits() ([]string, error) {
 	return commits, nil
 }
 
+// InitNotesRef creates an empty notes ref if it doesn't already exist.
+// This ensures timbers prime recognizes a repo as initialized even before
+// the first timbers log is run.
+func InitNotesRef() error {
+	if NotesRefExists() {
+		return nil
+	}
+
+	// Create an empty tree object
+	tree, err := Run("mktree")
+	if err != nil {
+		return err
+	}
+	tree = strings.TrimSpace(tree)
+
+	// Create an initial commit with the empty tree
+	commit, err := Run("commit-tree", tree, "-m", "Initialize timbers notes")
+	if err != nil {
+		return err
+	}
+	commit = strings.TrimSpace(commit)
+
+	// Point the notes ref at the commit
+	_, err = Run("update-ref", notesRefName, commit)
+	return err
+}
+
 // ConfigureNotesFetch adds the notes fetch configuration for a remote.
 // If already configured, this is a no-op.
 func ConfigureNotesFetch(remote string) error {

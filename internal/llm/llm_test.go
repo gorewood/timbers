@@ -178,7 +178,7 @@ func TestResolveModelAlias(t *testing.T) {
 		// OpenAI aliases
 		{name: "openai nano alias", model: "nano", provider: ProviderOpenAI, wantModel: "gpt-5-nano"},
 		{name: "openai mini alias", model: "mini", provider: ProviderOpenAI, wantModel: "gpt-5-mini"},
-		{name: "openai gpt-5 alias", model: "gpt-5", provider: ProviderOpenAI, wantModel: "gpt-5.2"},
+		{name: "openai gpt alias", model: "gpt", provider: ProviderOpenAI, wantModel: "gpt-5.2"},
 
 		// Google aliases
 		{name: "google flash alias", model: "flash", provider: ProviderGoogle, wantModel: "gemini-3-flash-preview"},
