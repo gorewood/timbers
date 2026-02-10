@@ -178,6 +178,51 @@ timbers export --last 5 --json
 timbers export --format md --out ./notes/
 ```
 
+### draft
+
+Render templates with ledger entries for LLM consumption or direct execution
+
+**Usage**: `timbers draft <template> [flags]`
+
+**Flags**:
+- `--last N`: Use last N entries
+- `--since <duration|date>`: Use entries since duration or date
+- `--until <duration|date>`: Use entries until duration or date
+- `--range A..B`: Use entries in commit range
+- `--append <text>`: Append extra instructions
+- `--list`: List available templates
+- `--show`: Show template content without rendering
+- `-m, --model <name>`: Execute with built-in LLM
+- `--json`: Structured JSON output
+
+**Templates**: `changelog`, `devblog`, `exec-summary`, `pr-description`, `release-notes`, `sprint-report`, `decision-log`
+
+**Examples**:
+```bash
+timbers draft changelog --since 7d | claude -p
+timbers draft exec-summary --last 10 --model haiku
+timbers draft decision-log --last 20
+```
+
+### amend
+
+Update an existing ledger entry
+
+**Usage**: `timbers amend <id> [flags]`
+
+**Flags**:
+- `--what <text>`: Update the what field
+- `--why <text>`: Update the why field
+- `--how <text>`: Update the how field
+- `--tag <name>`: Add tag (repeatable)
+- `--dry-run`: Preview without writing
+- `--json`: Structured JSON output
+
+**Examples**:
+```bash
+timbers amend tb_2026-01-15T10:30:00Z_abc123 --why "Updated reasoning"
+```
+
 ### notes
 
 Notes management

@@ -102,17 +102,17 @@ watch:
 # REPORTING
 # =============================================================================
 
-# Generate a report using timbers prompt + claude
-# Usage: just prompt changelog --since 7d
-#        just prompt exec-summary --last 10
-# Model defaults to haiku; override with: just prompt-model sonnet changelog --since 7d
-prompt +args:
-    @claude -p --model haiku "$(go run ./cmd/timbers prompt {{args}})"
+# Generate a report using timbers draft + claude
+# Usage: just draft changelog --since 7d
+#        just draft exec-summary --last 10
+# Model defaults to haiku; override with: just draft-model sonnet changelog --since 7d
+draft +args:
+    @claude -p --model haiku "$(go run ./cmd/timbers draft {{args}})"
 
 # Generate a report with specific model
-# Usage: just prompt-model sonnet devblog --last 20
-prompt-model model +args:
-    @claude -p --model {{model}} "$(go run ./cmd/timbers prompt {{args}})"
+# Usage: just draft-model sonnet devblog --last 20
+draft-model model +args:
+    @claude -p --model {{model}} "$(go run ./cmd/timbers draft {{args}})"
 
 # =============================================================================
 # RELEASE (goreleaser)
@@ -176,7 +176,7 @@ blog:
         echo "date = '${DATE}'"
         echo "+++"
         echo ""
-        timbers prompt devblog --since 7d --model haiku
+        timbers draft devblog --since 7d --model haiku
     } > "$FILE"
     echo "Created: $FILE"
 
@@ -190,9 +190,9 @@ changelog-draft:
     set -euo pipefail
     PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
     if [ -n "$PREV_TAG" ]; then
-        timbers prompt changelog --range "$PREV_TAG"..HEAD --model haiku
+        timbers draft changelog --range "$PREV_TAG"..HEAD --model haiku
     else
-        timbers prompt changelog --last 50 --model haiku
+        timbers draft changelog --last 50 --model haiku
     fi > CHANGELOG-draft.md
     echo "Created: CHANGELOG-draft.md (review before committing)"
 

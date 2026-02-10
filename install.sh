@@ -8,7 +8,7 @@ set -e
 #   INSTALL_DIR - Installation directory (default: ~/.local/bin)
 #   VERSION     - Specific version to install (default: latest)
 
-REPO_OWNER="rbergman"
+REPO_OWNER="gorewood"
 REPO_NAME="timbers"
 BINARY_NAME="timbers"
 

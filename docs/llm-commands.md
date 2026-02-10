@@ -9,7 +9,7 @@ Timbers provides four commands for LLM integration, forming a pipeline from raw 
 | Command | Purpose | Output |
 |---------|---------|--------|
 | `export` | Raw data extraction | JSON/Markdown |
-| `prompt` | Template rendering with entries | Text for piping OR LLM response (with --model) |
+| `draft` | Template rendering with entries | Text for piping OR LLM response (with --model) |
 | `generate` | Ad-hoc LLM completion primitive | LLM response text |
 | `catchup` | Auto-generate entries from undocumented commits | Ledger entries |
 
@@ -49,30 +49,30 @@ timbers export --last 10 --out ./exports/
 
 ---
 
-## 2. Prompt — Template Rendering
+## 2. Draft — Template Rendering
 
 Render templates with ledger entries for LLM consumption. By default, outputs text for piping to external LLMs. Use `--model` for built-in LLM execution.
 
 ```bash
 # Pipe to external LLM
-timbers prompt changelog --since 7d | claude -p
+timbers draft changelog --since 7d | claude -p
 
 # Append custom instructions
-timbers prompt devblog --last 10 --append "Focus on physics engine changes" | claude -p
+timbers draft devblog --last 10 --append "Focus on physics engine changes" | claude -p
 
 # By commit range
-timbers prompt pr-description --range main..HEAD | claude -p
+timbers draft pr-description --range main..HEAD | claude -p
 
 # List available templates
-timbers prompt --list
+timbers draft --list
 
 # Show template content
-timbers prompt changelog --show
+timbers draft changelog --show
 
 # Built-in LLM execution (no piping needed)
-timbers prompt changelog --since 7d --model local
-timbers prompt exec-summary --last 10 --model haiku
-timbers prompt devblog --last 20 --model flash --append "Focus on physics"
+timbers draft changelog --since 7d --model local
+timbers draft exec-summary --last 10 --model haiku
+timbers draft devblog --last 20 --model flash --append "Focus on physics"
 ```
 
 **Flags:**
@@ -89,7 +89,7 @@ timbers prompt devblog --last 20 --model flash --append "Focus on physics"
 
 ### Available Templates
 
-Built-in templates (use `timbers prompt --list` for current list):
+Built-in templates (use `timbers draft --list` for current list):
 
 | Template | Purpose |
 |----------|---------|
@@ -269,7 +269,7 @@ timbers pending  # Should show fewer/no pending commits
 
 ## Flag Consistency
 
-These flags work consistently across `prompt`, `generate`, and `catchup`:
+These flags work consistently across `draft`, `generate`, and `catchup`:
 
 | Flag | Short | Description |
 |------|-------|-------------|
@@ -282,17 +282,17 @@ These flags work consistently across `prompt`, `generate`, and `catchup`:
 
 ### Pattern 1: External LLM Piping
 
-Use `prompt` to render templates, pipe to your preferred LLM CLI:
+Use `draft` to render templates, pipe to your preferred LLM CLI:
 
 ```bash
 # Claude Code
-timbers prompt changelog --since 7d | claude -p
+timbers draft changelog --since 7d | claude -p
 
 # OpenAI
-timbers prompt exec-summary --last 5 | openai-cli
+timbers draft exec-summary --last 5 | openai-cli
 
 # Any LLM that accepts stdin
-timbers prompt pr-description --range main..HEAD | my-llm-tool
+timbers draft pr-description --range main..HEAD | my-llm-tool
 ```
 
 ### Pattern 2: Built-in LLM Execution
@@ -301,9 +301,9 @@ Use `--model` for simpler one-liner execution:
 
 ```bash
 # Direct execution (recommended for most use cases)
-timbers prompt changelog --since 7d --model local
-timbers prompt exec-summary --last 5 --model haiku
-timbers prompt pr-description --range main..HEAD --model flash
+timbers draft changelog --since 7d --model local
+timbers draft exec-summary --last 5 --model haiku
+timbers draft pr-description --range main..HEAD --model flash
 ```
 
 ### Pattern 3: Built-in LLM via Generate
@@ -312,7 +312,7 @@ Chain export or prompt output through generate:
 
 ```bash
 # Render prompt, pipe through built-in LLM
-timbers prompt changelog --since 7d | timbers generate --model haiku
+timbers draft changelog --since 7d | timbers generate --model haiku
 
 # Custom prompts with exported data
 timbers export --last 3 --format md | timbers generate "Summarize these changes" --model sonnet
@@ -334,11 +334,11 @@ timbers notes push                        # Sync to remote
 
 ```bash
 # In release workflow
-timbers prompt release-notes --range $PREV_TAG..$NEW_TAG | \
+timbers draft release-notes --range $PREV_TAG..$NEW_TAG | \
   timbers generate --model haiku > RELEASE_NOTES.md
 
 # Generate PR description
-timbers prompt pr-description --range main..HEAD | \
+timbers draft pr-description --range main..HEAD | \
   timbers generate --model haiku
 ```
 
@@ -353,7 +353,7 @@ All commands support `--json` for structured output:
 timbers export --last 5 --json
 
 # Prompt rendering with metadata
-timbers prompt changelog --since 7d --json
+timbers draft changelog --since 7d --json
 
 # Generate with response metadata
 timbers generate "Hello" --model haiku --json

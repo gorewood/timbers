@@ -24,7 +24,7 @@ Best for: CHANGELOG.md, release notes that should be versioned with code.
 
 ```bash
 # Before release
-timbers prompt changelog --since <last-release-tag> | claude --model haiku > CHANGELOG-draft.md
+timbers draft changelog --since <last-release-tag> | claude --model haiku > CHANGELOG-draft.md
 # Review, edit, commit
 ```
 
@@ -35,13 +35,13 @@ Add to `justfile`:
 ```just
 # Generate changelog draft for review
 changelog-draft:
-    timbers prompt changelog --since $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~50") \
+    timbers draft changelog --since $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~50") \
         | claude --model haiku --print > CHANGELOG-draft.md
     @echo "Review CHANGELOG-draft.md, then rename to CHANGELOG.md"
 
 # Generate release notes
 release-notes tag:
-    timbers prompt release-notes --range {{tag}}..HEAD \
+    timbers draft release-notes --range {{tag}}..HEAD \
         | claude --model haiku --print
 ```
 
@@ -84,7 +84,7 @@ jobs:
           else
             RANGE="--last 20"
           fi
-          timbers prompt release-notes $RANGE | claude --model haiku --print > release-notes.md
+          timbers draft release-notes $RANGE | claude --model haiku --print > release-notes.md
 
       - name: Update release
         uses: softprops/action-gh-release@v1
@@ -140,7 +140,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           WEEK=$(date +%Y-week%V)
-          timbers prompt devblog --since 7d \
+          timbers draft devblog --since 7d \
             --append "This is the weekly update for $WEEK." \
             | claude --model haiku --print > docs/blog/$WEEK.md
 
@@ -183,17 +183,17 @@ Best for: Stakeholder updates, sprint reviews.
 
 ```bash
 # Weekly exec summary to clipboard (macOS)
-timbers prompt exec-summary --since 7d | claude --model haiku --print | pbcopy
+timbers draft exec-summary --since 7d | claude --model haiku --print | pbcopy
 
 # Or save to shared location
-timbers prompt sprint-report --since 14d | claude --model haiku --print > /shared/reports/sprint-$(date +%Y%m%d).md
+timbers draft sprint-report --since 14d | claude --model haiku --print > /shared/reports/sprint-$(date +%Y%m%d).md
 ```
 
 ### Cron Job
 
 ```bash
 # crontab -e
-0 9 * * 1 cd /path/to/repo && timbers prompt exec-summary --since 7d | claude --model haiku --print | mail -s "Weekly Dev Summary" team@example.com
+0 9 * * 1 cd /path/to/repo && timbers draft exec-summary --since 7d | claude --model haiku --print | mail -s "Weekly Dev Summary" team@example.com
 ```
 
 ---
@@ -211,8 +211,8 @@ timbers prompt sprint-report --since 14d | claude --model haiku --print > /share
 
 ```bash
 # Examples
-timbers prompt changelog --since 30d | claude --model haiku --print
-timbers prompt devblog --last 20 | claude --model sonnet --print
+timbers draft changelog --since 30d | claude --model haiku --print
+timbers draft devblog --last 20 | claude --model sonnet --print
 ```
 
 ---

@@ -60,7 +60,7 @@ changelog:
 
 release:
   github:
-    owner: rbergman
+    owner: gorewood
     name: timbers
   draft: false
   prerelease: auto

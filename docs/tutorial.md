@@ -296,12 +296,12 @@ timbers export --last 20 --json > entries.json
 
 ## Part 6: LLM-Powered Reports
 
-The `prompt` command renders templates with your entries for piping to LLMs.
+The `draft` command renders templates with your entries for piping to LLMs.
 
 ### Available Templates
 
 ```bash
-timbers prompt --list
+timbers draft --list
 ```
 
 Built-in templates:
@@ -318,9 +318,9 @@ Instead of piping to external tools, use `--model` for direct LLM execution:
 
 ```bash
 # Built-in execution (no piping needed)
-timbers prompt changelog --since 7d --model local         # Local LLM
-timbers prompt exec-summary --last 10 --model haiku       # Cloud (Anthropic)
-timbers prompt pr-description --range main..HEAD --model flash  # Cloud (Google)
+timbers draft changelog --since 7d --model local         # Local LLM
+timbers draft exec-summary --last 10 --model haiku       # Cloud (Anthropic)
+timbers draft pr-description --range main..HEAD --model flash  # Cloud (Google)
 ```
 
 This is equivalent to piping but simpler for quick use.
@@ -331,37 +331,37 @@ The `-p` (print) flag makes Claude output to stdout and exit, rather than openin
 
 ```bash
 # Generate a changelog from last week's work
-timbers prompt changelog --since 7d | claude -p
+timbers draft changelog --since 7d | claude -p
 
 # PR description for current branch
-timbers prompt pr-description --range main..HEAD | claude -p
+timbers draft pr-description --range main..HEAD | claude -p
 
 # Executive summary of last 10 entries
-timbers prompt exec-summary --last 10 | claude -p
+timbers draft exec-summary --last 10 | claude -p
 
 # Blog post with custom focus
-timbers prompt devblog --last 20 --append "Focus on the new plugin system" | claude -p
+timbers draft devblog --last 20 --append "Focus on the new plugin system" | claude -p
 
 # Or use built-in LLM execution (simpler, no piping)
-timbers prompt changelog --since 7d --model local
-timbers prompt exec-summary --last 10 --model haiku
+timbers draft changelog --since 7d --model local
+timbers draft exec-summary --last 10 --model haiku
 ```
 
 **Shortcut with just:** If you're developing timbers itself, use the just recipes:
 
 ```bash
-just prompt changelog --since 7d           # Uses haiku model by default
-just prompt-model sonnet devblog --last 20 # Specify a different model
+just draft changelog --since 7d           # Uses haiku model by default
+just draft-model sonnet devblog --last 20 # Specify a different model
 ```
 
 ### Preview Templates
 
 ```bash
 # See template content without rendering
-timbers prompt changelog --show
+timbers draft changelog --show
 
 # See what data would be sent
-timbers prompt changelog --last 5
+timbers draft changelog --last 5
 ```
 
 ### Custom Templates
@@ -387,7 +387,7 @@ EOF
 Then use it:
 
 ```bash
-timbers prompt weekly-standup --since 7d | claude -p
+timbers draft weekly-standup --since 7d | claude -p
 ```
 
 Template resolution order:
@@ -442,7 +442,7 @@ timbers query --tags "auth,security"
 
 ```bash
 # Monthly changelog (built-in LLM)
-timbers prompt changelog --since 30d --model local > CHANGELOG-january.md
+timbers draft changelog --since 30d --model local > CHANGELOG-january.md
 
 # Architecture decision records
 timbers query --tags architecture --json | \
@@ -472,7 +472,7 @@ timbers log "Debugged flaky test in CI" \
 
 # Weekly review
 timbers query --since 7d
-timbers prompt exec-summary --since 7d | claude -p
+timbers draft exec-summary --since 7d | claude -p
 ```
 
 ---
@@ -510,7 +510,7 @@ This removes:
 | `timbers query --last N` | View recent entries |
 | `timbers prime` | Session context for agents |
 | `timbers notes push` | Sync to remote |
-| `timbers prompt <template> --model local` | Generate report with built-in LLM |
+| `timbers draft <template> --model local` | Generate report with built-in LLM |
 
 ### Flags Available Everywhere
 
@@ -565,7 +565,7 @@ Example: `tb_2026-01-15T10:30:00Z_abc123`
 
 1. **Start documenting** — Begin with `timbers log` after your next piece of work
 2. **Set up agent workflow** — Add `timbers prime` to your agent's session start
-3. **Explore templates** — Try `timbers prompt changelog --since 7d | claude -p`
+3. **Explore templates** — Try `timbers draft changelog --since 7d | claude -p`
 4. **Customize** — Create `.timbers/PRIME.md` or custom templates for your project
 
 The goal is simple: capture *why* before it disappears.

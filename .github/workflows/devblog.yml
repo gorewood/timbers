@@ -40,7 +40,7 @@ jobs:
             echo "date = '${DATE}'"
             echo "+++"
             echo ""
-            timbers prompt devblog --since 7d --model haiku
+            timbers draft devblog --since 7d --model haiku
           } > "$FILE"
 
       - name: Commit and push
