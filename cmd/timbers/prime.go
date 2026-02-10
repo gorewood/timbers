@@ -81,6 +81,8 @@ type primePending struct {
 type primeEntry struct {
 	ID        string `json:"id"`
 	What      string `json:"what"`
+	Why       string `json:"why,omitempty"`
+	How       string `json:"how,omitempty"`
 	CreatedAt string `json:"created_at"`
 }
 
@@ -93,6 +95,7 @@ func newPrimeCmd() *cobra.Command {
 // If storage is nil, a real storage is created when the command runs.
 func newPrimeCmdInternal(storage *ledger.Storage) *cobra.Command {
 	var lastFlag int
+	var verboseFlag bool
 	var exportFlag bool
 
 	cmd := &cobra.Command{
@@ -109,6 +112,7 @@ protocol. These can be customized by creating .timbers/PRIME.md in the repo root
 Examples:
   timbers prime              # Show session context with last 3 entries
   timbers prime --last 5     # Show session context with last 5 entries
+  timbers prime --verbose    # Include why/how in recent entries
   timbers prime --json       # Output structured context as JSON
   timbers prime --export     # Output default workflow content for customization`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -116,18 +120,19 @@ Examples:
 				cmd.Print(defaultWorkflowContent)
 				return nil
 			}
-			return runPrime(cmd, storage, lastFlag)
+			return runPrime(cmd, storage, lastFlag, verboseFlag)
 		},
 	}
 
 	cmd.Flags().IntVar(&lastFlag, "last", 3, "Number of recent entries to show")
+	cmd.Flags().BoolVar(&verboseFlag, "verbose", false, "Include why/how details in recent entries")
 	cmd.Flags().BoolVar(&exportFlag, "export", false, "Output default workflow content for customization")
 
 	return cmd
 }
 
 // runPrime executes the prime command.
-func runPrime(cmd *cobra.Command, storage *ledger.Storage, lastN int) error {
+func runPrime(cmd *cobra.Command, storage *ledger.Storage, lastN int, verbose bool) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
 	// Check if we're in a git repo (only when using real git)
@@ -143,7 +148,7 @@ func runPrime(cmd *cobra.Command, storage *ledger.Storage, lastN int) error {
 	}
 
 	// Gather all context
-	result, err := gatherPrimeContext(storage, lastN)
+	result, err := gatherPrimeContext(storage, lastN, verbose)
 	if err != nil {
 		printer.Error(err)
 		return err
@@ -159,7 +164,7 @@ func runPrime(cmd *cobra.Command, storage *ledger.Storage, lastN int) error {
 }
 
 // gatherPrimeContext collects all prime context information.
-func gatherPrimeContext(storage *ledger.Storage, lastN int) (*primeResult, error) {
+func gatherPrimeContext(storage *ledger.Storage, lastN int, verbose bool) (*primeResult, error) {
 	// Get repo root and extract name
 	root, err := git.RepoRoot()
 	if err != nil {
@@ -212,7 +217,7 @@ func gatherPrimeContext(storage *ledger.Storage, lastN int) (*primeResult, error
 		NotesConfigured: notesConfigured,
 		EntryCount:      len(allEntries),
 		Pending:         buildPrimePending(pendingCommits),
-		RecentEntries:   buildPrimeEntries(recentEntries),
+		RecentEntries:   buildPrimeEntries(recentEntries, verbose),
 		Workflow:        workflow,
 	}
 
@@ -248,15 +253,21 @@ func buildPrimePending(commits []git.Commit) primePending {
 }
 
 // buildPrimeEntries constructs the recent entries section.
-func buildPrimeEntries(entries []*ledger.Entry) []primeEntry {
+// When verbose is true, includes why and how fields.
+func buildPrimeEntries(entries []*ledger.Entry, verbose bool) []primeEntry {
 	result := make([]primeEntry, 0, len(entries))
 
-	for _, e := range entries {
-		result = append(result, primeEntry{
-			ID:        e.ID,
-			What:      e.Summary.What,
-			CreatedAt: e.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		})
+	for _, entry := range entries {
+		prime := primeEntry{
+			ID:        entry.ID,
+			What:      entry.Summary.What,
+			CreatedAt: entry.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		}
+		if verbose {
+			prime.Why = entry.Summary.Why
+			prime.How = entry.Summary.How
+		}
+		result = append(result, prime)
 	}
 
 	return result
@@ -306,6 +317,12 @@ func outputPrimeHuman(printer *output.Printer, result *primeResult) {
 	} else {
 		for _, entry := range result.RecentEntries {
 			printer.Print("  %s  %s\n", entry.ID, entry.What)
+			if entry.Why != "" {
+				printer.Print("    Why: %s\n", entry.Why)
+			}
+			if entry.How != "" {
+				printer.Print("    How: %s\n", entry.How)
+			}
 		}
 	}
 	printer.Println()

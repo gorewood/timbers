@@ -368,3 +368,108 @@ func TestPrimeExportFlag(t *testing.T) {
 		}
 	}
 }
+
+func TestPrimeVerboseFlag(t *testing.T) {
+	now := time.Now()
+
+	mock := &mockGitOpsForPrime{
+		head: "abc123def456",
+		notes: map[string][]byte{
+			"anchor1234": createPrimeTestEntry("anchor1234", now, "Fixed auth bug"),
+		},
+		commits: []git.Commit{},
+	}
+	storage := ledger.NewStorage(mock)
+
+	// Without verbose: should show what but not why/how
+	cmd := newPrimeCmdInternal(storage)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Fixed auth bug") {
+		t.Error("expected 'what' in non-verbose output")
+	}
+	if strings.Contains(out, "Why:") || strings.Contains(out, "How:") {
+		t.Error("expected no why/how in non-verbose output")
+	}
+
+	// With verbose: should show why and how
+	cmd2 := newPrimeCmdInternal(storage)
+	if err := cmd2.Flags().Set("verbose", "true"); err != nil {
+		t.Fatalf("failed to set verbose flag: %v", err)
+	}
+	var buf2 bytes.Buffer
+	cmd2.SetOut(&buf2)
+	cmd2.SetErr(&buf2)
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	out2 := buf2.String()
+	if !strings.Contains(out2, "Why: For testing") {
+		t.Errorf("expected 'Why: For testing' in verbose output, got: %s", out2)
+	}
+	if !strings.Contains(out2, "How: Via test") {
+		t.Errorf("expected 'How: Via test' in verbose output, got: %s", out2)
+	}
+}
+
+func TestPrimeVerboseJSON(t *testing.T) {
+	now := time.Now()
+
+	mock := &mockGitOpsForPrime{
+		head: "abc123def456",
+		notes: map[string][]byte{
+			"anchor1234": createPrimeTestEntry("anchor1234", now, "Fixed auth bug"),
+		},
+		commits: []git.Commit{},
+	}
+	storage := ledger.NewStorage(mock)
+
+	// JSON with verbose: should include why/how fields
+	cmd := newPrimeCmdInternal(storage)
+	cmd.PersistentFlags().Bool("json", false, "")
+	_ = cmd.PersistentFlags().Set("json", "true")
+	if err := cmd.Flags().Set("verbose", "true"); err != nil {
+		t.Fatalf("failed to set verbose flag: %v", err)
+	}
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var result primeResult
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, buf.String())
+	}
+	if len(result.RecentEntries) == 0 {
+		t.Fatal("expected at least one recent entry")
+	}
+	entry := result.RecentEntries[0]
+	if entry.Why != "For testing" {
+		t.Errorf("why = %q, want %q", entry.Why, "For testing")
+	}
+	if entry.How != "Via test" {
+		t.Errorf("how = %q, want %q", entry.How, "Via test")
+	}
+
+	// JSON without verbose: why/how should be empty (omitted)
+	cmd2 := newPrimeCmdInternal(storage)
+	cmd2.PersistentFlags().Bool("json", false, "")
+	_ = cmd2.PersistentFlags().Set("json", "true")
+	var buf2 bytes.Buffer
+	cmd2.SetOut(&buf2)
+	cmd2.SetErr(&buf2)
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	out2 := buf2.String()
+	if strings.Contains(out2, `"why"`) || strings.Contains(out2, `"how"`) {
+		t.Errorf("expected no why/how in non-verbose JSON, got: %s", out2)
+	}
+}
