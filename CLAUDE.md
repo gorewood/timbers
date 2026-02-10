@@ -14,7 +14,7 @@ just run           # Run CLI: just run log "..." --why "..." --how "..."
 just build         # Build binary to bin/timbers
 just test          # Run tests only
 just lint          # Run linter only
-just install-local # Install to GOPATH from source (for testing before release)
+just build-local   # Build bin/timbers with git version info (for dev testing)
 ```
 
 **Quality Gate**: `just check` must pass before any commit. No exceptions.
@@ -214,7 +214,7 @@ timbers notes push   # Sync to remote
 
 **Before releasing a new version:**
 ```bash
-just install-local   # Install from source with version info
-# Test the local build
+just build-local     # Build bin/timbers with version info
+bin/timbers --version  # Verify the build
 just release 0.x.x   # Tag and push (triggers GitHub Actions)
 ```

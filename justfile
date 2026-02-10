@@ -78,13 +78,19 @@ fix:
 build:
     go build -o bin/timbers ./cmd/timbers
 
-# Build with version info
+# Build with version info from git (for local testing)
+build-local:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+    commit=$(git rev-parse --short HEAD)
+    date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    go build -ldflags "-X main.version=$version -X main.commit=$commit -X main.date=$date" -o bin/timbers ./cmd/timbers
+    echo "Built: bin/timbers $version ($commit)"
+
+# Build with explicit version info
 build-release version:
     go build -ldflags "-X main.version={{version}}" -o bin/timbers ./cmd/timbers
-
-# Install locally
-install:
-    go install ./cmd/timbers
 
 # =============================================================================
 # DEV WORKFLOW
@@ -118,18 +124,10 @@ draft-model model +args:
 # RELEASE (goreleaser)
 # =============================================================================
 
-# Install from source to GOPATH for local testing before release
-# Injects version info from git
-install-local:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    version=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-    commit=$(git rev-parse --short HEAD)
-    date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    echo "Installing timbers $version ($commit) to GOPATH..."
-    go install -ldflags "-X main.version=$version -X main.commit=$commit -X main.date=$date" ./cmd/timbers
-    echo "Installed: $(which timbers)"
-    timbers --version
+# Build local dev binary with version info (use bin/timbers for testing)
+# The goreleaser install.sh puts the release binary in ~/.local/bin/
+# Dev builds stay in bin/ to avoid shadowing the release binary
+install-local: build-local
 
 # Tag and push a release (triggers GitHub Actions)
 # Usage: just release 0.1.0
