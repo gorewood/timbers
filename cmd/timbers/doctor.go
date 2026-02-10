@@ -29,6 +29,7 @@ type checkResult struct {
 type doctorResult struct {
 	Version     string         `json:"version"`
 	Core        []checkResult  `json:"core"`
+	Config      []checkResult  `json:"config"`
 	Workflow    []checkResult  `json:"workflow"`
 	Integration []checkResult  `json:"integration"`
 	Summary     *doctorSummary `json:"summary"`
@@ -56,8 +57,9 @@ func newDoctorCmd() *cobra.Command {
 		Short: "Check installation health and suggest fixes",
 		Long: `Check timbers installation health and suggest fixes.
 
-Runs a series of health checks across three categories:
-  CORE        - Git notes configuration and binary availability
+Runs a series of health checks across four categories:
+  CORE        - Git notes, binary, and version update check
+  CONFIG      - Config directory, env files, API keys, templates
   WORKFLOW    - Pending commits and recent entries
   INTEGRATION - Git hooks and Claude Code integration
 
@@ -110,13 +112,14 @@ func gatherDoctorChecks(flags *doctorFlags) *doctorResult {
 	result := &doctorResult{
 		Version:     version,
 		Core:        runCoreChecks(flags),
+		Config:      runConfigChecks(),
 		Workflow:    runWorkflowChecks(),
 		Integration: runIntegrationChecks(),
 		Summary:     &doctorSummary{},
 	}
 
 	// Calculate summary
-	allChecks := append(append(result.Core, result.Workflow...), result.Integration...)
+	allChecks := append(append(append(result.Core, result.Config...), result.Workflow...), result.Integration...)
 	for _, check := range allChecks {
 		switch check.Status {
 		case checkPass:
@@ -136,6 +139,7 @@ func outputDoctorJSON(printer *output.Printer, result *doctorResult) error {
 	data := map[string]any{
 		"version":     result.Version,
 		"core":        result.Core,
+		"config":      result.Config,
 		"workflow":    result.Workflow,
 		"integration": result.Integration,
 		"summary": map[string]any{
@@ -155,6 +159,9 @@ func outputDoctorHuman(printer *output.Printer, result *doctorResult, quiet bool
 
 	// Core checks
 	printCheckSection(printer, "CORE", result.Core, quiet)
+
+	// Config checks
+	printCheckSection(printer, "CONFIG", result.Config, quiet)
 
 	// Workflow checks
 	printCheckSection(printer, "WORKFLOW", result.Workflow, quiet)

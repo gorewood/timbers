@@ -13,10 +13,11 @@ import (
 
 // runCoreChecks performs core infrastructure checks.
 func runCoreChecks(flags *doctorFlags) []checkResult {
-	checks := make([]checkResult, 0, 3)
+	checks := make([]checkResult, 0, 4)
 	checks = append(checks, checkNotesRefExists())
 	checks = append(checks, checkRemoteConfigured(flags))
 	checks = append(checks, checkBinaryInPath())
+	checks = append(checks, checkVersion())
 	return checks
 }
 
