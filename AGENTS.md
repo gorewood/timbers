@@ -42,9 +42,17 @@ npm run check       # If package.json with check script
 
 ## Worktree Guardrails
 
+**All worktrees go under `.worktrees/` in the repo root.** Before creating any worktree, ensure `.worktrees/` is in `.gitignore`:
+
+```bash
+git check-ignore -q .worktrees/ || echo '.worktrees/' >> .gitignore
+```
+
+If you added the line, commit it before proceeding. See `dm-work:worktrees` for full workflow details.
+
 When using git worktrees for feature development:
 
-1. Create worktree and implement feature
+1. Create worktree: `bd worktree create .worktrees/<name>`
 2. Run quality gates
 3. **STOP AND GET USER SIGN-OFF** before merging
 4. Only after explicit approval: merge to main, sync beads, push, cleanup worktree
