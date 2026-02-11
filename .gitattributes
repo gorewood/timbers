@@ -1,0 +1,6 @@
+
+# Use bd merge for beads JSONL files
+.beads/issues.jsonl merge=beads
+
+# Mark timbers ledger entries as generated (excluded from GitHub language stats)
+/.timbers/** linguist-generated
