@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-02-11
+
+### Changed
+- Pivoted storage from git notes to flat directory files (`.timbers/<id>.json`), enabling atomic writes and eliminating merge conflicts in concurrent worktrees
+- Simplified `GitOps` interface from 8 methods to 4 (`HEAD`, `Log`, `CommitsReachableFrom`, `GetDiffstat`)
+- Adopted `YYYY/MM/DD` directory layout for `.timbers/` entries to scale beyond flat-directory limits at high commit volumes
+- Replaced `ReadDir` with `WalkDir` for recursive entry discovery across date-bucketed directories
+- Rewrote `uninstall` command to clean up `.timbers/` directory with recursive cleanup
+
+### Removed
+- Removed all git notes code and references (`notes.go`, `notes_configured`, `remote_config` fields, `timbers notes push/fetch` commands)
+
+### Technical
+- Migrated 37 existing ledger entries from git notes to `.timbers/` flat files
+- Extracted `atomicWrite` helper using temp-file-plus-rename pattern for crash-safe writes
+- Added 14 integration tests proving file-per-entry storage is inherently merge-safe across branches
+
+
 ## [0.5.0] - 2026-02-11
 
 ### Added
@@ -119,3 +137,4 @@ Initial public release.
 [0.2.0]: https://github.com/gorewood/timbers/releases/tag/v0.2.0
 [0.1.0]: https://github.com/gorewood/timbers/releases/tag/v0.1.0
 [0.5.0]: https://github.com/gorewood/timbers/releases/tag/v0.5.0
+[0.6.0]: https://github.com/gorewood/timbers/releases/tag/v0.6.0
