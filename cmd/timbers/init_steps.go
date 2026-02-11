@@ -220,7 +220,7 @@ func promptClaudeInstall(printer *output.Printer, styles initStyleSet) initStepR
 
 // installClaudeIntegration installs the Claude hook at project level.
 func installClaudeIntegration() initStepResult {
-	hookPath, _, err := setup.ResolveClaudeHookPath(true)
+	hookPath, _, err := setup.ResolveClaudeSettingsPath(true)
 	if err != nil {
 		return initStepResult{Name: "claude", Status: "failed", Message: err.Error()}
 	}
@@ -229,5 +229,5 @@ func installClaudeIntegration() initStepResult {
 		return initStepResult{Name: "claude", Status: "failed", Message: err.Error()}
 	}
 
-	return initStepResult{Name: "claude", Status: "ok", Message: "installed in .claude/hooks/"}
+	return initStepResult{Name: "claude", Status: "ok", Message: "installed in .claude/settings.local.json"}
 }

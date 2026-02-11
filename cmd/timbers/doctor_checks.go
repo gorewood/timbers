@@ -210,7 +210,7 @@ func checkGitHooks() checkResult {
 func checkClaudeIntegration(flags *doctorFlags) checkResult {
 	// Check project-scope Claude hook first, then global.
 	for _, projectScope := range []bool{true, false} {
-		hookPath, _, err := setup.ResolveClaudeHookPath(projectScope)
+		hookPath, _, err := setup.ResolveClaudeSettingsPath(projectScope)
 		if err != nil {
 			continue
 		}
@@ -224,7 +224,7 @@ func checkClaudeIntegration(flags *doctorFlags) checkResult {
 	}
 
 	if flags.fix {
-		hookPath, _, err := setup.ResolveClaudeHookPath(true) // project-level
+		hookPath, _, err := setup.ResolveClaudeSettingsPath(true) // project-level
 		if err == nil {
 			if err := setup.InstallTimbersSection(hookPath); err == nil {
 				return checkResult{

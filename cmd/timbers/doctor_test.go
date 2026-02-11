@@ -328,15 +328,15 @@ func TestDoctorFixClaudeIntegration(t *testing.T) {
 			t.Errorf("claude check status = %v, want pass (auto-fixed)", claudeCheck["status"])
 		}
 
-		// Verify hook was installed at project level, not global
-		projectHookPath := filepath.Join(tempDir, ".claude", "hooks", "user_prompt_submit.sh")
-		if _, err := os.Stat(projectHookPath); os.IsNotExist(err) {
-			t.Error("--fix should install Claude hook at project level")
+		// Verify settings were installed at project level, not global
+		projectSettingsPath := filepath.Join(tempDir, ".claude", "settings.local.json")
+		if _, err := os.Stat(projectSettingsPath); os.IsNotExist(err) {
+			t.Error("--fix should install Claude settings at project level")
 		}
 
-		globalHookPath := filepath.Join(tmpHome, ".claude", "hooks", "user_prompt_submit.sh")
-		if _, err := os.Stat(globalHookPath); !os.IsNotExist(err) {
-			t.Error("--fix should not install Claude hook at global level")
+		globalSettingsPath := filepath.Join(tmpHome, ".claude", "settings.json")
+		if _, err := os.Stat(globalSettingsPath); !os.IsNotExist(err) {
+			t.Error("--fix should not install Claude settings at global level")
 		}
 	})
 }

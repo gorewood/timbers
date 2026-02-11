@@ -69,8 +69,8 @@ func GatherHookInfo(info *UninstallInfo) {
 
 // GatherClaudeInfo detects Claude integration in project or global scope.
 func GatherClaudeInfo(info *UninstallInfo) {
-	globalPath, _, _ := ResolveClaudeHookPath(false)
-	projectPath, _, _ := ResolveClaudeHookPath(true)
+	globalPath, _, _ := ResolveClaudeSettingsPath(false)
+	projectPath, _, _ := ResolveClaudeSettingsPath(true)
 	if IsTimbersSectionInstalled(projectPath) {
 		info.ClaudeInstalled = true
 		info.ClaudeScope = "project"

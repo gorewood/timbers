@@ -130,8 +130,8 @@ func gatherInitState() *initState {
 		state.hooksInstalled = hookStatus.Installed
 	}
 
-	globalHookPath, _, _ := setup.ResolveClaudeHookPath(false)
-	projectHookPath, _, _ := setup.ResolveClaudeHookPath(true)
+	globalHookPath, _, _ := setup.ResolveClaudeSettingsPath(false)
+	projectHookPath, _, _ := setup.ResolveClaudeSettingsPath(true)
 	state.claudeInstalled = setup.IsTimbersSectionInstalled(globalHookPath) || setup.IsTimbersSectionInstalled(projectHookPath)
 
 	return state

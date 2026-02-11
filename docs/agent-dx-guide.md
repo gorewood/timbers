@@ -87,7 +87,7 @@ Quick commands:
 - Agents lose context on session boundaries
 - `/clear` and compaction wipe working memory
 - `prime` restores workflow state in one call
-- Include in editor hooks (project-level `.claude/hooks/`) for automatic injection
+- Include in editor hooks (project-level `.claude/settings.local.json`) for automatic injection
 
 **Opt-in activation:** Prime should be silent in repos that haven't been initialized. Use a predicate (e.g., check for a storage ref or config marker) to guard against noise in non-participating repos. With `--verbose`, output a stderr hint directing users to the init command.
 
@@ -553,12 +553,12 @@ ok Installed pre-commit hook
 
 ```bash
 $ mytool setup claude           # Install for this project (default)
-$ mytool setup claude --global  # Install globally (~/.claude/hooks/)
-ok Claude Code hook installed in .claude/hooks/
+$ mytool setup claude --global  # Install globally (~/.claude/settings.json)
+ok Claude Code hook installed in .claude/settings.local.json
   -> Will inject 'mytool prime' at session start
 ```
 
-**Project-level by default.** Editor hooks should install to the project directory (e.g., `.claude/hooks/`) rather than globally. This matches the opt-in activation model: if your tool requires per-repo init to activate, a global hook adds noise to every repo without providing value. Project-level hooks are created naturally during `init` and only affect repos that have opted in.
+**Project-level by default.** Editor hooks should install to the project settings (e.g., `.claude/settings.local.json`) rather than globally. This matches the opt-in activation model: if your tool requires per-repo init to activate, a global hook adds noise to every repo without providing value. Project-level hooks are created naturally during `init` and only affect repos that have opted in.
 
 The `--global` flag provides an escape hatch for users who prefer a single installation.
 
@@ -575,7 +575,7 @@ mytool setup --list           # Show available integrations
 
 **What setup installs:**
 
-For Claude Code, this typically means adding a `user_prompt_submit` hook that runs `mytool prime` and injects the output into the session context. The agent starts every session with workflow state already loaded. The hook uses `BEGIN/END` markers for safe append/remove without disturbing other tools' hook sections.
+For Claude Code, this means adding a `SessionStart` hook entry in the JSON settings file that runs `mytool prime` and injects the output into the session context. The agent starts every session with workflow state already loaded. The hook is a structured JSON entry, so install/remove operations are safe and don't disturb other tools' hook entries.
 
 **Future integrations** might include: Cursor, Windsurf, Aider, Gemini CLI, Copilot.
 
@@ -617,7 +617,7 @@ Initializing mytool in my-project...
 
 Optional integrations:
   ? Install Claude Code integration? [Y/n] y
-  ok Claude hook installed in .claude/hooks/
+  ok Claude hook installed in .claude/settings.local.json
   -- Git hooks not requested (use --hooks)
 
 Next steps:

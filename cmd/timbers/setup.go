@@ -34,7 +34,7 @@ Flags:
 Examples:
   timbers setup --list           # List available integrations
   timbers setup claude           # Install Claude integration for this project
-  timbers setup claude --global  # Install globally (~/.claude/hooks/)
+  timbers setup claude --global  # Install globally (~/.claude/settings.json)
   timbers setup claude --check   # Check installation status
   timbers setup claude --remove  # Remove integration`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -65,11 +65,11 @@ func newSetupClaudeCmd() *cobra.Command {
 		Short: "Install Claude Code integration",
 		Long: `Install timbers integration with Claude Code.
 
-Creates a hook that runs 'timbers prime' at the start of each Claude Code session,
-injecting development context into the conversation.
+Adds a SessionStart hook entry that runs 'timbers prime' at the start of each
+Claude Code session, injecting development context into the conversation.
 
-By default, installs to the current project's .claude/hooks/ directory.
-Use --global to install to ~/.claude/hooks/ instead.
+By default, installs to the current project's .claude/settings.local.json.
+Use --global to install to ~/.claude/settings.json instead.
 
 Examples:
   timbers setup claude           # Install for this project
@@ -82,7 +82,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().BoolVar(&globalFlag, "global", false, "Install globally to ~/.claude/hooks/")
+	cmd.Flags().BoolVar(&globalFlag, "global", false, "Install globally to ~/.claude/settings.json")
 	cmd.Flags().BoolVar(&checkFlag, "check", false, "Check installation status without changes")
 	cmd.Flags().BoolVar(&removeFlag, "remove", false, "Remove the integration")
 	cmd.Flags().BoolVar(&dryRunFlag, "dry-run", false, "Show what would be done without doing it")
@@ -94,7 +94,7 @@ Examples:
 func runSetupClaude(cmd *cobra.Command, project, check, remove, dryRun bool) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
-	hookPath, scope, err := setup.ResolveClaudeHookPath(project)
+	hookPath, scope, err := setup.ResolveClaudeSettingsPath(project)
 	if err != nil {
 		printer.Error(err)
 		return err
@@ -115,8 +115,8 @@ func runSetupClaude(cmd *cobra.Command, project, check, remove, dryRun bool) err
 func runSetupList(cmd *cobra.Command) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
-	globalHookPath, _, _ := setup.ResolveClaudeHookPath(false)
-	projectHookPath, _, _ := setup.ResolveClaudeHookPath(true)
+	globalHookPath, _, _ := setup.ResolveClaudeSettingsPath(false)
+	projectHookPath, _, _ := setup.ResolveClaudeSettingsPath(true)
 
 	globalInstalled := setup.IsTimbersSectionInstalled(globalHookPath)
 	projectInstalled := setup.IsTimbersSectionInstalled(projectHookPath)

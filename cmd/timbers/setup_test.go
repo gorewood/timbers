@@ -10,14 +10,58 @@ import (
 	"testing"
 )
 
+// writeSettingsJSON creates a Claude Code settings file with the given content.
+func writeSettingsJSON(t *testing.T, path string, data map[string]any) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("failed to create settings dir: %v", err)
+	}
+	b, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatalf("failed to write settings: %v", err)
+	}
+}
+
+// readSettingsJSON reads a Claude Code settings file.
+func readSettingsJSON(t *testing.T, path string) map[string]any {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read settings: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("failed to parse settings: %v", err)
+	}
+	return m
+}
+
+// timbersSettings creates a minimal settings map with timbers prime installed.
+func timbersSettings() map[string]any {
+	return map[string]any{
+		"hooks": map[string]any{
+			"SessionStart": []any{
+				map[string]any{
+					"matcher": "",
+					"hooks": []any{
+						map[string]any{"type": "command", "command": "timbers prime"},
+					},
+				},
+			},
+		},
+	}
+}
+
 // TestSetupClaudeCheck verifies the check flag for Claude integration.
 func TestSetupClaudeCheck(t *testing.T) {
 	tests := []struct {
 		name       string
-		setupHook  bool // If true, create the hook file first
-		wantJSON   map[string]any
-		wantHuman  string
+		setupHook  bool // If true, create the settings file first
 		wantStatus bool // Expected installed status
+		wantHuman  string
 	}{
 		{
 			name:       "not installed",
@@ -35,21 +79,12 @@ func TestSetupClaudeCheck(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create a temp home directory
 			tmpHome := t.TempDir()
 			t.Setenv("HOME", tmpHome)
 
-			hookDir := filepath.Join(tmpHome, ".claude", "hooks")
-			hookPath := filepath.Join(hookDir, "user_prompt_submit.sh")
-
 			if tc.setupHook {
-				if err := os.MkdirAll(hookDir, 0o755); err != nil {
-					t.Fatalf("failed to create hook dir: %v", err)
-				}
-				// #nosec G306 -- hook needs execute permission for testing
-				if err := os.WriteFile(hookPath, []byte("#!/bin/bash\n# BEGIN timbers\n# END timbers"), 0o755); err != nil {
-					t.Fatalf("failed to write hook: %v", err)
-				}
+				settingsPath := filepath.Join(tmpHome, ".claude", "settings.json")
+				writeSettingsJSON(t, settingsPath, timbersSettings())
 			}
 
 			// Test JSON output (use --global to check global scope)
@@ -105,11 +140,11 @@ func TestSetupClaudeCheck(t *testing.T) {
 
 // TestSetupClaudeInstall verifies hook installation.
 func TestSetupClaudeInstall(t *testing.T) {
-	t.Run("install creates hook globally", func(t *testing.T) {
+	t.Run("install creates settings globally", func(t *testing.T) {
 		tmpHome := t.TempDir()
 		t.Setenv("HOME", tmpHome)
 
-		hookPath := filepath.Join(tmpHome, ".claude", "hooks", "user_prompt_submit.sh")
+		settingsPath := filepath.Join(tmpHome, ".claude", "settings.json")
 
 		var buf bytes.Buffer
 		cmd := newSetupCmd()
@@ -121,27 +156,33 @@ func TestSetupClaudeInstall(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Verify hook was created
-		content, err := os.ReadFile(hookPath)
-		if err != nil {
-			t.Fatalf("hook file not created: %v", err)
+		// Verify settings were created
+		settings := readSettingsJSON(t, settingsPath)
+
+		// Check settings content
+		hooks, ok := settings["hooks"].(map[string]any)
+		if !ok {
+			t.Fatal("expected hooks section in settings")
+		}
+		sessionStart, ok := hooks["SessionStart"].([]any)
+		if !ok || len(sessionStart) == 0 {
+			t.Fatal("expected SessionStart hook group")
 		}
 
-		// Check hook content
-		if !strings.Contains(string(content), "timbers prime") {
-			t.Errorf("hook should contain 'timbers prime', got: %s", content)
+		// Verify timbers prime is present
+		found := false
+		for _, rawGroup := range sessionStart {
+			group, _ := rawGroup.(map[string]any)
+			rawHooks, _ := group["hooks"].([]any)
+			for _, rawHook := range rawHooks {
+				hook, _ := rawHook.(map[string]any)
+				if cmd, _ := hook["command"].(string); cmd == "timbers prime" {
+					found = true
+				}
+			}
 		}
-		if !strings.Contains(string(content), "#!/bin/bash") {
-			t.Errorf("hook should have bash shebang, got: %s", content)
-		}
-
-		// Check permissions
-		info, err := os.Stat(hookPath)
-		if err != nil {
-			t.Fatalf("failed to stat hook: %v", err)
-		}
-		if info.Mode().Perm()&0o111 == 0 {
-			t.Error("hook should be executable")
+		if !found {
+			t.Error("settings should contain 'timbers prime' hook")
 		}
 	})
 
@@ -149,7 +190,7 @@ func TestSetupClaudeInstall(t *testing.T) {
 		tmpHome := t.TempDir()
 		t.Setenv("HOME", tmpHome)
 
-		hookPath := filepath.Join(tmpHome, ".claude", "hooks", "user_prompt_submit.sh")
+		settingsPath := filepath.Join(tmpHome, ".claude", "settings.json")
 
 		// Run install twice (global scope)
 		for i := range 2 {
@@ -164,34 +205,46 @@ func TestSetupClaudeInstall(t *testing.T) {
 			}
 		}
 
-		// Verify only one timbers section exists
-		content, err := os.ReadFile(hookPath)
-		if err != nil {
-			t.Fatalf("hook file not found: %v", err)
+		// Verify only one timbers hook entry exists
+		settings := readSettingsJSON(t, settingsPath)
+		count := 0
+		hooks, _ := settings["hooks"].(map[string]any)
+		sessionStart, _ := hooks["SessionStart"].([]any)
+		for _, rawGroup := range sessionStart {
+			group, _ := rawGroup.(map[string]any)
+			rawHooks, _ := group["hooks"].([]any)
+			for _, rawHook := range rawHooks {
+				hook, _ := rawHook.(map[string]any)
+				if cmd, _ := hook["command"].(string); cmd == "timbers prime" {
+					count++
+				}
+			}
 		}
-
-		count := strings.Count(string(content), "# BEGIN timbers")
 		if count != 1 {
-			t.Errorf("expected exactly 1 timbers section, found %d in:\n%s", count, content)
+			t.Errorf("expected exactly 1 timbers prime hook, found %d", count)
 		}
 	})
 
-	t.Run("preserves existing hook content", func(t *testing.T) {
+	t.Run("preserves existing settings", func(t *testing.T) {
 		tmpHome := t.TempDir()
 		t.Setenv("HOME", tmpHome)
 
-		hookDir := filepath.Join(tmpHome, ".claude", "hooks")
-		hookPath := filepath.Join(hookDir, "user_prompt_submit.sh")
+		settingsPath := filepath.Join(tmpHome, ".claude", "settings.json")
 
-		// Create existing hook with other content
-		if err := os.MkdirAll(hookDir, 0o755); err != nil {
-			t.Fatalf("failed to create hook dir: %v", err)
-		}
-		existingContent := "#!/bin/bash\necho 'existing hook'\n"
-		// #nosec G306 -- hook needs execute permission for testing
-		if err := os.WriteFile(hookPath, []byte(existingContent), 0o755); err != nil {
-			t.Fatalf("failed to write existing hook: %v", err)
-		}
+		// Create existing settings with other hooks
+		writeSettingsJSON(t, settingsPath, map[string]any{
+			"permissions": map[string]any{"allow": []any{"Bash(ls:*)"}},
+			"hooks": map[string]any{
+				"SessionStart": []any{
+					map[string]any{
+						"matcher": "",
+						"hooks": []any{
+							map[string]any{"type": "command", "command": "bd prime"},
+						},
+					},
+				},
+			},
+		})
 
 		var buf bytes.Buffer
 		cmd := newSetupCmd()
@@ -203,17 +256,36 @@ func TestSetupClaudeInstall(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		content, err := os.ReadFile(hookPath)
-		if err != nil {
-			t.Fatalf("hook file not found: %v", err)
+		settings := readSettingsJSON(t, settingsPath)
+
+		// Verify existing settings preserved
+		if _, ok := settings["permissions"]; !ok {
+			t.Error("existing permissions should be preserved")
 		}
 
-		// Should contain both existing content and timbers
-		if !strings.Contains(string(content), "existing hook") {
-			t.Error("existing hook content was lost")
+		// Verify both hooks present
+		hooks, _ := settings["hooks"].(map[string]any)
+		sessionStart, _ := hooks["SessionStart"].([]any)
+		foundBd, foundTimbers := false, false
+		for _, rawGroup := range sessionStart {
+			group, _ := rawGroup.(map[string]any)
+			rawHooks, _ := group["hooks"].([]any)
+			for _, rawHook := range rawHooks {
+				hook, _ := rawHook.(map[string]any)
+				cmd, _ := hook["command"].(string)
+				if cmd == "bd prime" {
+					foundBd = true
+				}
+				if cmd == "timbers prime" {
+					foundTimbers = true
+				}
+			}
 		}
-		if !strings.Contains(string(content), "timbers prime") {
-			t.Error("timbers section not added")
+		if !foundBd {
+			t.Error("existing bd prime hook should be preserved")
+		}
+		if !foundTimbers {
+			t.Error("timbers prime hook should be added")
 		}
 	})
 }
@@ -224,26 +296,27 @@ func TestSetupClaudeRemove(t *testing.T) {
 		tmpHome := t.TempDir()
 		t.Setenv("HOME", tmpHome)
 
-		hookDir := filepath.Join(tmpHome, ".claude", "hooks")
-		hookPath := filepath.Join(hookDir, "user_prompt_submit.sh")
+		settingsPath := filepath.Join(tmpHome, ".claude", "settings.json")
 
-		// Create hook with timbers and other content
-		if err := os.MkdirAll(hookDir, 0o755); err != nil {
-			t.Fatalf("failed to create hook dir: %v", err)
-		}
-		hookContent := `#!/bin/bash
-echo 'before'
-# BEGIN timbers
-if command -v timbers >/dev/null 2>&1 && [ -d ".git" ]; then
-  timbers prime 2>/dev/null
-fi
-# END timbers
-echo 'after'
-`
-		// #nosec G306 -- hook needs execute permission for testing
-		if err := os.WriteFile(hookPath, []byte(hookContent), 0o755); err != nil {
-			t.Fatalf("failed to write hook: %v", err)
-		}
+		// Create settings with timbers and other hooks
+		writeSettingsJSON(t, settingsPath, map[string]any{
+			"hooks": map[string]any{
+				"SessionStart": []any{
+					map[string]any{
+						"matcher": "",
+						"hooks": []any{
+							map[string]any{"type": "command", "command": "bd prime"},
+						},
+					},
+					map[string]any{
+						"matcher": "",
+						"hooks": []any{
+							map[string]any{"type": "command", "command": "timbers prime"},
+						},
+					},
+				},
+			},
+		})
 
 		var buf bytes.Buffer
 		cmd := newSetupCmd()
@@ -255,20 +328,36 @@ echo 'after'
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		content, err := os.ReadFile(hookPath)
-		if err != nil {
-			t.Fatalf("hook file not found: %v", err)
+		settings := readSettingsJSON(t, settingsPath)
+
+		// timbers should be gone
+		hooks, _ := settings["hooks"].(map[string]any)
+		sessionStart, _ := hooks["SessionStart"].([]any)
+		for _, rawGroup := range sessionStart {
+			group, _ := rawGroup.(map[string]any)
+			rawHooks, _ := group["hooks"].([]any)
+			for _, rawHook := range rawHooks {
+				hook, _ := rawHook.(map[string]any)
+				if cmd, _ := hook["command"].(string); cmd == "timbers prime" {
+					t.Error("timbers prime should be removed")
+				}
+			}
 		}
 
-		// Should have existing content but not timbers
-		if !strings.Contains(string(content), "before") {
-			t.Error("existing content before timbers was lost")
+		// bd prime should still be there
+		foundBd := false
+		for _, rawGroup := range sessionStart {
+			group, _ := rawGroup.(map[string]any)
+			rawHooks, _ := group["hooks"].([]any)
+			for _, rawHook := range rawHooks {
+				hook, _ := rawHook.(map[string]any)
+				if cmd, _ := hook["command"].(string); cmd == "bd prime" {
+					foundBd = true
+				}
+			}
 		}
-		if !strings.Contains(string(content), "after") {
-			t.Error("existing content after timbers was lost")
-		}
-		if strings.Contains(string(content), "timbers prime") {
-			t.Error("timbers section should be removed")
+		if !foundBd {
+			t.Error("bd prime should be preserved")
 		}
 	})
 
@@ -299,7 +388,7 @@ func TestSetupClaudeDryRun(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
 
-	hookPath := filepath.Join(tmpHome, ".claude", "hooks", "user_prompt_submit.sh")
+	settingsPath := filepath.Join(tmpHome, ".claude", "settings.json")
 
 	var buf bytes.Buffer
 	cmd := newSetupCmd()
@@ -311,9 +400,9 @@ func TestSetupClaudeDryRun(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Hook should NOT be created
-	if _, err := os.Stat(hookPath); !os.IsNotExist(err) {
-		t.Error("dry-run should not create hook file")
+	// Settings file should NOT be created
+	if _, err := os.Stat(settingsPath); !os.IsNotExist(err) {
+		t.Error("dry-run should not create settings file")
 	}
 
 	// Output should describe what would happen
@@ -356,16 +445,16 @@ func TestSetupClaudeDefaultIsProject(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Should create hook in project directory (default)
-	projectHookPath := filepath.Join(tmpProject, ".claude", "hooks", "user_prompt_submit.sh")
-	if _, err := os.Stat(projectHookPath); os.IsNotExist(err) {
-		t.Error("project hook was not created")
+	// Should create settings in project directory (default)
+	projectSettingsPath := filepath.Join(tmpProject, ".claude", "settings.local.json")
+	if _, err := os.Stat(projectSettingsPath); os.IsNotExist(err) {
+		t.Error("project settings file was not created")
 	}
 
-	// Should NOT create hook in global directory
-	globalHookPath := filepath.Join(tmpHome, ".claude", "hooks", "user_prompt_submit.sh")
-	if _, err := os.Stat(globalHookPath); !os.IsNotExist(err) {
-		t.Error("global hook should not be created by default")
+	// Should NOT create settings in global directory
+	globalSettingsPath := filepath.Join(tmpHome, ".claude", "settings.json")
+	if _, err := os.Stat(globalSettingsPath); !os.IsNotExist(err) {
+		t.Error("global settings should not be created by default")
 	}
 }
 
