@@ -5,33 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-```markdown
-# Changelog
-
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
 ## [0.3.0] - 2026-02-10
 
 ### Added
-
-- Added `git.InitNotesRef()` to create an empty notes namespace during `init`, so `prime` works immediately without requiring a manual commit first
-- Added `NotesRefExists` guard to `prime` to exit silently when notes ref is missing, preventing no-op runs in uninitiated repos
+- Added `git.InitNotesRef()` to create an empty notes namespace during `init`, so `prime` works immediately without requiring a manual first note
+- Added tests for the `prime` guard silent-exit path and `doctor --fix` auto-install path
 - Added TTY-aware lipgloss style sets to `doctor` and `init` output, following the existing `uninstall` pattern
-- Added tests for the `prime` silent-exit guard path
-- Added tests for the `doctor --fix` auto-install path
+- Added `NotesRefExists` guard to `prime` to prevent no-op runs in uninitialized repos
 
 ### Changed
-
-- Switched Claude hooks from global to project-level by default; global install is now available via the `--global` flag
+- Switched Claude hooks from global to project-level by default; global install is now behind the `--global` flag
 - Changed git hooks from default-on (`--no-hooks` to skip) to opt-in (`--hooks` to enable), avoiding conflicts with tools like beads that rely on `pre-commit`
 - Renamed `warn` style to `skip` in `init` output styles for consistency
-- Renamed `gpt-5` alias to `gpt`
+- Renamed `gpt-5` model alias to `gpt`
 - Updated `agent-dx-guide` documentation to reflect opt-in hooks and project-level defaults
-```
 
+## [0.2.0] - 2026-02-10
+
+### Added
+- Added `--tag` filtering to `timbers query` command with OR semantics, supporting both repeated flags and comma-separated values
+- Added `timbers changelog` command that generates markdown changelogs from ledger entries, grouped by tag
+- Added `timbers draft` command (renamed from `prompt`) for document generation, with decision-log template in ADR format
+- Added `.env.local` support for API keys via new `internal/envfile` package, loaded as fallback in root `PersistentPreRunE`
+- Added cross-platform config directory support via new `internal/config` package with `Dir()` function, respecting `TIMBERS_CONFIG_HOME`, `XDG_CONFIG_HOME`, and Windows AppData
+- Added CONFIG section to `doctor` command with checks for config dir, env files, API keys, and templates
+- Added version check to `doctor` that queries GitHub releases API with graceful failure for dev builds and network errors
+- Added draft status hint and stderr routing for errors/warnings when stdout is piped via `output.Printer` `WithStderr()`
+- Added goreleaser configuration, GitHub Actions release workflow, and `install.sh` with checksum verification
+- Added robustness for non-timbers git notes with `ErrNotTimbersNote`, schema validation, and `ListEntriesWithStats()`
+- Added Configuration section to README documenting env file resolution, API key setup, and custom templates
+- Added Installation section to README with `curl|bash` and `go install` methods
+- Added MIT LICENSE, CONTRIBUTING.md, and CI workflow for test and lint
+
+### Changed
+- Renamed `prompt` command to `draft` and propagated rename across docs, justfile, and CI
+- Surfaced `draft` command in `prime` output under a new Generating Documents section
+- Rewrote README for open-source audience with badges and dogfood caveat
+- Updated agent DX guide with v0.2 learnings
+- Fixed org owner references from `rbergman` to `gorewood` in goreleaser and install script
+
+### Fixed
+- Fixed global state issue in `status.go` by switching to closure pattern
+- Fixed `amend.go` output inconsistency
+- Fixed `uninstall.go` icon usage
+- Fixed `ListTemplates` override bug
+- Fixed piped output corruption caused by errors and warnings being written to stdout instead of stderr
 
 ## [0.1.0] - 2026-02-10
 
@@ -66,4 +84,6 @@ Initial public release.
 - GitHub Actions workflows for releases, dev blog generation, and CI (test + lint)
 - Comprehensive documentation: tutorial, agent reference, LLM commands guide, publishing artifacts guide, agent DX guide, and spec
 
+[0.3.0]: https://github.com/gorewood/timbers/releases/tag/v0.3.0
+[0.2.0]: https://github.com/gorewood/timbers/releases/tag/v0.2.0
 [0.1.0]: https://github.com/gorewood/timbers/releases/tag/v0.1.0

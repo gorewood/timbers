@@ -33,8 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Grouping**:
 - Use `## [Unreleased]` as the top section by default
-- If the user appends release version info (e.g., "This is release v0.3.0"), use a versioned heading instead: `## [0.3.0] - 2026-02-10` (with today's date)
+- If the user appends release version info (e.g., "This is release v0.3.0"), use a versioned heading instead: `## [0.3.0] - 2026-02-10` (with today's date), and **omit the top-level header and preamble** — output only the version section starting from `## [0.3.0]`
 - If entries span multiple dates, group them under a single version section (not by date)
+
+**Output format**:
+- Output raw markdown only — never wrap in code fences (no ``` blocks)
 
 **Style**:
 - Past tense, one line per item

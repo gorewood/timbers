@@ -144,12 +144,14 @@ release version:
 
     # Generate versioned changelog section
     if [ -n "$PREV_TAG" ]; then
-        SECTION=$(go run ./cmd/timbers draft changelog --range "$PREV_TAG"..HEAD \
-            --append "This is release v${ver}" --model opus)
+        RAW=$(go run ./cmd/timbers draft changelog --range "$PREV_TAG"..HEAD \
+            --append "This is release v${ver}. Output ONLY the version section starting from ## [${ver}], no top-level header or preamble." --model opus)
     else
-        SECTION=$(go run ./cmd/timbers draft changelog --last 50 \
-            --append "This is release v${ver}" --model opus)
+        RAW=$(go run ./cmd/timbers draft changelog --last 50 \
+            --append "This is release v${ver}. Output ONLY the version section starting from ## [${ver}], no top-level header or preamble." --model opus)
     fi
+    # Strip code fences and duplicate headers that LLMs sometimes add
+    SECTION=$(echo "$RAW" | sed '/^```/d' | sed '/^# Changelog/,/^$/d')
 
     # Prepend new section to existing CHANGELOG.md (after the header)
     if [ -f CHANGELOG.md ]; then
