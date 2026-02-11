@@ -20,6 +20,13 @@ type hookGroup struct {
 	Hooks   []hookEntry `json:"hooks"`
 }
 
+// timbersHookConfig describes a single hook event to install.
+type timbersHookConfig struct {
+	Event   string
+	Matcher string
+	Command string
+}
+
 // timbersHookCommand is the resilient hook command that degrades gracefully
 // when timbers is not installed: prints a helpful message instead of erroring.
 //
@@ -28,6 +35,24 @@ const timbersHookCommand = `command -v timbers >/dev/null 2>&1 && timbers prime 
 
 // legacyHookCommand is the old non-resilient format, kept for backward-compat detection and removal.
 const legacyHookCommand = "timbers prime"
+
+// stopCommand checks for undocumented commits at session end.
+//
+//nolint:lll // shell one-liner
+const stopCommand = `command -v timbers >/dev/null 2>&1 && timbers pending --json 2>/dev/null | grep -q '"count":[1-9][0-9]*' && echo "timbers: undocumented commits - run 'timbers pending' to review" || true`
+
+// postToolUseBashCommand nudges after git commits to document work.
+//
+//nolint:lll // shell one-liner
+const postToolUseBashCommand = `printf '%s\n' "$TOOL_INPUT" | grep -q 'git commit' && command -v timbers >/dev/null 2>&1 && echo "timbers: remember to run 'timbers log' to document this commit" || true`
+
+// timbersHooks defines all hook events timbers installs into Claude Code settings.
+var timbersHooks = []timbersHookConfig{
+	{Event: "SessionStart", Matcher: "", Command: timbersHookCommand},
+	{Event: "PreCompact", Matcher: "", Command: timbersHookCommand},
+	{Event: "Stop", Matcher: "", Command: stopCommand},
+	{Event: "PostToolUse", Matcher: "Bash", Command: postToolUseBashCommand},
+}
 
 // ResolveClaudeSettingsPath determines the settings file path based on scope.
 // If project is true, returns the project-local settings path; otherwise the global path.
@@ -47,16 +72,17 @@ func ResolveClaudeSettingsPath(project bool) (string, string, error) {
 	return filepath.Join(home, ".claude", "settings.json"), "global", nil
 }
 
-// IsTimbersSectionInstalled checks if timbers prime is configured in a Claude settings file.
+// IsTimbersSectionInstalled checks if any timbers hooks are configured in a Claude settings file.
 func IsTimbersSectionInstalled(settingsPath string) bool {
 	settings, err := readSettings(settingsPath)
 	if err != nil {
 		return false
 	}
-	return hasTimbersPrime(settings)
+	return hasTimbersHooks(settings)
 }
 
-// InstallTimbersSection adds timbers prime to the SessionStart hooks in a Claude settings file.
+// InstallTimbersSection adds timbers hooks to a Claude settings file.
+// On upgrade, adds missing event hooks without duplicating existing ones.
 func InstallTimbersSection(settingsPath string) error {
 	settingsDir := filepath.Dir(settingsPath)
 	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
@@ -71,12 +97,12 @@ func InstallTimbersSection(settingsPath string) error {
 		settings = make(map[string]any)
 	}
 
-	addTimbersPrime(settings)
+	addTimbersHooks(settings)
 
 	return writeSettings(settingsPath, settings)
 }
 
-// RemoveTimbersSectionFromHook removes timbers prime from a Claude settings file.
+// RemoveTimbersSectionFromHook removes all timbers hooks from a Claude settings file.
 func RemoveTimbersSectionFromHook(settingsPath string) error {
 	settings, err := readSettings(settingsPath)
 	if err != nil {
@@ -86,7 +112,7 @@ func RemoveTimbersSectionFromHook(settingsPath string) error {
 		return output.NewSystemErrorWithCause("failed to read settings file", err)
 	}
 
-	removeTimbersPrime(settings)
+	removeTimbersHooks(settings)
 
 	return writeSettings(settingsPath, settings)
 }
@@ -121,18 +147,32 @@ func writeSettings(path string, settings map[string]any) error {
 	return nil
 }
 
-// isTimbersPrimeCommand checks if a command string is a timbers prime hook
-// (either the current resilient format or the legacy bare command).
-func isTimbersPrimeCommand(cmd string) bool {
-	return cmd == timbersHookCommand || cmd == legacyHookCommand
+// isTimbersCommand checks if a command string is any timbers hook command.
+func isTimbersCommand(cmd string) bool {
+	for _, cfg := range timbersHooks {
+		if cmd == cfg.Command {
+			return true
+		}
+	}
+	return cmd == legacyHookCommand
 }
 
-// hasTimbersPrime checks if the SessionStart hooks contain timbers prime.
-func hasTimbersPrime(settings map[string]any) bool {
-	groups := getSessionStartGroups(settings)
+// hasTimbersHooks checks if any timbers hooks are installed across all events.
+func hasTimbersHooks(settings map[string]any) bool {
+	for _, cfg := range timbersHooks {
+		if hasHookForEvent(settings, cfg.Event) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasHookForEvent checks if a timbers hook exists for a specific event.
+func hasHookForEvent(settings map[string]any, event string) bool {
+	groups := getEventGroups(settings, event)
 	for _, group := range groups {
 		for _, hook := range group.Hooks {
-			if isTimbersPrimeCommand(hook.Command) {
+			if isTimbersCommand(hook.Command) {
 				return true
 			}
 		}
@@ -140,50 +180,54 @@ func hasTimbersPrime(settings map[string]any) bool {
 	return false
 }
 
-// addTimbersPrime adds timbers prime to SessionStart hooks if not already present.
-func addTimbersPrime(settings map[string]any) {
-	if hasTimbersPrime(settings) {
-		return
-	}
-
+// addTimbersHooks adds all timbers hooks, skipping events that already have one.
+func addTimbersHooks(settings map[string]any) {
 	hooks, _ := settings["hooks"].(map[string]any)
 	if hooks == nil {
 		hooks = make(map[string]any)
 		settings["hooks"] = hooks
 	}
 
-	newGroup := map[string]any{
-		"matcher": "",
-		"hooks": []any{
-			map[string]any{
-				"type":    "command",
-				"command": timbersHookCommand,
-			},
-		},
-	}
+	for _, cfg := range timbersHooks {
+		if hasHookForEvent(settings, cfg.Event) {
+			continue
+		}
 
-	existing, _ := hooks["SessionStart"].([]any)
-	hooks["SessionStart"] = append(existing, newGroup)
+		newGroup := map[string]any{
+			"matcher": cfg.Matcher,
+			"hooks": []any{
+				map[string]any{
+					"type":    "command",
+					"command": cfg.Command,
+				},
+			},
+		}
+
+		existing, _ := hooks[cfg.Event].([]any)
+		hooks[cfg.Event] = append(existing, newGroup)
+	}
 }
 
-// removeTimbersPrime removes timbers prime from SessionStart hooks.
-func removeTimbersPrime(settings map[string]any) {
+// removeTimbersHooks removes all timbers hooks from all events.
+func removeTimbersHooks(settings map[string]any) {
 	hooks, ok := settings["hooks"].(map[string]any)
 	if !ok {
 		return
 	}
 
-	groups, ok := hooks["SessionStart"].([]any)
-	if !ok {
-		return
-	}
+	for _, cfg := range timbersHooks {
+		groups, ok := hooks[cfg.Event].([]any)
+		if !ok {
+			continue
+		}
 
-	filtered := filterGroups(groups)
+		filtered := filterGroups(groups)
 
-	if len(filtered) > 0 {
-		hooks["SessionStart"] = filtered
-	} else {
-		delete(hooks, "SessionStart")
+		if len(filtered) > 0 {
+			hooks[cfg.Event] = filtered
+		} else {
+			delete(hooks, cfg.Event)
+		}
 	}
 
 	if len(hooks) == 0 {
@@ -191,7 +235,7 @@ func removeTimbersPrime(settings map[string]any) {
 	}
 }
 
-// filterGroups removes timbers prime hooks from a list of hook groups,
+// filterGroups removes timbers hooks from a list of hook groups,
 // dropping groups that become empty.
 func filterGroups(groups []any) []any {
 	var filtered []any
@@ -213,7 +257,7 @@ func filterGroups(groups []any) []any {
 	return filtered
 }
 
-// filterHooks removes timbers prime entries from a list of hook entries.
+// filterHooks removes timbers entries from a list of hook entries.
 func filterHooks(rawHooks []any) []any {
 	var filtered []any
 	for _, rawHook := range rawHooks {
@@ -222,7 +266,7 @@ func filterHooks(rawHooks []any) []any {
 			filtered = append(filtered, rawHook)
 			continue
 		}
-		if cmd, _ := hook["command"].(string); isTimbersPrimeCommand(cmd) {
+		if cmd, _ := hook["command"].(string); isTimbersCommand(cmd) {
 			continue
 		}
 		filtered = append(filtered, rawHook)
@@ -230,14 +274,14 @@ func filterHooks(rawHooks []any) []any {
 	return filtered
 }
 
-// getSessionStartGroups parses SessionStart hook groups from settings.
-func getSessionStartGroups(settings map[string]any) []hookGroup {
+// getEventGroups parses hook groups from settings for a specific event.
+func getEventGroups(settings map[string]any, event string) []hookGroup {
 	hooks, ok := settings["hooks"].(map[string]any)
 	if !ok {
 		return nil
 	}
 
-	groups, ok := hooks["SessionStart"].([]any)
+	groups, ok := hooks[event].([]any)
 	if !ok {
 		return nil
 	}
@@ -249,6 +293,11 @@ func getSessionStartGroups(settings map[string]any) []hookGroup {
 		}
 	}
 	return result
+}
+
+// getSessionStartGroups parses SessionStart hook groups from settings.
+func getSessionStartGroups(settings map[string]any) []hookGroup {
+	return getEventGroups(settings, "SessionStart")
 }
 
 // parseHookGroup converts a raw JSON group into a typed hookGroup.

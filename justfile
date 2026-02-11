@@ -92,6 +92,15 @@ build-local:
 build-release version:
     go build -ldflags "-X main.version={{version}}" -o bin/timbers ./cmd/timbers
 
+# Install dev build to ~/.local/bin (overwrites release binary)
+install-local: build-local
+    cp bin/timbers ~/.local/bin/timbers
+    @echo "Installed: $(~/.local/bin/timbers --version)"
+
+# Install latest release from GitHub
+install-release:
+    curl -fsSL https://raw.githubusercontent.com/gorewood/timbers/main/install.sh | bash
+
 # =============================================================================
 # DEV WORKFLOW
 # =============================================================================

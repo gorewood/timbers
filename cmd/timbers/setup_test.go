@@ -10,10 +10,10 @@ import (
 	"testing"
 )
 
-// isTimbersPrime checks if a hook command is a timbers prime command
-// (either the current resilient format or the legacy bare command).
+// isTimbersPrime checks if a hook command is a timbers command
+// (either the current resilient format, legacy, or any event hook).
 func isTimbersPrime(cmd string) bool {
-	return strings.Contains(cmd, "timbers prime")
+	return strings.Contains(cmd, "timbers")
 }
 
 // writeSettingsJSON creates a Claude Code settings file with the given content.
@@ -45,7 +45,7 @@ func readSettingsJSON(t *testing.T, path string) map[string]any {
 	return m
 }
 
-// timbersSettings creates a minimal settings map with timbers prime installed.
+// timbersSettings creates a minimal settings map with timbers prime installed (legacy format).
 func timbersSettings() map[string]any {
 	return map[string]any{
 		"hooks": map[string]any{
@@ -59,6 +59,44 @@ func timbersSettings() map[string]any {
 			},
 		},
 	}
+}
+
+// allTimbersEvents are the events timbers installs hooks for.
+var allTimbersEvents = []string{"SessionStart", "PreCompact", "Stop", "PostToolUse"}
+
+// assertAllEventsPresent checks that all expected hook events exist in settings.
+func assertAllEventsPresent(t *testing.T, settings map[string]any) {
+	t.Helper()
+	hooks, ok := settings["hooks"].(map[string]any)
+	if !ok {
+		t.Fatal("expected hooks section in settings")
+	}
+	for _, event := range allTimbersEvents {
+		groups, ok := hooks[event].([]any)
+		if !ok || len(groups) == 0 {
+			t.Errorf("expected %s hook group to exist", event)
+		}
+	}
+}
+
+// countTimbersHooks counts timbers hook entries across all events.
+func countTimbersHooks(settings map[string]any) int {
+	count := 0
+	hooks, _ := settings["hooks"].(map[string]any)
+	for _, event := range allTimbersEvents {
+		groups, _ := hooks[event].([]any)
+		for _, rawGroup := range groups {
+			group, _ := rawGroup.(map[string]any)
+			rawHooks, _ := group["hooks"].([]any)
+			for _, rawHook := range rawHooks {
+				hook, _ := rawHook.(map[string]any)
+				if cmd, _ := hook["command"].(string); isTimbersPrime(cmd) {
+					count++
+				}
+			}
+		}
+	}
+	return count
 }
 
 // TestSetupClaudeCheck verifies the check flag for Claude integration.
@@ -146,7 +184,7 @@ func TestSetupClaudeCheck(t *testing.T) {
 
 // TestSetupClaudeInstall verifies hook installation.
 func TestSetupClaudeInstall(t *testing.T) {
-	t.Run("install creates settings globally", func(t *testing.T) {
+	t.Run("install creates settings with all events", func(t *testing.T) {
 		tmpHome := t.TempDir()
 		t.Setenv("HOME", tmpHome)
 
@@ -162,34 +200,9 @@ func TestSetupClaudeInstall(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Verify settings were created
+		// Verify settings were created with all events
 		settings := readSettingsJSON(t, settingsPath)
-
-		// Check settings content
-		hooks, ok := settings["hooks"].(map[string]any)
-		if !ok {
-			t.Fatal("expected hooks section in settings")
-		}
-		sessionStart, ok := hooks["SessionStart"].([]any)
-		if !ok || len(sessionStart) == 0 {
-			t.Fatal("expected SessionStart hook group")
-		}
-
-		// Verify timbers prime is present
-		found := false
-		for _, rawGroup := range sessionStart {
-			group, _ := rawGroup.(map[string]any)
-			rawHooks, _ := group["hooks"].([]any)
-			for _, rawHook := range rawHooks {
-				hook, _ := rawHook.(map[string]any)
-				if cmd, _ := hook["command"].(string); isTimbersPrime(cmd) {
-					found = true
-				}
-			}
-		}
-		if !found {
-			t.Error("settings should contain 'timbers prime' hook")
-		}
+		assertAllEventsPresent(t, settings)
 	})
 
 	t.Run("install is idempotent", func(t *testing.T) {
@@ -211,23 +224,11 @@ func TestSetupClaudeInstall(t *testing.T) {
 			}
 		}
 
-		// Verify only one timbers hook entry exists
+		// Verify exactly one timbers hook per event (4 total)
 		settings := readSettingsJSON(t, settingsPath)
-		count := 0
-		hooks, _ := settings["hooks"].(map[string]any)
-		sessionStart, _ := hooks["SessionStart"].([]any)
-		for _, rawGroup := range sessionStart {
-			group, _ := rawGroup.(map[string]any)
-			rawHooks, _ := group["hooks"].([]any)
-			for _, rawHook := range rawHooks {
-				hook, _ := rawHook.(map[string]any)
-				if cmd, _ := hook["command"].(string); isTimbersPrime(cmd) {
-					count++
-				}
-			}
-		}
-		if count != 1 {
-			t.Errorf("expected exactly 1 timbers prime hook, found %d", count)
+		count := countTimbersHooks(settings)
+		if count != 4 {
+			t.Errorf("expected exactly 4 timbers hooks (one per event), found %d", count)
 		}
 	})
 
@@ -269,93 +270,124 @@ func TestSetupClaudeInstall(t *testing.T) {
 			t.Error("existing permissions should be preserved")
 		}
 
-		// Verify both hooks present
+		// Verify all events present
+		assertAllEventsPresent(t, settings)
+
+		// Verify bd prime still present
 		hooks, _ := settings["hooks"].(map[string]any)
 		sessionStart, _ := hooks["SessionStart"].([]any)
-		foundBd, foundTimbers := false, false
+		foundBd := false
 		for _, rawGroup := range sessionStart {
 			group, _ := rawGroup.(map[string]any)
 			rawHooks, _ := group["hooks"].([]any)
 			for _, rawHook := range rawHooks {
 				hook, _ := rawHook.(map[string]any)
-				cmd, _ := hook["command"].(string)
-				if cmd == "bd prime" {
+				if cmd, _ := hook["command"].(string); cmd == "bd prime" {
 					foundBd = true
-				}
-				if isTimbersPrime(cmd) {
-					foundTimbers = true
 				}
 			}
 		}
 		if !foundBd {
 			t.Error("existing bd prime hook should be preserved")
 		}
-		if !foundTimbers {
-			t.Error("timbers prime hook should be added")
-		}
 	})
-}
 
-// TestSetupClaudeRemove verifies hook removal.
-func TestSetupClaudeRemove(t *testing.T) {
-	t.Run("remove deletes timbers section only", func(t *testing.T) {
+	t.Run("PostToolUse has Bash matcher", func(t *testing.T) {
 		tmpHome := t.TempDir()
 		t.Setenv("HOME", tmpHome)
-
-		settingsPath := filepath.Join(tmpHome, ".claude", "settings.json")
-
-		// Create settings with timbers and other hooks
-		writeSettingsJSON(t, settingsPath, map[string]any{
-			"hooks": map[string]any{
-				"SessionStart": []any{
-					map[string]any{
-						"matcher": "",
-						"hooks": []any{
-							map[string]any{"type": "command", "command": "bd prime"},
-						},
-					},
-					map[string]any{
-						"matcher": "",
-						"hooks": []any{
-							map[string]any{"type": "command", "command": "timbers prime"},
-						},
-					},
-				},
-			},
-		})
 
 		var buf bytes.Buffer
 		cmd := newSetupCmd()
 		cmd.SetOut(&buf)
-		cmd.SetArgs([]string{"claude", "--global", "--remove"})
+		cmd.SetArgs([]string{"claude", "--global"})
 
 		err := cmd.Execute()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
+		settingsPath := filepath.Join(tmpHome, ".claude", "settings.json")
 		settings := readSettingsJSON(t, settingsPath)
 
-		// timbers should be gone
+		hooks, _ := settings["hooks"].(map[string]any)
+		groups, ok := hooks["PostToolUse"].([]any)
+		if !ok || len(groups) == 0 {
+			t.Fatal("PostToolUse hook group should exist")
+		}
+		group, _ := groups[0].(map[string]any)
+		matcher, _ := group["matcher"].(string)
+		if matcher != "Bash" {
+			t.Errorf("PostToolUse matcher = %q, want %q", matcher, "Bash")
+		}
+	})
+}
+
+// TestSetupClaudeRemove verifies hook removal.
+func TestSetupClaudeRemove(t *testing.T) {
+	t.Run("remove deletes all timbers hooks", func(t *testing.T) {
+		tmpHome := t.TempDir()
+		t.Setenv("HOME", tmpHome)
+
+		settingsPath := filepath.Join(tmpHome, ".claude", "settings.json")
+
+		// Install first, then remove
+		var buf bytes.Buffer
+		cmd := newSetupCmd()
+		cmd.SetOut(&buf)
+		cmd.SetArgs([]string{"claude", "--global"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("install error: %v", err)
+		}
+
+		// Add bd prime alongside
+		settings := readSettingsJSON(t, settingsPath)
 		hooks, _ := settings["hooks"].(map[string]any)
 		sessionStart, _ := hooks["SessionStart"].([]any)
-		for _, rawGroup := range sessionStart {
-			group, _ := rawGroup.(map[string]any)
-			rawHooks, _ := group["hooks"].([]any)
-			for _, rawHook := range rawHooks {
-				hook, _ := rawHook.(map[string]any)
-				if cmd, _ := hook["command"].(string); isTimbersPrime(cmd) {
-					t.Error("timbers prime should be removed")
+		hooks["SessionStart"] = append(sessionStart, map[string]any{
+			"matcher": "",
+			"hooks": []any{
+				map[string]any{"type": "command", "command": "bd prime"},
+			},
+		})
+		writeSettingsJSON(t, settingsPath, settings)
+
+		// Remove
+		buf.Reset()
+		cmd = newSetupCmd()
+		cmd.SetOut(&buf)
+		cmd.SetArgs([]string{"claude", "--global", "--remove"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("remove error: %v", err)
+		}
+
+		result := readSettingsJSON(t, settingsPath)
+
+		// All timbers hooks should be gone from all events
+		rHooks, _ := result["hooks"].(map[string]any)
+		for _, event := range allTimbersEvents {
+			groups, ok := rHooks[event].([]any)
+			if !ok {
+				continue
+			}
+			for _, rawGroup := range groups {
+				group, _ := rawGroup.(map[string]any)
+				rawHookList, _ := group["hooks"].([]any)
+				for _, rawHook := range rawHookList {
+					hook, _ := rawHook.(map[string]any)
+					if cmd, _ := hook["command"].(string); isTimbersPrime(cmd) {
+						t.Errorf("timbers hook should be removed from %s", event)
+					}
 				}
 			}
 		}
 
 		// bd prime should still be there
+		sessionStart, _ = rHooks["SessionStart"].([]any)
 		foundBd := false
 		for _, rawGroup := range sessionStart {
 			group, _ := rawGroup.(map[string]any)
-			rawHooks, _ := group["hooks"].([]any)
-			for _, rawHook := range rawHooks {
+			rawHookList, _ := group["hooks"].([]any)
+			for _, rawHook := range rawHookList {
 				hook, _ := rawHook.(map[string]any)
 				if cmd, _ := hook["command"].(string); cmd == "bd prime" {
 					foundBd = true

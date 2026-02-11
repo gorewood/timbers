@@ -8,14 +8,15 @@ import (
 )
 
 // Onboard snippet templates - both targets use the same content currently.
-const onboardSnippet = `## Development Ledger
+const onboardSnippet = `## Development Ledger (REQUIRED)
 
 This project uses **timbers** for capturing development context.
-Run ` + "`timbers prime`" + ` for workflow context, or install hooks (` + "`timbers hooks install`" + `) for auto-injection.
+You MUST document every commit with ` + "`timbers log`" + ` before ending your session.
+Run ` + "`timbers prime`" + ` for workflow context, or install hooks (` + "`timbers setup claude`" + `) for auto-injection.
 
 **Quick reference:**
-- ` + "`timbers pending`" + ` - Check for undocumented work
-- ` + "`timbers log \"what\" --why \"why\" --how \"how\"`" + ` - Record work
+- ` + "`timbers pending`" + ` - MUST be zero before session end
+- ` + "`timbers log \"what\" --why \"why\" --how \"how\"`" + ` - Run after EVERY commit
 - ` + "`timbers notes push`" + ` - Sync ledger to remote
 
 For full workflow details: ` + "`timbers prime`"

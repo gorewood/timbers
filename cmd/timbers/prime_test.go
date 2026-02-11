@@ -91,7 +91,7 @@ func TestPrimeCommand(t *testing.T) {
 			lastN: 3,
 			wantContains: []string{
 				"Timbers Session Context", "2 undocumented", "(no entries)",
-				"Session Close Protocol", "Core Rules", "Writing Good Why Fields",
+				"CRITICAL: Session Protocol", "Core Rules", "Writing Good Why Fields",
 			},
 		},
 		{
@@ -122,7 +122,7 @@ func TestPrimeCommand(t *testing.T) {
 				commits: []git.Commit{},
 			},
 			lastN:        3,
-			wantContains: []string{"all work documented", "Latest work", "Session Close Protocol"},
+			wantContains: []string{"all work documented", "Latest work", "CRITICAL: Session Protocol"},
 		},
 		{
 			name: "respects lastN flag",
@@ -356,7 +356,7 @@ func TestPrimeExportFlag(t *testing.T) {
 
 	// Verify it contains default workflow content
 	expectedParts := []string{
-		"Session Close Protocol",
+		"CRITICAL: Session Protocol",
 		"Core Rules",
 		"Essential Commands",
 		"timbers pending",

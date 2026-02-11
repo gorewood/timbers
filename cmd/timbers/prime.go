@@ -14,15 +14,20 @@ import (
 
 // defaultWorkflowContent is the default workflow instructions for agent onboarding.
 // This can be overridden by placing a .timbers/PRIME.md file in the repo root.
-const defaultWorkflowContent = `# Session Close Protocol
+const defaultWorkflowContent = `# CRITICAL: Session Protocol
 - [ ] git add && git commit (commit code FIRST)
-- [ ] timbers pending (check for undocumented work)
 - [ ] timbers log "what" --why "why" --how "how" (document committed work)
+- [ ] timbers pending (MUST be zero before session end)
 - [ ] timbers notes push (sync to remote)
 
 IMPORTANT: Always commit code before running timbers log. Entries must
 describe committed work, not work-in-progress. Timbers will warn if
 the working tree is dirty.
+
+# Post-Commit Rule (MANDATORY)
+After EVERY git commit, you MUST run:
+  timbers log "what you did" --why "design decision" --how "approach"
+Do not batch commits. Document each commit immediately.
 
 # Writing Good Why Fields
 The --why flag captures *design decisions*, not feature descriptions.
@@ -38,16 +43,16 @@ GOOD (design decision):
 
 Ask yourself: why THIS approach over alternatives? What trade-off did you make?
 
-# Core Rules
-- Commit code first, then document with timbers log
-- Capture design decisions in --why, not feature summaries
-- Use ` + "`timbers pending`" + ` to check for undocumented commits
-- Run ` + "`timbers notes push`" + ` to sync ledger to remote
+# Core Rules (MANDATORY)
+- You MUST commit code first, then document with timbers log
+- You MUST capture design decisions in --why, not feature summaries
+- You MUST run ` + "`timbers pending`" + ` before session end (MUST be zero)
+- You MUST run ` + "`timbers notes push`" + ` to sync ledger to remote
 
 # Essential Commands
 ### Recording Work
-- ` + "`timbers log \"what\" --why \"why\" --how \"how\"`" + ` - Record development work
-- ` + "`timbers pending`" + ` - Show undocumented commits
+- ` + "`timbers log \"what\" --why \"why\" --how \"how\"`" + ` - Run after EVERY commit
+- ` + "`timbers pending`" + ` - MUST be zero before session end
 
 ### Querying
 - ` + "`timbers query --last 5`" + ` - Recent entries

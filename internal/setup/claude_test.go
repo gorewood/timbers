@@ -82,19 +82,36 @@ func TestIsTimbersSectionInstalled(t *testing.T) {
 			t.Error("expected false for file with only other hooks")
 		}
 	})
+
+	t.Run("detects stop hook as installed", func(t *testing.T) {
+		path := filepath.Join(dir, "has-stop.json")
+		writeJSON(t, path, map[string]any{
+			"hooks": map[string]any{
+				"Stop": []any{
+					map[string]any{
+						"matcher": "",
+						"hooks": []any{
+							map[string]any{"type": "command", "command": stopCommand},
+						},
+					},
+				},
+			},
+		})
+		if !IsTimbersSectionInstalled(path) {
+			t.Error("expected true for file with stop hook")
+		}
+	})
 }
 
 func TestInstallTimbersSection(t *testing.T) {
-	t.Run("creates new file with hook", func(t *testing.T) {
+	t.Run("creates new file with all hooks", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, ".claude", "settings.local.json")
 		if err := InstallTimbersSection(path); err != nil {
 			t.Fatalf("InstallTimbersSection() error: %v", err)
 		}
 		settings := readJSON(t, path)
-		if !hasTimbersPrime(settings) {
-			t.Error("expected timbers prime hook to be present")
-		}
+		assertAllTimbersHooksPresent(t, settings)
 	})
 
 	t.Run("preserves existing settings", func(t *testing.T) {
@@ -107,9 +124,7 @@ func TestInstallTimbersSection(t *testing.T) {
 			t.Fatalf("InstallTimbersSection() error: %v", err)
 		}
 		settings := readJSON(t, path)
-		if !hasTimbersPrime(settings) {
-			t.Error("expected timbers prime hook")
-		}
+		assertAllTimbersHooksPresent(t, settings)
 		perms, ok := settings["permissions"].(map[string]any)
 		if !ok {
 			t.Fatal("permissions should be preserved")
@@ -139,9 +154,7 @@ func TestInstallTimbersSection(t *testing.T) {
 			t.Fatalf("InstallTimbersSection() error: %v", err)
 		}
 		settings := readJSON(t, path)
-		if !hasTimbersPrime(settings) {
-			t.Error("expected timbers prime hook")
-		}
+		assertAllTimbersHooksPresent(t, settings)
 		// Verify bd prime is still there
 		groups := getSessionStartGroups(settings)
 		foundBd := false
@@ -167,24 +180,19 @@ func TestInstallTimbersSection(t *testing.T) {
 			t.Fatal(err)
 		}
 		settings := readJSON(t, path)
-		count := 0
-		groups := getSessionStartGroups(settings)
-		for _, g := range groups {
-			for _, h := range g.Hooks {
-				if isTimbersPrimeCommand(h.Command) {
-					count++
-				}
+		// Count timbers hooks per event — should be exactly 1 each
+		for _, cfg := range timbersHooks {
+			count := countTimbersHooksForEvent(settings, cfg.Event)
+			if count != 1 {
+				t.Errorf("event %s: expected 1 timbers hook, got %d", cfg.Event, count)
 			}
-		}
-		if count != 1 {
-			t.Errorf("expected exactly 1 timbers prime hook, got %d", count)
 		}
 	})
 
 	t.Run("detects legacy format as already installed", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "settings.json")
-		// Write legacy format
+		// Write legacy format for SessionStart only
 		writeJSON(t, path, map[string]any{
 			"hooks": map[string]any{
 				"SessionStart": []any{
@@ -197,24 +205,97 @@ func TestInstallTimbersSection(t *testing.T) {
 				},
 			},
 		})
-		// Install should be a no-op since legacy is detected
+		// Install should skip SessionStart (legacy detected) and add the 3 new events
 		if err := InstallTimbersSection(path); err != nil {
 			t.Fatal(err)
 		}
 		settings := readJSON(t, path)
-		count := 0
-		groups := getSessionStartGroups(settings)
-		for _, g := range groups {
-			for _, h := range g.Hooks {
-				if isTimbersPrimeCommand(h.Command) {
-					count++
-				}
+		// SessionStart should have exactly 1 hook (the legacy one, not duplicated)
+		count := countTimbersHooksForEvent(settings, "SessionStart")
+		if count != 1 {
+			t.Errorf("SessionStart: expected exactly 1 timbers hook, got %d", count)
+		}
+		// Other events should be added
+		for _, event := range []string{"PreCompact", "Stop", "PostToolUse"} {
+			if !hasHookForEvent(settings, event) {
+				t.Errorf("event %s should be installed during upgrade", event)
 			}
 		}
-		if count != 1 {
-			t.Errorf("expected exactly 1 timbers hook, got %d", count)
-		}
 	})
+}
+
+func TestAddTimbersHooks_AllEvents(t *testing.T) {
+	settings := make(map[string]any)
+	addTimbersHooks(settings)
+	assertAllTimbersHooksPresent(t, settings)
+}
+
+func TestAddTimbersHooks_Idempotent(t *testing.T) {
+	settings := make(map[string]any)
+	addTimbersHooks(settings)
+	addTimbersHooks(settings)
+	for _, cfg := range timbersHooks {
+		count := countTimbersHooksForEvent(settings, cfg.Event)
+		if count != 1 {
+			t.Errorf("event %s: expected 1 timbers hook after double add, got %d", cfg.Event, count)
+		}
+	}
+}
+
+func TestAddTimbersHooks_UpgradeFromSingle(t *testing.T) {
+	settings := map[string]any{
+		"hooks": map[string]any{
+			"SessionStart": []any{
+				map[string]any{
+					"matcher": "",
+					"hooks": []any{
+						map[string]any{"type": "command", "command": timbersHookCommand},
+					},
+				},
+			},
+		},
+	}
+	addTimbersHooks(settings)
+	// SessionStart preserved (not duplicated)
+	if count := countTimbersHooksForEvent(settings, "SessionStart"); count != 1 {
+		t.Errorf("SessionStart: expected 1, got %d", count)
+	}
+	// 3 new events added
+	for _, event := range []string{"PreCompact", "Stop", "PostToolUse"} {
+		if !hasHookForEvent(settings, event) {
+			t.Errorf("event %s should be added during upgrade", event)
+		}
+	}
+}
+
+func TestRemoveTimbersHooks_AllEvents(t *testing.T) {
+	// Install all hooks plus some non-timbers hooks
+	settings := map[string]any{
+		"hooks": map[string]any{
+			"SessionStart": []any{
+				map[string]any{
+					"matcher": "",
+					"hooks": []any{
+						map[string]any{"type": "command", "command": "bd prime"},
+					},
+				},
+			},
+		},
+	}
+	addTimbersHooks(settings)
+	removeTimbersHooks(settings)
+
+	// All timbers hooks should be gone
+	for _, cfg := range timbersHooks {
+		if hasHookForEvent(settings, cfg.Event) {
+			t.Errorf("event %s should be removed", cfg.Event)
+		}
+	}
+	// bd prime should remain
+	groups := getSessionStartGroups(settings)
+	if len(groups) != 1 || groups[0].Hooks[0].Command != "bd prime" {
+		t.Error("non-timbers hooks should be preserved")
+	}
 }
 
 func TestRemoveTimbersSectionFromHook(t *testing.T) {
@@ -225,10 +306,11 @@ func TestRemoveTimbersSectionFromHook(t *testing.T) {
 		}
 	})
 
-	t.Run("removes timbers hook preserving others", func(t *testing.T) {
+	t.Run("removes all timbers hooks preserving others", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "settings.json")
-		writeJSON(t, path, map[string]any{
+		// Create settings with timbers (all events) and other hooks
+		settings := map[string]any{
 			"hooks": map[string]any{
 				"SessionStart": []any{
 					map[string]any{
@@ -237,24 +319,23 @@ func TestRemoveTimbersSectionFromHook(t *testing.T) {
 							map[string]any{"type": "command", "command": "bd prime"},
 						},
 					},
-					map[string]any{
-						"matcher": "",
-						"hooks": []any{
-							map[string]any{"type": "command", "command": "timbers prime"},
-						},
-					},
 				},
 			},
-		})
+		}
+		addTimbersHooks(settings)
+		writeJSON(t, path, settings)
+
 		if err := RemoveTimbersSectionFromHook(path); err != nil {
 			t.Fatalf("RemoveTimbersSectionFromHook() error: %v", err)
 		}
-		settings := readJSON(t, path)
-		if hasTimbersPrime(settings) {
-			t.Error("timbers prime should be removed")
+		result := readJSON(t, path)
+		for _, cfg := range timbersHooks {
+			if hasHookForEvent(result, cfg.Event) {
+				t.Errorf("event %s: timbers hook should be removed", cfg.Event)
+			}
 		}
 		// bd prime should still be there
-		groups := getSessionStartGroups(settings)
+		groups := getSessionStartGroups(result)
 		if len(groups) != 1 {
 			t.Fatalf("expected 1 remaining group, got %d", len(groups))
 		}
@@ -281,8 +362,8 @@ func TestRemoveTimbersSectionFromHook(t *testing.T) {
 		if err := RemoveTimbersSectionFromHook(path); err != nil {
 			t.Fatal(err)
 		}
-		settings := readJSON(t, path)
-		if hasTimbersPrime(settings) {
+		result := readJSON(t, path)
+		if hasTimbersHooks(result) {
 			t.Error("legacy timbers prime should be removed")
 		}
 	})
@@ -290,30 +371,46 @@ func TestRemoveTimbersSectionFromHook(t *testing.T) {
 	t.Run("cleans up empty hooks section", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "settings.json")
-		writeJSON(t, path, map[string]any{
+		settings := map[string]any{
 			"permissions": map[string]any{"allow": []any{}},
-			"hooks": map[string]any{
-				"SessionStart": []any{
-					map[string]any{
-						"matcher": "",
-						"hooks": []any{
-							map[string]any{"type": "command", "command": "timbers prime"},
-						},
-					},
-				},
-			},
-		})
+		}
+		addTimbersHooks(settings)
+		writeJSON(t, path, settings)
+
 		if err := RemoveTimbersSectionFromHook(path); err != nil {
 			t.Fatal(err)
 		}
-		settings := readJSON(t, path)
-		if _, ok := settings["hooks"]; ok {
+		result := readJSON(t, path)
+		if _, ok := result["hooks"]; ok {
 			t.Error("empty hooks section should be removed")
 		}
-		if _, ok := settings["permissions"]; !ok {
+		if _, ok := result["permissions"]; !ok {
 			t.Error("other settings should be preserved")
 		}
 	})
+}
+
+func TestIsTimbersCommand(t *testing.T) {
+	tests := []struct {
+		name string
+		cmd  string
+		want bool
+	}{
+		{"resilient prime command", timbersHookCommand, true},
+		{"legacy prime command", legacyHookCommand, true},
+		{"stop command", stopCommand, true},
+		{"post-tool-use command", postToolUseBashCommand, true},
+		{"unrelated command", "bd prime", false},
+		{"empty string", "", false},
+		{"partial match", "timbers", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isTimbersCommand(tc.cmd); got != tc.want {
+				t.Errorf("isTimbersCommand(%q) = %v, want %v", tc.cmd, got, tc.want)
+			}
+		})
+	}
 }
 
 func TestResolveClaudeSettingsPath(t *testing.T) {
@@ -345,6 +442,48 @@ func TestResolveClaudeSettingsPath(t *testing.T) {
 			t.Errorf("project path should end with settings.local.json, got: %s", path)
 		}
 	})
+}
+
+func TestPostToolUseHasBashMatcher(t *testing.T) {
+	settings := make(map[string]any)
+	addTimbersHooks(settings)
+
+	hooks, _ := settings["hooks"].(map[string]any)
+	groups, ok := hooks["PostToolUse"].([]any)
+	if !ok || len(groups) == 0 {
+		t.Fatal("PostToolUse hook group should exist")
+	}
+	group, _ := groups[0].(map[string]any)
+	matcher, _ := group["matcher"].(string)
+	if matcher != "Bash" {
+		t.Errorf("PostToolUse matcher = %q, want %q", matcher, "Bash")
+	}
+}
+
+// --- test helpers ---
+
+// assertAllTimbersHooksPresent checks that all 4 hook events are installed.
+func assertAllTimbersHooksPresent(t *testing.T, settings map[string]any) {
+	t.Helper()
+	for _, cfg := range timbersHooks {
+		if !hasHookForEvent(settings, cfg.Event) {
+			t.Errorf("event %s: timbers hook should be present", cfg.Event)
+		}
+	}
+}
+
+// countTimbersHooksForEvent counts timbers hook entries in a specific event.
+func countTimbersHooksForEvent(settings map[string]any, event string) int {
+	count := 0
+	groups := getEventGroups(settings, event)
+	for _, g := range groups {
+		for _, h := range g.Hooks {
+			if isTimbersCommand(h.Command) {
+				count++
+			}
+		}
+	}
+	return count
 }
 
 // writeTestFile creates a file in tests. Hook files need 0o755 for realistic testing.

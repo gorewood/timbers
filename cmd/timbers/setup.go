@@ -65,11 +65,17 @@ func newSetupClaudeCmd() *cobra.Command {
 		Short: "Install Claude Code integration",
 		Long: `Install timbers integration with Claude Code.
 
-Adds a SessionStart hook entry that runs 'timbers prime' at the start of each
-Claude Code session, injecting development context into the conversation.
+Adds hooks to multiple Claude Code events for comprehensive workflow integration:
+  - SessionStart: injects development context at session start
+  - PreCompact: re-injects context before context compression
+  - Stop: warns about undocumented commits at session end
+  - PostToolUse (Bash): nudges to run 'timbers log' after git commits
 
 By default, installs to the current project's .claude/settings.local.json.
 Use --global to install to ~/.claude/settings.json instead.
+
+Re-running this command safely upgrades existing installations by adding
+missing hooks without duplicating existing ones.
 
 Examples:
   timbers setup claude           # Install for this project
