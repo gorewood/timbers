@@ -1,0 +1,31 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-10T05:07:34Z_9ac3a5",
+    "created_at": "2026-02-10T05:07:34.051922Z",
+    "updated_at": "2026-02-10T05:07:34.051922Z",
+    "workset": {
+        "anchor_commit": "9ac3a5153e98e202ca501df430b0e8510d9ef4cb",
+        "commits": [
+            "9ac3a5153e98e202ca501df430b0e8510d9ef4cb",
+            "ae9e7aa48967c34e02025d4fcfa258d7aa91a201",
+            "7932a80f4b48736b8b68b82a678c93f860cbe813",
+            "e4530af04389734df8064683b4ec1f419681d956",
+            "f03be53e0322565e3b9d79ddda94ad3afef4cfe2",
+            "347d4ea453aec42407de90bd5b302317ff0674d5",
+            "8b486e268be5bff6f2d45a12903eeef5d389b5a0",
+            "2e3091cb2ac5d6be7edec65c95dcb92c68d6f29a"
+        ],
+        "range": "2e3091c..9ac3a51",
+        "diffstat": {
+            "files": 22,
+            "insertions": 2577,
+            "deletions": 57
+        }
+    },
+    "summary": {
+        "what": "Added timbers changelog command that generates markdown changelogs from ledger entries, grouped by tag",
+        "why": "Markdown output over structured JSON because changelogs are human-readable documents not machine data. Group-by-tag with duplication over primary-tag assignment because discoverability in context matters more than deduplication. Default to all entries unlike export/query because a changelog without content is useless and requiring --last 999 is hostile UX.",
+        "how": "New changelog.go following export.go patterns: newChangelogCmdInternal with storage injection, reuses getEntriesByLast/getEntriesByTimeRange/filterEntriesByTags from entry_filter.go, groupEntriesByTag with alphabetical sort and Other-last ordering, formatTagTitle for section headers, both markdown and JSON output paths. Table-driven tests cover grouping, filtering, tag duplication, custom titles, JSON output, and empty states."
+    }
+}

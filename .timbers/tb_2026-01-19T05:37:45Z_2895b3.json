@@ -1,0 +1,33 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-01-19T05:37:45Z_2895b3",
+    "created_at": "2026-01-19T05:37:45.763251Z",
+    "updated_at": "2026-01-19T05:37:45.763251Z",
+    "workset": {
+        "anchor_commit": "2895b30",
+        "commits": [
+            "2895b30f44c4e584db92b86111a5ade7beff1b1e",
+            "745c3b6a148ced995ab1fdb9f481e29321d8b113",
+            "35e8a65c4de4c821d7ffd1fb551462527c7b2897",
+            "9feb30b1ce3f1bfc9179dce81f8fb7d04768b57a",
+            "c143f60c2ea5017b6ce1238cb63772bde74a85d3"
+        ],
+        "range": "c143f60..2895b30",
+        "diffstat": {
+            "files": 49,
+            "insertions": 5143,
+            "deletions": 158
+        }
+    },
+    "summary": {
+        "what": "Enhanced logging and LLM prompt templates",
+        "why": "Reduce friction for documenting work (auto-extract from commits, batch by work-item) and enable LLM-ready output for reports",
+        "how": "Auto mode parses commit messages, batch groups by beads trailers or dates, prompt command with 8 built-in templates and resolution chain"
+    },
+    "tags": [
+        "logging",
+        "templates",
+        "llm"
+    ]
+}

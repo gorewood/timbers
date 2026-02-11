@@ -1,0 +1,51 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-09T06:25:03Z_17f056",
+    "created_at": "2026-02-09T06:25:03.347305Z",
+    "updated_at": "2026-02-09T06:32:55.712981Z",
+    "workset": {
+        "anchor_commit": "17f056491bb1fab3af2d428839336ef89f28d226",
+        "commits": [
+            "17f056491bb1fab3af2d428839336ef89f28d226",
+            "530650424fcfc2cc328b230688e9eb77dfacef5f",
+            "a11784735c67a97c53f5d449c02a96747650c77e",
+            "6393788a24048e0b88238d5ca9ad8149493d87d3",
+            "e3e93cc99bf686cf2f12834789065b5788cc5518",
+            "69c4437126410de23751ed88e85549fe9625afe6",
+            "094a2488185269ad00b0b1b36e539511c1a5f076",
+            "6f493991bd9cd4867697177aeffebcd43f2d7fab",
+            "368effcc6c6549c8ffaa4aa716c622012c07aa84",
+            "793d65056396c504a7af4cf0884b99560e3bc1e5",
+            "88fd2222651679933a9d5572072755521c00f2e4",
+            "c55ffd1c35cec2c50e9536b54cd04f626d8290f9",
+            "a493e0d31b8f394d1ff1bbd54041ab40815980f4",
+            "ff51d5dd5a0634407243fce0d9bb2316fafcce50",
+            "09aad63886e39cd5f5dad9c36571652b8f93706d",
+            "c9db4974c9ff475b136941578ca15b290b150c82",
+            "9f79c6887ae3f302f6678b70af4da2063b6bd4f1",
+            "a4b854431656e178a5fd9c16e936cfd7266c578c"
+        ],
+        "range": "a4b8544..17f0564",
+        "diffstat": {
+            "files": 110,
+            "insertions": 7119,
+            "deletions": 1723
+        }
+    },
+    "summary": {
+        "what": "Added --tag filtering to timbers query command",
+        "why": "Query needed tag-based filtering for agents to discover related work across entries. Chose OR semantics over AND because agents typically want broad discovery \u2014 AND can be composed with multiple queries. Cobra StringSliceVar handles both repeated flags and comma separation for free.",
+        "how": "Added --tag StringSliceVar flag to query command, filterEntriesByTags() in entry_filter.go using OR matching with slices.Contains, extracted canUseOptimizedPath() and applyQueryFilters() to reduce cyclomatic complexity. Table-driven tests cover single tag, multiple tags, no match, empty tags, and composition with --last."
+    },
+    "tags": [
+        "feature",
+        "query"
+    ],
+    "work_items": [
+        {
+            "system": "beads",
+            "id": "timbers-oxq"
+        }
+    ]
+}

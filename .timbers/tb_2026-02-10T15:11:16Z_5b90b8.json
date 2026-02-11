@@ -1,0 +1,25 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-10T15:11:16Z_5b90b8",
+    "created_at": "2026-02-10T15:11:16.132137Z",
+    "updated_at": "2026-02-10T15:11:16.132137Z",
+    "workset": {
+        "anchor_commit": "5b90b867bc617071fe0b18d9290b174acf168a6b",
+        "commits": [
+            "5b90b867bc617071fe0b18d9290b174acf168a6b",
+            "bc6d20c3645dd0ddb221751ef53efd339f549d2c"
+        ],
+        "range": "bc6d20c..5b90b86",
+        "diffstat": {
+            "files": 6,
+            "insertions": 156,
+            "deletions": 12
+        }
+    },
+    "summary": {
+        "what": "Centralize config dir with cross-platform support, document configuration in README",
+        "why": "Config path was hardcoded as ~/.config/timbers in two places (env loader, template resolver). Windows users would get the wrong path. Also, README had no documentation of config strategy, API keys, or custom templates \u2014 users had to discover these by reading source.",
+        "how": "New internal/config package with Dir() function: checks TIMBERS_CONFIG_HOME, XDG_CONFIG_HOME, Windows AppData, then falls back to ~/.config/timbers. Both env loader and template resolver now use config.Dir(). README gains Configuration section covering env file resolution, API key setup, and custom template creation."
+    }
+}

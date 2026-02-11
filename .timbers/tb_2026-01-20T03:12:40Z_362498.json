@@ -1,0 +1,26 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-01-20T03:12:40Z_362498",
+    "created_at": "2026-01-20T03:12:40.622179Z",
+    "updated_at": "2026-01-20T03:12:40.622179Z",
+    "workset": {
+        "anchor_commit": "362498f",
+        "commits": [
+            "362498ff9e0d2e2d471d9efc01ec45d6988d8190"
+        ],
+        "diffstat": {
+            "files": 3,
+            "insertions": 49,
+            "deletions": 47
+        }
+    },
+    "summary": {
+        "what": "Add --limit and --group-by flags to catchup command",
+        "why": "Give users control over catchup batch size and grouping strategy for better workflow flexibility",
+        "how": "Added --limit/-l to cap entries per run, --group-by/-g to select day or work-item grouping"
+    },
+    "tags": [
+        "cli"
+    ]
+}

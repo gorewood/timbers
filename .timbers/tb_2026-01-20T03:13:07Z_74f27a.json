@@ -1,0 +1,30 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-01-20T03:13:07Z_74f27a",
+    "created_at": "2026-01-20T03:13:07.373075Z",
+    "updated_at": "2026-01-20T03:13:07.373075Z",
+    "workset": {
+        "anchor_commit": "74f27a3",
+        "commits": [
+            "a4b854431656e178a5fd9c16e936cfd7266c578c",
+            "c9f679387df38b7323e8c32d7bf0f899d86dfad1",
+            "74f27a3b4e89a08a5f3ac7075d4a08f47b342ece"
+        ],
+        "range": "74f27a3..a4b8544",
+        "diffstat": {
+            "files": 6,
+            "insertions": 362,
+            "deletions": 6
+        }
+    },
+    "summary": {
+        "what": "Set up goreleaser infrastructure",
+        "why": "Foundation for automated release pipeline",
+        "how": "Initial goreleaser config, GitHub Actions workflow, install.sh script"
+    },
+    "tags": [
+        "release",
+        "ci"
+    ]
+}

@@ -1,0 +1,33 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-01-19T05:37:28Z_552e6c",
+    "created_at": "2026-01-19T05:37:28.55109Z",
+    "updated_at": "2026-01-19T05:37:28.55109Z",
+    "workset": {
+        "anchor_commit": "552e6cb",
+        "commits": [
+            "552e6cbea82f8f68f1047bf3fe8223e6a4603548",
+            "72689743cf970186dede0bd1105b1740f45e4d44",
+            "64bf8bc6a1c7c2a1a3dba42caa837253cf9fb282",
+            "0e29c1556dce8dbd307f6a12ea173ea2a5b4c7a2",
+            "dcb4b3a6dea266373a81a08c191e95c61fdad89b"
+        ],
+        "range": "dcb4b3a..552e6cb",
+        "diffstat": {
+            "files": 22,
+            "insertions": 3593,
+            "deletions": 551
+        }
+    },
+    "summary": {
+        "what": "Project foundation: spec, CLI scaffold, agent DX guide",
+        "why": "Create a development ledger that captures why alongside what - the reasoning that evaporates after sessions end",
+        "how": "Spec-first design with dialectical refinement, Cobra CLI with Charmbracelet styling, comprehensive agent DX patterns guide"
+    },
+    "tags": [
+        "foundation",
+        "spec",
+        "agent-dx"
+    ]
+}

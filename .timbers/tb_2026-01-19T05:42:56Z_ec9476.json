@@ -1,0 +1,27 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-01-19T05:42:56Z_ec9476",
+    "created_at": "2026-01-19T05:42:56.561947Z",
+    "updated_at": "2026-01-19T05:42:56.561947Z",
+    "workset": {
+        "anchor_commit": "ec9476d5f25eefe57be0e84a2410cc7d5fb33843",
+        "commits": [
+            "ec9476d5f25eefe57be0e84a2410cc7d5fb33843"
+        ],
+        "diffstat": {
+            "files": 2,
+            "insertions": 539,
+            "deletions": 0
+        }
+    },
+    "summary": {
+        "what": "Comprehensive tutorial for setup, catching up, and usage",
+        "why": "Users need step-by-step guidance for onboarding, catching up existing repos, and integrating with agent workflows",
+        "how": "8-part tutorial covering installation, batch catchup strategies, daily workflow, agent integration, querying, LLM reports, human uses, and troubleshooting"
+    },
+    "tags": [
+        "docs",
+        "tutorial"
+    ]
+}

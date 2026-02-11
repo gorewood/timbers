@@ -1,0 +1,32 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-01-20T03:12:46Z_f9e09e",
+    "created_at": "2026-01-20T03:12:46.338754Z",
+    "updated_at": "2026-01-20T03:12:46.338754Z",
+    "workset": {
+        "anchor_commit": "f9e09e4",
+        "commits": [
+            "a4b854431656e178a5fd9c16e936cfd7266c578c",
+            "c9f679387df38b7323e8c32d7bf0f899d86dfad1",
+            "74f27a3b4e89a08a5f3ac7075d4a08f47b342ece",
+            "f9e09e411b830905f1828f319ea1555f10198e87",
+            "ddd9948cdfc93fb15c4216e71341b24da655952e",
+            "2786d8b5700f74dada4fc0bfb111a5b70954b44b"
+        ],
+        "range": "2786d8b..a4b8544",
+        "diffstat": {
+            "files": 9,
+            "insertions": 386,
+            "deletions": 37
+        }
+    },
+    "summary": {
+        "what": "Add robustness for non-timbers notes",
+        "why": "Repos may have git notes from other tools; timbers should gracefully skip them instead of erroring",
+        "how": "Added ErrNotTimbersNote, schema validation in entry parsing, ListEntriesWithStats() for status --verbose"
+    },
+    "tags": [
+        "robustness"
+    ]
+}

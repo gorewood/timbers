@@ -1,0 +1,23 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-11T02:05:25Z_412be8",
+    "created_at": "2026-02-11T02:05:25.567437Z",
+    "updated_at": "2026-02-11T02:05:25.567437Z",
+    "workset": {
+        "anchor_commit": "412be8a80238f2cf765aa816f07850c781ec6ced",
+        "commits": [
+            "412be8a80238f2cf765aa816f07850c781ec6ced"
+        ],
+        "diffstat": {
+            "files": 4,
+            "insertions": 114,
+            "deletions": 12
+        }
+    },
+    "summary": {
+        "what": "Graceful degradation: hook command warns instead of erroring when timbers not installed",
+        "why": "Team members cloning a timbers-enabled repo without timbers installed would get hook errors at every session start, blocking adoption. The git hook already had command -v guard but the Claude Code hook did not.",
+        "how": "Wrapped hook command in command -v check with friendly install URL fallback. Added isTimbersPrimeCommand() for backward-compat detection of both legacy and resilient formats. Updated DX guide with pattern."
+    }
+}

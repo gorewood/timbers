@@ -1,0 +1,23 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-10T06:25:36Z_add014",
+    "created_at": "2026-02-10T06:25:36.802954Z",
+    "updated_at": "2026-02-10T06:25:36.802954Z",
+    "workset": {
+        "anchor_commit": "add014d08f2a563cfb46d533c018e105430f665b",
+        "commits": [
+            "add014d08f2a563cfb46d533c018e105430f665b"
+        ],
+        "diffstat": {
+            "files": 4,
+            "insertions": 63,
+            "deletions": 11
+        }
+    },
+    "summary": {
+        "what": "Renamed prompt command to draft, added ADR decision-log template, surfaced draft in prime output",
+        "why": "Prompt is developer jargon that undersells document generation \u2014 draft reads as the action it performs (draft a changelog, draft release notes). Decision-log template fills the biggest gap: the why-field data is uniquely suited to ADR extraction and no existing template exploited it. Prime omitted document generation entirely, causing agents to reach for export|pipe instead.",
+        "how": "Changed cobra Use/Short/Long in prompt.go, updated error message and examples to reference draft. Added decision-log.md template with ADR-N format, filtering guidance for thin why-fields, and consequences section. Added Generating Documents section to prime defaultWorkflowContent with draft --list, draft for piping, and draft --model opus examples."
+    }
+}

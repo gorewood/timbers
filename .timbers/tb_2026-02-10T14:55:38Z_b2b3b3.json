@@ -1,0 +1,23 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-10T14:55:38Z_b2b3b3",
+    "created_at": "2026-02-10T14:55:38.433253Z",
+    "updated_at": "2026-02-10T14:55:38.433253Z",
+    "workset": {
+        "anchor_commit": "b2b3b3bf40ebf831412c0104ac3c546b80a134e4",
+        "commits": [
+            "b2b3b3bf40ebf831412c0104ac3c546b80a134e4"
+        ],
+        "diffstat": {
+            "files": 7,
+            "insertions": 227,
+            "deletions": 6
+        }
+    },
+    "summary": {
+        "what": "Add .env.local support for API keys and changelog just recipe",
+        "why": "Claude Code conflicts with ANTHROPIC_API_KEY in environment (confuses it with OAuth); need a way to provide API keys from a file that timbers loads as fallback. Changelog recipe needed for pre-release workflow.",
+        "how": "New internal/envfile package reads .env.local then .env, sets vars not already in env. Wired into root PersistentPreRunE. Added .env.example template. Updated changelog just recipe to default to opus."
+    }
+}

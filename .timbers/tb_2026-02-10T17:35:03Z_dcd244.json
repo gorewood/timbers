@@ -1,0 +1,25 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-10T17:35:03Z_dcd244",
+    "created_at": "2026-02-10T17:35:03.387375Z",
+    "updated_at": "2026-02-10T17:35:03.387375Z",
+    "workset": {
+        "anchor_commit": "dcd2449f5bde300691d3e3eb3866285c36b72f69",
+        "commits": [
+            "dcd2449f5bde300691d3e3eb3866285c36b72f69",
+            "ab80b57be3132d4f85ee34e3aad16fcf24da4484"
+        ],
+        "range": "ab80b57..dcd2449",
+        "diffstat": {
+            "files": 14,
+            "insertions": 248,
+            "deletions": 154
+        }
+    },
+    "summary": {
+        "what": "Switch Claude hooks from global to project-level, make git hooks opt-in, add lipgloss to doctor/init",
+        "why": "Global Claude hook was a no-op in uninitiated repos but still ran timbers prime everywhere; git hooks conflicted with tools like beads that need pre-commit for critical operations; project-level is the natural scope since timbers requires per-repo init",
+        "how": "Flipped setup claude default from global to --global flag, added NotesRefExists guard to prime, changed --no-hooks to opt-in --hooks, added TTY-aware lipgloss style sets to doctor/init following existing uninstall pattern"
+    }
+}

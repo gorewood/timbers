@@ -1,0 +1,42 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-01-19T05:37:34Z_27a729",
+    "created_at": "2026-01-19T05:37:34.600335Z",
+    "updated_at": "2026-01-19T05:37:34.600335Z",
+    "workset": {
+        "anchor_commit": "27a7292",
+        "commits": [
+            "27a729215f98660f59b7831947122c0a6d846858",
+            "7603073a72dd956e869e147c30adcb5b1a6a399f",
+            "67e05c4829fad1ec8f52f1f3c4ba606b82d0d0e2",
+            "33b6dcbea3b5ef2fea6b07ad02dbeb4041e1361d",
+            "b50dd5e87af341dcfb70d10cb8e5112aaf8971db",
+            "11c1363987985215c9ea27febc71c07c27536b69",
+            "a35bc8edbabb251fca5ade36fdf1076645648833",
+            "5a39f778933c56a36b17e38c82f777d5579acb79",
+            "1a39eeb2cc7080980173b6811c54201134c3d205",
+            "4ead111037e19f432e8769ed3a8d4e432665ac8f",
+            "79eb83562b0dc20c0313bd3a0debd27056664175",
+            "16eaa85b4f983e96c1a944a10b196d9fc1094c45",
+            "58f8b8ec35403d9f8c53c3b9cd8e0493ead29885",
+            "63d9aba8b8a94e1cf633bde694c9b5bfdc68218f"
+        ],
+        "range": "63d9aba..27a7292",
+        "diffstat": {
+            "files": 21,
+            "insertions": 4607,
+            "deletions": 11
+        }
+    },
+    "summary": {
+        "what": "Internal packages and core CLI commands",
+        "why": "Need clean abstraction layers for git operations and entry management, plus the essential recording workflow",
+        "how": "Git exec wrapper with notes layer, ledger entry schema with validation, status/pending/log/show commands for the core workflow"
+    },
+    "tags": [
+        "core",
+        "git",
+        "ledger"
+    ]
+}

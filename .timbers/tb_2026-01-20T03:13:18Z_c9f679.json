@@ -1,0 +1,25 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-01-20T03:13:18Z_c9f679",
+    "created_at": "2026-01-20T03:13:18.602071Z",
+    "updated_at": "2026-01-20T03:13:18.602071Z",
+    "workset": {
+        "anchor_commit": "c9f6793",
+        "commits": [
+            "a4b854431656e178a5fd9c16e936cfd7266c578c",
+            "c9f679387df38b7323e8c32d7bf0f899d86dfad1"
+        ],
+        "range": "c9f6793..a4b8544",
+        "diffstat": {
+            "files": 1,
+            "insertions": 10,
+            "deletions": 3
+        }
+    },
+    "summary": {
+        "what": "Update README with installation instructions",
+        "why": "Users need clear install options at the top of the README",
+        "how": "Added Installation section with curl|bash and go install methods"
+    }
+}

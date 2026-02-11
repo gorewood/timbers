@@ -1,0 +1,23 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-11T15:59:33Z_252fd5",
+    "created_at": "2026-02-11T15:59:33.246748Z",
+    "updated_at": "2026-02-11T15:59:33.246748Z",
+    "workset": {
+        "anchor_commit": "252fd529929a6ca982699e4e85be28359b837617",
+        "commits": [
+            "252fd529929a6ca982699e4e85be28359b837617"
+        ],
+        "diffstat": {
+            "files": 2,
+            "insertions": 25,
+            "deletions": 1
+        }
+    },
+    "summary": {
+        "what": "Cut v0.5.0: multi-event Claude Code hooks",
+        "why": "Feature-complete milestone; 4-hook lifecycle approach validated through testing",
+        "how": "just release 0.5.0 \u2014 auto-generated changelog, tagged, pushed to trigger GitHub Actions"
+    }
+}

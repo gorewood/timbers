@@ -69,6 +69,10 @@ Desktop.ini
 # Install script
 !install.sh
 
+# Timbers ledger entries
+!.timbers/
+!.timbers/**
+
 # Beads issue tracking
 !.beads/
 !.beads/**

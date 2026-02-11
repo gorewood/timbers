@@ -1,0 +1,35 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-11T00:52:06Z_d0cb50",
+    "created_at": "2026-02-11T00:52:06.705266Z",
+    "updated_at": "2026-02-11T00:52:06.705266Z",
+    "workset": {
+        "anchor_commit": "d0cb5001f59fd090c3f8fda034fb1f03a7f14d4c",
+        "commits": [
+            "d0cb5001f59fd090c3f8fda034fb1f03a7f14d4c",
+            "b6ae127ee5558f71df9cde4ae583fb19a21a04ac",
+            "52f1489bc99010503316584e6ea3ae816a3d5d2b",
+            "037b0e840eb283ea35b15595e14ad86bdaea9eb8",
+            "e96bcfffcda5f55c788426c7d79b0beec2e16bfd",
+            "178ec4b3bb12f86861b2e6ab8fcb4e3316a373b0",
+            "0512d5cf957005b32f835782e2f6f789f905efec"
+        ],
+        "range": "0512d5c..d0cb500",
+        "diffstat": {
+            "files": 19,
+            "insertions": 580,
+            "deletions": 154
+        }
+    },
+    "summary": {
+        "what": "Published Hugo site to GitHub Pages with example artifacts and versioned CHANGELOG",
+        "why": "Examples demonstrate real output from each draft template, making the value proposition tangible for new users. Versioned CHANGELOG was missing release sections, making it useless for tracking what shipped when.",
+        "how": "Generated 5 example artifacts with opus, added site/content/examples/ section with Hugo nav. Rewrote CHANGELOG.md with proper v0.1.0/v0.2.0/v0.3.0 sections. Updated changelog template v5 to support version headings via --append. Rewrote just release recipe to generate changelog, commit, tag, and push in one step."
+    },
+    "tags": [
+        "site",
+        "release",
+        "dx"
+    ]
+}

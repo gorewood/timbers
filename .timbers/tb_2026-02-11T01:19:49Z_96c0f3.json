@@ -1,0 +1,23 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-11T01:19:49Z_96c0f3",
+    "created_at": "2026-02-11T01:19:49.519348Z",
+    "updated_at": "2026-02-11T01:19:49.519348Z",
+    "workset": {
+        "anchor_commit": "96c0f3645443de076e0b9030373db6ffe38660d0",
+        "commits": [
+            "96c0f3645443de076e0b9030373db6ffe38660d0"
+        ],
+        "diffstat": {
+            "files": 19,
+            "insertions": 53,
+            "deletions": 273
+        }
+    },
+    "summary": {
+        "what": "v0.4.0 prep: renamed internal/prompt to internal/draft, gitignored history/, updated agent DX guide with v0.3+ learnings, installed timbers on PATH",
+        "why": "Package name inconsistency (command is 'draft' but package was 'prompt') would confuse contributors; history/ artifacts shouldn't be in git; DX guide needed JSON hook format docs and shell-script anti-pattern learned from v0.3 hook rewrite",
+        "how": "git mv for package rename, replace_all for import/declaration updates, added concrete JSON hook example and new anti-pattern section to DX guide"
+    }
+}

@@ -1,0 +1,29 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-01-20T03:12:31Z_a4b854",
+    "created_at": "2026-01-20T03:12:31.036115Z",
+    "updated_at": "2026-01-20T03:12:31.036115Z",
+    "workset": {
+        "anchor_commit": "a4b8544",
+        "commits": [
+            "a4b854431656e178a5fd9c16e936cfd7266c578c",
+            "c9f679387df38b7323e8c32d7bf0f899d86dfad1"
+        ],
+        "range": "c9f6793..a4b8544",
+        "diffstat": {
+            "files": 3,
+            "insertions": 48,
+            "deletions": 16
+        }
+    },
+    "summary": {
+        "what": "Add goreleaser for automated GitHub releases",
+        "why": "Enable users to install timbers via curl|bash or download binaries directly from GitHub releases",
+        "how": "Added .goreleaser.yaml config, GitHub Actions workflow on tag push, install.sh with checksum verification, and just install-local for testing before release"
+    },
+    "tags": [
+        "release",
+        "ci"
+    ]
+}

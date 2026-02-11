@@ -1,0 +1,30 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-01-19T05:37:52Z_8ad19f",
+    "created_at": "2026-01-19T05:37:52.116559Z",
+    "updated_at": "2026-01-19T05:37:52.116559Z",
+    "workset": {
+        "anchor_commit": "8ad19f2",
+        "commits": [
+            "8ad19f217c8106c27b9dca4814a7350afc02b3f2",
+            "0502b56b3c005cc6fb1b1bd299fec47542555ffd"
+        ],
+        "range": "0502b56..8ad19f2",
+        "diffstat": {
+            "files": 4,
+            "insertions": 285,
+            "deletions": 118
+        }
+    },
+    "summary": {
+        "what": "Agent onboarding, clean uninstall, and documentation polish",
+        "why": "Better agent onboarding with workflow instructions, clean removal support, and a compelling README that explains the value proposition",
+        "how": "Prime now outputs workflow instructions with override support, uninstall removes from repo (optionally binary), README rewritten with problem/solution framing"
+    },
+    "tags": [
+        "agent-dx",
+        "docs",
+        "admin"
+    ]
+}

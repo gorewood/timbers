@@ -1,0 +1,23 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-10T15:19:30Z_451926",
+    "created_at": "2026-02-10T15:19:30.88382Z",
+    "updated_at": "2026-02-10T15:19:30.88382Z",
+    "workset": {
+        "anchor_commit": "4519261ecd441cc2d5408a6a4eae36ebf75aa7b0",
+        "commits": [
+            "4519261ecd441cc2d5408a6a4eae36ebf75aa7b0"
+        ],
+        "diffstat": {
+            "files": 3,
+            "insertions": 246,
+            "deletions": 4
+        }
+    },
+    "summary": {
+        "what": "Enhanced doctor with CONFIG section and version check",
+        "why": "Doctor had no awareness of config dirs, env files, templates, or whether the binary was up to date \u2014 all added since the initial doctor implementation",
+        "how": "Added 4 new checks (config dir, env files, API keys, templates) in a new doctor_config.go file to stay under lint file-length limit. Version check queries GitHub releases API with 5s timeout, graceful failure for dev builds and network errors."
+    }
+}

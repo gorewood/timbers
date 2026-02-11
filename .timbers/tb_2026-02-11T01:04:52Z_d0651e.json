@@ -1,0 +1,28 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-11T01:04:52Z_d0651e",
+    "created_at": "2026-02-11T01:04:52.913009Z",
+    "updated_at": "2026-02-11T01:04:52.913009Z",
+    "workset": {
+        "anchor_commit": "d0651efbdc6c1f04a49d629bc0a8893a2ad9b379",
+        "commits": [
+            "d0651efbdc6c1f04a49d629bc0a8893a2ad9b379"
+        ],
+        "diffstat": {
+            "files": 10,
+            "insertions": 643,
+            "deletions": 359
+        }
+    },
+    "summary": {
+        "what": "Rewrote Claude Code hook integration from shell scripts to JSON settings",
+        "why": "timbers setup claude was writing shell scripts to .claude/hooks/user_prompt_submit.sh, but Claude Code actually uses JSON hooks in settings.json/settings.local.json with SessionStart events. This mismatch caused 0% hook adoption \u2014 timbers prime never ran at session start, so agents never got context injected.",
+        "how": "Replaced shell script read/write/parse logic in internal/setup/claude.go with JSON settings manipulation (readSettings/writeSettings/addTimbersPrime/removeTimbersPrime). Refactored for lint compliance by extracting filterGroups/filterHooks/parseHookGroup/parseHookEntry helpers. Updated all 10 callers and rewrote tests. Updated agent-dx-guide docs. Removed old .claude/hooks/user_prompt_submit.sh."
+    },
+    "tags": [
+        "fix",
+        "hooks",
+        "claude"
+    ]
+}

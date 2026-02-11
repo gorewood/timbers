@@ -1,0 +1,25 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-10T07:17:17Z_9e35b7",
+    "created_at": "2026-02-10T07:17:17.719549Z",
+    "updated_at": "2026-02-10T07:17:17.719549Z",
+    "workset": {
+        "anchor_commit": "9e35b7d10a13a37bffe34f561f71dda435a06735",
+        "commits": [
+            "9e35b7d10a13a37bffe34f561f71dda435a06735",
+            "e4117d11a81c7884c795e6aaae54db9fd848a85f"
+        ],
+        "range": "e4117d1..9e35b7d",
+        "diffstat": {
+            "files": 8,
+            "insertions": 640,
+            "deletions": 9
+        }
+    },
+    "summary": {
+        "what": "Route errors/warnings to stderr when piped, add draft status hint",
+        "why": "Pipe ergonomics: errors and warnings were going to stdout which corrupts piped output; status hints help users know output is flowing",
+        "how": "output.Printer WithStderr() routes Warn() to stderr; detect piped stdout and emit status hint to stderr"
+    }
+}

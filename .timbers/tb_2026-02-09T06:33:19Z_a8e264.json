@@ -1,0 +1,29 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-09T06:33:19Z_a8e264",
+    "created_at": "2026-02-09T06:33:19.54538Z",
+    "updated_at": "2026-02-09T06:33:19.54538Z",
+    "workset": {
+        "anchor_commit": "a8e2641b44093db4bc4ab2ca96bbb094cf1b0411",
+        "commits": [
+            "a8e2641b44093db4bc4ab2ca96bbb094cf1b0411"
+        ],
+        "diffstat": {
+            "files": 3,
+            "insertions": 758,
+            "deletions": 1
+        }
+    },
+    "summary": {
+        "what": "Added timbers amend command to modify existing ledger entries",
+        "why": "Users needed ability to fix typos, add missing context, or update summary fields in existing entries without recreating them",
+        "how": "Implemented new amend subcommand with --what/--why/--how/--tag flags for partial updates, --dry-run for preview, full JSON support, and comprehensive test coverage. Command uses storage.WriteEntry with force=true to overwrite git notes and updates the updated_at timestamp."
+    },
+    "work_items": [
+        {
+            "system": "beads",
+            "id": "timbers-6e4"
+        }
+    ]
+}

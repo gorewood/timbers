@@ -1,0 +1,23 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-10T14:46:37Z_cda450",
+    "created_at": "2026-02-10T14:46:37.115938Z",
+    "updated_at": "2026-02-10T14:46:37.115938Z",
+    "workset": {
+        "anchor_commit": "cda45000a439186b3d27fe4507b524dd6379367c",
+        "commits": [
+            "cda45000a439186b3d27fe4507b524dd6379367c"
+        ],
+        "diffstat": {
+            "files": 15,
+            "insertions": 291,
+            "deletions": 209
+        }
+    },
+    "summary": {
+        "what": "Release readiness for v0.1.0: LICENSE, README rewrite, prompt\u2192draft rename propagation, org owner fixes, CI workflow, CHANGELOG, CONTRIBUTING",
+        "why": "Accumulated drift from prompt\u2192draft rename and missing OSS artifacts blocked a clean first release. Needed consistent naming, proper licensing, and CI before tagging v0.1.0",
+        "how": "Added MIT LICENSE, rewrote README for OSS audience with badges and dogfood caveat, mass-renamed timbers prompt\u2192draft across 8 files (docs, justfile, CI), fixed rbergman\u2192gorewood in goreleaser/install.sh, added CI workflow for test+lint, wrote CHANGELOG in Keep a Changelog format, added CONTRIBUTING.md"
+    }
+}

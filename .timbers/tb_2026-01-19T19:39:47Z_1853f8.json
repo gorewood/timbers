@@ -1,0 +1,25 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-01-19T19:39:47Z_1853f8",
+    "created_at": "2026-01-19T19:39:47.292224Z",
+    "updated_at": "2026-01-19T19:39:47.292224Z",
+    "workset": {
+        "anchor_commit": "1853f81051452575be8b99513bd799f6404a2f4e",
+        "commits": [
+            "1853f81051452575be8b99513bd799f6404a2f4e",
+            "6f0f0ea718cd9051bbd20ab26e89b828c6f88881"
+        ],
+        "range": "6f0f0ea..1853f81",
+        "diffstat": {
+            "files": 15,
+            "insertions": 2727,
+            "deletions": 2
+        }
+    },
+    "summary": {
+        "what": "Added multi-provider LLM client with generate and catchup commands, plus improved testability, error handling, and validation.",
+        "why": "To enable flexible LLM integration across providers while ensuring reliable, safe, and testable code.",
+        "how": "Implemented HTTPDoer interface for mocks, truncated error bodies, validated inputs, handled empty content, converted errors to ExitError, and added unit tests."
+    }
+}

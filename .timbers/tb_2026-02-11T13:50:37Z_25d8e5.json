@@ -1,0 +1,28 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-11T13:50:37Z_25d8e5",
+    "created_at": "2026-02-11T13:50:37.689371Z",
+    "updated_at": "2026-02-11T13:50:37.689371Z",
+    "workset": {
+        "anchor_commit": "25d8e5e8e1c368e037ccef4d11c401b0c9775a3b",
+        "commits": [
+            "25d8e5e8e1c368e037ccef4d11c401b0c9775a3b",
+            "c012ee6c9d9849738713f141f35a4c958fe93f9f",
+            "d34124d49683815d4572c0c730c2d4d4cd7befe9",
+            "d81b45fe3abca62290c28fcacf24f3ab2e9c814f",
+            "0c6f964c265f4fbde057d7ebf18d74127b4335fa"
+        ],
+        "range": "0c6f964..25d8e5e",
+        "diffstat": {
+            "files": 11,
+            "insertions": 610,
+            "deletions": 283
+        }
+    },
+    "summary": {
+        "what": "Multi-event hooks: SessionStart, PreCompact, Stop, PostToolUse",
+        "why": "Single SessionStart hook had 0% compliance for undocumented commits; 4 reinforcement points (start, compact, post-commit, stop) cover the full session lifecycle",
+        "how": "timbersHookConfig slice, addTimbersHooks/removeTimbersHooks generalization, upgrade path preserves existing hooks"
+    }
+}

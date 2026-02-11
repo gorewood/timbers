@@ -1,0 +1,26 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-09T21:12:02Z_5030e0",
+    "created_at": "2026-02-09T21:12:02.194563Z",
+    "updated_at": "2026-02-09T21:12:02.194563Z",
+    "workset": {
+        "anchor_commit": "5030e0f57738acd4a602182fc541996b7af08a19",
+        "commits": [
+            "5030e0f57738acd4a602182fc541996b7af08a19"
+        ],
+        "diffstat": {
+            "files": 5,
+            "insertions": 243,
+            "deletions": 15
+        }
+    },
+    "summary": {
+        "what": "Added --tag filtering to timbers export command for feature parity with query",
+        "why": "Export command needed tag filtering capability to match query command functionality. Users expect consistent filtering options across all commands that retrieve entries.",
+        "how": "Extracted filterEntriesByTags and entryHasAnyTag functions to entry_filter.go, added StringSliceVar --tag flag to export command, integrated tag filtering into all three export code paths (range, time, last), updated function signatures to thread tag flags through, added comprehensive tests for single tag, multiple tags, and composition with time filters. Tag filtering uses OR logic and composes with existing filters."
+    },
+    "tags": [
+        "feature"
+    ]
+}

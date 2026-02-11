@@ -1,0 +1,27 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-01-19T15:13:07Z_cdf82b",
+    "created_at": "2026-01-19T15:13:07.094666Z",
+    "updated_at": "2026-01-19T15:13:07.094666Z",
+    "workset": {
+        "anchor_commit": "cdf82bf82649e96638bc9d11f80dd34387e707b4",
+        "commits": [
+            "cdf82bf82649e96638bc9d11f80dd34387e707b4"
+        ],
+        "diffstat": {
+            "files": 1,
+            "insertions": 16,
+            "deletions": 0
+        }
+    },
+    "summary": {
+        "what": "Just recipes for LLM report generation",
+        "why": "Need convenient one-liner to generate reports without remembering claude flags",
+        "how": "just prompt uses command substitution to pass timbers output to claude -p with haiku default"
+    },
+    "tags": [
+        "tooling",
+        "just"
+    ]
+}

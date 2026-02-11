@@ -1,0 +1,23 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-02-11T17:54:05Z_cca267",
+    "created_at": "2026-02-11T17:54:05.493842Z",
+    "updated_at": "2026-02-11T17:54:05.493842Z",
+    "workset": {
+        "anchor_commit": "cca26769f9069122afbfe60f0cedc46cb846244d",
+        "commits": [
+            "cca26769f9069122afbfe60f0cedc46cb846244d"
+        ],
+        "diffstat": {
+            "files": 26,
+            "insertions": 1771,
+            "deletions": 1413
+        }
+    },
+    "summary": {
+        "what": "Pivoted storage from git notes to flat directory files (.timbers/<id>.json)",
+        "why": "Individual JSON files enable atomic writes, eliminate merge conflicts in concurrent worktrees, and simplify the GitOps interface from 8 to 4 methods",
+        "how": "New FileStorage with temp+rename atomicity; narrowed GitOps to HEAD/Log/CommitsReachableFrom/GetDiffstat; updated all 26 files including command tests"
+    }
+}

@@ -1,0 +1,35 @@
+{
+    "schema": "timbers.devlog/v1",
+    "kind": "entry",
+    "id": "tb_2026-01-19T05:37:39Z_6bc19c",
+    "created_at": "2026-01-19T05:37:39.902485Z",
+    "updated_at": "2026-01-19T05:37:39.902485Z",
+    "workset": {
+        "anchor_commit": "6bc19ce",
+        "commits": [
+            "6bc19cebf8149bdc96f59c47f506a3b7f8a6a80d",
+            "f4377fde77dbd3fa8990f2d2ec64b5c712b5b95a",
+            "b8ad3347b42a22b43c958a0941c8ddee7bcf7edd",
+            "dccb4e29d120a17042b7639878644f7940a8479c",
+            "49f9fcbe0c33651d4df1b72573cf06d8cd4cadab",
+            "0119a68e6420bc2d150d79d929f64cfff5a32cba",
+            "2480ee6fba12d0f48c01aee8bd9d1c4828af8d29"
+        ],
+        "range": "2480ee6..6bc19ce",
+        "diffstat": {
+            "files": 15,
+            "insertions": 2988,
+            "deletions": 5
+        }
+    },
+    "summary": {
+        "what": "Query, export, and agent integration commands",
+        "why": "Need to search entries, extract data for pipelines, and make timbers agent-friendly with context injection and self-documentation",
+        "how": "Query with tag/time filters, JSON/Markdown export, prime for session context, skill for agent skills, notes subcommands for sync"
+    },
+    "tags": [
+        "query",
+        "export",
+        "agent-dx"
+    ]
+}
