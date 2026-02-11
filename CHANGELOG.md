@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-02-10
+
+### Changed
+
+- Rewrote Claude Code hook integration from shell scripts to JSON settings, fixing session-start context injection that previously had 0% adoption due to format mismatch
+- Renamed `internal/prompt` package to `internal/draft` to match the `draft` command name
+- Updated agent DX guide with v0.3+ learnings, JSON hook format documentation, and shell-script anti-pattern section
+
+### Fixed
+
+- Added graceful degradation when `timbers` is not installed — Claude Code hook now warns with install URL instead of erroring, unblocking adoption for team members without timbers
+- Added `isTimbersPrimeCommand()` for backward-compatible detection of both legacy shell-script and new JSON hook formats
+
+### Removed
+
+- Removed legacy `.claude/hooks/user_prompt_submit.sh` shell script hook in favor of JSON settings
+- Removed `history/` artifacts from version control
+
+
 ## [0.3.0] - 2026-02-10
 
 ### Added
