@@ -1,7 +1,7 @@
 ---
 name: changelog
 description: Conventional changelog grouped by type
-version: 4
+version: 5
 ---
 Generate a changelog from these development log entries following the [Keep a Changelog](https://keepachangelog.com/) format.
 
@@ -32,9 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Technical** - Architecture, internals, infrastructure (optional, for dev-facing changes)
 
 **Grouping**:
-- Use `## [Unreleased]` as the top section for all changes not yet released
-- If entries span multiple dates, group them under Unreleased (not by date) unless generating for a specific release
-- Only use dated sections like `## [1.0.0] - 2026-01-20` when generating release-specific changelogs
+- Use `## [Unreleased]` as the top section by default
+- If the user appends release version info (e.g., "This is release v0.3.0"), use a versioned heading instead: `## [0.3.0] - 2026-02-10` (with today's date)
+- If entries span multiple dates, group them under a single version section (not by date)
 
 **Style**:
 - Past tense, one line per item

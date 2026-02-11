@@ -124,19 +124,60 @@ draft-model model +args:
 # RELEASE (goreleaser)
 # =============================================================================
 
-# Tag and push a release (triggers GitHub Actions)
-# Usage: just release 0.1.0
+# Generate changelog, commit, tag, and push a release
+# Usage: just release 0.3.0
 release version:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [[ "{{version}}" =~ ^v ]]; then
-        tag="{{version}}"
-    else
-        tag="v{{version}}"
+    ver="{{version}}"
+    ver="${ver#v}"
+    tag="v${ver}"
+
+    # Check for clean working tree
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        echo "ERROR: Working tree is dirty. Commit or stash changes first."
+        exit 1
     fi
-    echo "Creating release $tag..."
+
+    PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+    echo "Generating changelog for $tag (since ${PREV_TAG:-beginning})..."
+
+    # Generate versioned changelog section
+    if [ -n "$PREV_TAG" ]; then
+        SECTION=$(timbers draft changelog --range "$PREV_TAG"..HEAD \
+            --append "This is release v${ver}" --model opus)
+    else
+        SECTION=$(timbers draft changelog --last 50 \
+            --append "This is release v${ver}" --model opus)
+    fi
+
+    # Prepend new section to existing CHANGELOG.md (after the header)
+    if [ -f CHANGELOG.md ]; then
+        # Extract header (first 6 lines: title + blank + description + blank + format + blank)
+        HEADER=$(head -6 CHANGELOG.md)
+        REST=$(tail -n +7 CHANGELOG.md)
+        {
+            echo "$HEADER"
+            echo ""
+            echo "$SECTION"
+            echo ""
+            echo "$REST"
+        } > CHANGELOG.md
+    else
+        echo "$SECTION" > CHANGELOG.md
+    fi
+
+    echo "Updated CHANGELOG.md"
+    echo "---"
+    head -30 CHANGELOG.md
+    echo "..."
+    echo "---"
+
+    # Commit, tag, push
+    git add CHANGELOG.md
+    git commit -m "chore: changelog for $tag"
     git tag "$tag"
-    git push origin "$tag"
+    git push origin main "$tag"
     echo "Release $tag pushed. GitHub Actions will build and publish."
 
 # Validate goreleaser configuration
@@ -177,20 +218,22 @@ blog:
 blog-serve:
     cd site && hugo server -D
 
-# Generate CHANGELOG.md from ledger (run before release, review before committing)
-# Usage: just changelog              # defaults to opus
-#        just changelog haiku         # use a cheaper model
-changelog model="opus":
+# Preview changelog for next release (does not modify CHANGELOG.md)
+# Usage: just changelog              # preview unreleased changes
+#        just changelog 0.3.0        # preview with version heading
+changelog version="":
     #!/usr/bin/env bash
     set -euo pipefail
     PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+    APPEND=""
+    if [ -n "{{version}}" ]; then
+        APPEND="--append 'This is release v{{version}}'"
+    fi
     if [ -n "$PREV_TAG" ]; then
-        timbers draft changelog --range "$PREV_TAG"..HEAD --model {{model}}
+        eval timbers draft changelog --range "$PREV_TAG"..HEAD $APPEND --model opus
     else
-        timbers draft changelog --last 50 --model {{model}}
-    fi > CHANGELOG-draft.md
-    echo "Created: CHANGELOG-draft.md"
-    echo "Review it, then: mv CHANGELOG-draft.md CHANGELOG.md && git add CHANGELOG.md"
+        eval timbers draft changelog --last 50 $APPEND --model opus
+    fi
 
 # =============================================================================
 # CLEANUP
