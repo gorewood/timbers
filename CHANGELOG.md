@@ -103,6 +103,7 @@ Initial public release.
 - GitHub Actions workflows for releases, dev blog generation, and CI (test + lint)
 - Comprehensive documentation: tutorial, agent reference, LLM commands guide, publishing artifacts guide, agent DX guide, and spec
 
+[0.4.0]: https://github.com/gorewood/timbers/releases/tag/v0.4.0
 [0.3.0]: https://github.com/gorewood/timbers/releases/tag/v0.3.0
 [0.2.0]: https://github.com/gorewood/timbers/releases/tag/v0.2.0
 [0.1.0]: https://github.com/gorewood/timbers/releases/tag/v0.1.0
