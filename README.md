@@ -8,7 +8,7 @@
 
 AI agents write more code every day. Git tracks what they changed. Commit messages hint at how. But the *why* — the reasoning, trade-offs, and decisions — lives in session logs that get compacted and PR comments nobody reads twice. Six months later, you're staring at agent-written code with no idea why it was done that way.
 
-Timbers is a development ledger that captures what/why/how as structured records stored in Git notes — portable, queryable, and durable. Agents document their reasoning at the moment it exists. Humans harvest insights whenever they need them.
+Timbers is a development ledger that captures what/why/how as structured JSON files in `.timbers/` — portable, queryable, and durable. Agents document their reasoning at the moment it exists. Humans harvest insights whenever they need them.
 
 ```bash
 # Record work (agents or humans)
@@ -50,8 +50,7 @@ timbers query --last 10   # Query your ledger
 | `export` | Export as JSON or Markdown |
 | `draft` | Generate documents from your ledger (changelogs, reports, blogs) |
 | `prime` | Session context injection for agents |
-| `notes` | Manage Git notes sync (`init`, `push`, `fetch`, `status`) |
-| `status` | Repository and notes state |
+| `status` | Repository and ledger state |
 
 All commands support `--json`. Write operations support `--dry-run`.
 
@@ -139,7 +138,6 @@ timbers pending
 timbers log "Implemented rate limiting" \
   --why "API abuse detected in logs" \
   --how "Token bucket with Redis backend"
-timbers notes push
 ```
 
 Agent-friendly features: `--json` everywhere, `prime` for context injection, `pending` for clear signals, structured errors with recovery hints.

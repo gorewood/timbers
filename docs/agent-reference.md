@@ -17,7 +17,7 @@ For dynamic session context, use `timbers prime`. For CLAUDE.md integration, use
 
 ### Key Points
 
-- Entries are stored in Git notes (refs/notes/timbers) and sync with remotes
+- Entries are stored as JSON files in `.timbers/YYYY/MM/DD/` directories and sync via regular `git push`
 - Each entry has a unique ID: tb_<timestamp>_<short-sha>
 - The ledger is append-only; entries document completed work
 - All commands support --json for structured output
@@ -51,11 +51,6 @@ Document work.
 
 Review recent entries.
 
-### Sync
-**Command**: `timbers notes push`
-
-Push notes to remote.
-
 ## Command Reference
 
 ### log
@@ -75,7 +70,7 @@ Record work as a ledger entry
 - `--yes`: Skip confirmation in auto mode
 - `--batch`: Create entries by work-item/day
 - `--dry-run`: Preview without writing
-- `--push`: Push notes after logging
+- `--push`: Push to remote after logging
 
 **Examples**:
 ```bash
@@ -115,7 +110,7 @@ timbers prime --last 5
 
 ### status
 
-Show repository and notes state
+Show repository and ledger state
 
 **Usage**: `timbers status [flags]`
 
@@ -221,18 +216,6 @@ Update an existing ledger entry
 **Examples**:
 ```bash
 timbers amend tb_2026-01-15T10:30:00Z_abc123 --why "Updated reasoning"
-```
-
-### notes
-
-Notes management
-
-**Usage**: `timbers notes <subcommand>`
-
-**Examples**:
-```bash
-timbers notes init
-timbers notes push
 ```
 
 ## Contract

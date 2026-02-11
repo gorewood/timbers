@@ -12,7 +12,7 @@
 Timbers turns Git history into a durable development ledger by:
 1. Harvesting objective facts from Git (commits, diffstat, changed files)
 2. Pairing them with agent/human-authored rationale (what/why/how)
-3. Storing as portable Git notes that sync to remotes
+3. Storing as portable JSON files in `.timbers/` that sync via regular Git operations
 4. Exporting structured data for downstream narrative generation
 
 ### 0.2 Agent DX Principles
@@ -59,11 +59,10 @@ The CLI gathers evidence deterministically. The agent supplies meaning. Never fa
 - `timbers log` — Record work with what/why/how
 - `timbers pending` — Show undocumented commits
 - `timbers prime` — Context injection for session start
-- `timbers status` — Repo/notes state
+- `timbers status` — Repo/ledger state
 - `timbers show` — Display a single entry
 - `timbers query` — Retrieve entries (--last N for M1)
 - `timbers export` — Structured export for pipelines
-- `timbers notes` — Notes management (init/push/fetch/status)
 
 **Features:**
 - Minimal entry schema
@@ -108,8 +107,8 @@ The CLI gathers evidence deterministically. The agent supplies meaning. Never fa
 ### 2.3 "Since Last Entry" Algorithm
 
 ```
-1. List all notes under refs/notes/timbers
-2. Parse each note to extract anchor_commit
+1. Walk .timbers/YYYY/MM/DD/ directories to find all entry JSON files
+2. Parse each entry to extract anchor_commit
 3. Find anchor_commit with latest created_at timestamp
 4. Return commits from that anchor (exclusive) to HEAD (inclusive)
 5. If no entries exist, return all commits reachable from HEAD
@@ -223,7 +222,7 @@ timbers log "Test" --why "Test" --how "Test" --dry-run --json
 - `--minor` — Use defaults for trivial changes
 - `--auto` — Extract what/why/how from commit messages (non-interactive)
 - `--batch` — Process multiple commit groups interactively
-- `--push` — Push notes after write
+- `--push` — Push to remote after write
 - `--dry-run` — Show what would be written without writing
 - `--json` — Output JSON receipt
 
@@ -231,7 +230,7 @@ timbers log "Test" --why "Test" --how "Test" --dry-run --json
 - 0: Success
 - 1: Invalid arguments or missing required fields
 - 2: Git operation failed
-- 3: Note already exists for anchor (use --replace)
+- 3: Entry already exists for anchor (use --replace)
 
 **JSON output (success):**
 ```json
@@ -338,7 +337,7 @@ Quick commands:
 
 ### 4.5 `timbers status`
 
-Show repository and notes status.
+Show repository and ledger status.
 
 ```bash
 timbers status
@@ -351,9 +350,7 @@ timbers status --json
   "repo": "timbers",
   "branch": "main",
   "head": "abc1234...",
-  "notes_ref": "refs/notes/timbers",
-  "notes_configured": true,
-  "notes_synced": true,
+  "storage_dir": ".timbers/",
   "entry_count": 47,
   "pending_count": 5
 }
@@ -447,46 +444,6 @@ tags: [security, auth]
 - Files changed: 6 (+241/-88)
 ```
 
-### 4.9 `timbers notes`
-
-Manage Git notes for syncing.
-
-#### `timbers notes init`
-
-```bash
-timbers notes init
-timbers notes init --remote upstream
-```
-
-Configures notes ref for syncing:
-```bash
-git config --add remote.origin.fetch "+refs/notes/timbers:refs/notes/timbers"
-```
-
-#### `timbers notes push`
-
-```bash
-timbers notes push
-```
-
-Runs: `git push origin refs/notes/timbers`
-
-#### `timbers notes fetch`
-
-```bash
-timbers notes fetch
-```
-
-Runs: `git fetch origin refs/notes/timbers`
-
-#### `timbers notes status`
-
-```bash
-timbers notes status
-```
-
-Shows sync status and entry counts.
-
 ---
 
 ## 5. Error Handling
@@ -498,7 +455,7 @@ Shows sync status and entry counts.
 | 0 | Success |
 | 1 | Invalid arguments, missing fields, or entry not found |
 | 2 | Git operation failed |
-| 3 | Note conflict or I/O error |
+| 3 | Entry conflict or I/O error |
 
 ### 5.2 Error JSON Format
 
@@ -556,7 +513,7 @@ timbers log --minor "Updated dependencies"
 
 # At session end
 timbers pending      # Any undocumented work?
-timbers notes push   # Sync to remote
+git push             # Sync to remote
 ```
 
 ### 6.3 Historical Documentation
@@ -627,7 +584,7 @@ timbers prime
 
 At session end:
 timbers pending      # Check for undocumented work
-timbers notes push   # Sync to remote
+git push             # Sync to remote
 ```
 
 ---
@@ -689,19 +646,6 @@ timbers log "Second" --why "Test" --how "Test" --anchor HEAD
 # Exit 3, error mentions --replace
 ```
 
-### 8.3 Notes Sync
-
-```bash
-# AC12: Notes init configures fetch
-timbers notes init
-git config --get-all remote.origin.fetch
-# Includes +refs/notes/timbers:refs/notes/timbers
-
-# AC13: Notes push/fetch work
-timbers notes push && timbers notes fetch
-# Both exit 0
-```
-
 ---
 
 ## 9. Implementation Notes
@@ -719,15 +663,12 @@ cmd/
     show.go           # show command
     query.go          # query command
     export.go         # export command
-    notes.go          # notes subcommands
-
 internal/
   git/
     git.go            # Git operations via exec
-    notes.go          # Notes-specific operations
   ledger/
     entry.go          # Entry struct and validation
-    storage.go        # Read/write entries to notes
+    filestorage.go    # Read/write entries to .timbers/ files
     pending.go        # Since-last-entry algorithm
   export/
     json.go           # JSON export
@@ -751,7 +692,7 @@ internal/
 **Integration tests:**
 - Create temp git repo
 - Run full workflows (log → pending → query → export)
-- Verify notes content
+- Verify entry files in .timbers/
 - Test error cases
 - Test pipeline output
 

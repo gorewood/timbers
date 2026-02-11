@@ -880,14 +880,16 @@ Use this checklist when designing agent-oriented CLIs:
 - `timbers export --json | claude "..."` — Unix composability
 - `--batch` mode for efficiency
 
+**Storage:** Entries are JSON files in `.timbers/YYYY/MM/DD/` — regular tracked files synced via `git push/pull`, no special refs or fetch commands needed.
+
 **Integration stack:**
 - `timbers doctor` — Health check across CORE, CONFIG, WORKFLOW, INTEGRATION
   - CONFIG checks: config dir, env files, API keys, custom templates, version staleness
-  - `--fix` auto-remediates: remote config, config dir, Claude hooks (project-level)
+  - `--fix` auto-remediates: config dir, Claude hooks (project-level)
 - `timbers hooks install` — Opt-in pre-commit warning for undocumented work
 - `timbers setup claude` — Session-start prime injection (project-level by default, `--global` available)
 - `timbers onboard` — Minimal CLAUDE.md/AGENTS.md snippet
-- `timbers init` — Full setup: notes ref, remote config, optional Claude; git hooks via `--hooks`
+- `timbers init` — Full setup: `.timbers/` directory, optional Claude integration; git hooks via `--hooks`
 - `timbers uninstall` — Clean removal of all components
 
 **Pipe ergonomics:**

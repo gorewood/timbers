@@ -68,9 +68,6 @@ jobs:
         with:
           fetch-depth: 0  # Full history for notes
 
-      - name: Fetch git notes
-        run: git fetch origin refs/notes/timbers:refs/notes/timbers
-
       - name: Install timbers
         run: go install github.com/gorewood/timbers/cmd/timbers@latest
 
@@ -128,9 +125,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Fetch git notes
-        run: git fetch origin refs/notes/timbers:refs/notes/timbers
 
       - name: Install timbers
         run: go install github.com/gorewood/timbers/cmd/timbers@latest

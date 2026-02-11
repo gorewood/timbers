@@ -8,18 +8,19 @@ import (
 )
 
 // Onboard snippet templates - both targets use the same content currently.
-const onboardSnippet = `## Development Ledger (REQUIRED)
+const onboardSnippet = `## Development Ledger
 
-This project uses **timbers** for capturing development context.
-You MUST document every commit with ` + "`timbers log`" + ` before ending your session.
-Run ` + "`timbers prime`" + ` for workflow context, or install hooks (` + "`timbers setup claude`" + `) for auto-injection.
+This project uses **timbers** to capture development context as structured entries in ` + "`.timbers/`" + `.
+
+**Before using timbers commands**, verify it is installed: ` + "`command -v timbers`" + `.
+If not installed, warn the user once and continue working normally.
+Install: ` + "`curl -fsSL https://raw.githubusercontent.com/gorewood/timbers/main/install.sh | bash`" + `
 
 **Quick reference:**
-- ` + "`timbers pending`" + ` - MUST be zero before session end
-- ` + "`timbers log \"what\" --why \"why\" --how \"how\"`" + ` - Run after EVERY commit
-- Entries are files in .timbers/ — sync via ` + "`git push`" + `
-
-For full workflow details: ` + "`timbers prime`"
+- ` + "`timbers prime`" + ` - Get workflow context at session start
+- ` + "`timbers pending`" + ` - Check for undocumented commits before session end
+- ` + "`timbers log \"what\" --why \"why\" --how \"how\"`" + ` - Document committed work
+- Entries are files in .timbers/ — sync via ` + "`git push`"
 
 // newOnboardCmd creates the onboard command.
 func newOnboardCmd() *cobra.Command {

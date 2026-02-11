@@ -327,7 +327,7 @@ Catch up on undocumented history:
 timbers pending                           # See what's missing
 timbers catchup --model haiku --dry-run   # Preview
 timbers catchup --model haiku             # Execute
-timbers notes push                        # Sync to remote
+git push                                  # Sync to remote
 ```
 
 ### Pattern 5: CI/CD Integration

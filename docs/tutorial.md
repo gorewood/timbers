@@ -21,19 +21,20 @@ timbers --help
 
 ### Initialize a Repository
 
-Navigate to your Git repository and initialize Timbers notes sync:
+Navigate to your Git repository and initialize Timbers:
 
 ```bash
 cd /path/to/your/repo
 
-# Initialize notes sync with your remote (usually 'origin')
-timbers notes init origin
+# Initialize Timbers (creates .timbers/ directory, installs hooks)
+timbers init
 ```
 
-This configures Git to fetch and push Timbers notes alongside your regular branches. Notes are stored in `refs/notes/timbers` and travel with your repository.
+This creates a `.timbers/` directory in your repository root where ledger entries are stored as JSON files, organized by date (`YYYY/MM/DD/`). Entries are regular tracked files that sync with `git push` and `git pull`.
 
 **What just happened?**
-- Git config updated to include `+refs/notes/timbers:refs/notes/timbers` in fetch refspec
+- `.timbers/` directory created for ledger entry storage
+- Git hooks installed for workflow integration
 - Your repo is now ready to store and sync development ledger entries
 
 ### Verify Setup
@@ -50,11 +51,10 @@ Repository Status
   Branch:  main
   HEAD:    abc1234
 
-Timbers Notes
-─────────────
-  Ref:        refs/notes/timbers
-  Configured: yes
-  Entries:    0
+Timbers Ledger
+──────────────
+  Storage:  .timbers/
+  Entries:  0
 ```
 
 ---
@@ -165,24 +165,16 @@ timbers pending
 
 If there are pending commits, document them before you forget the context.
 
-### Syncing Notes
+### Syncing Entries
 
-Push your entries to the remote:
-
-```bash
-timbers notes push
-```
-
-Fetch entries from collaborators:
+Entries are regular tracked files in `.timbers/`, so they sync with standard Git commands:
 
 ```bash
-timbers notes fetch
-```
+# Push your entries to the remote
+git push
 
-Check sync status:
-
-```bash
-timbers notes status
+# Fetch entries from collaborators
+git pull
 ```
 
 ---
@@ -217,8 +209,8 @@ After completing work:
   timbers log "what" --why "why" --how "how"
 
 At session end:
-  timbers pending    # Verify all work documented
-  timbers notes push # Sync to remote
+  timbers pending  # Verify all work documented
+  git push         # Sync to remote
 ```
 
 ### Session End: Document and Sync
@@ -227,7 +219,7 @@ Agents should follow this checklist before completing:
 
 1. `timbers pending` — Check for undocumented commits
 2. `timbers log "..." --why "..." --how "..."` — Document the work
-3. `timbers notes push` — Sync to remote
+3. `git push` — Sync to remote
 
 ### Customizing Agent Onboarding
 
@@ -493,8 +485,8 @@ timbers uninstall --binary
 ```
 
 This removes:
-- Git notes ref (`refs/notes/timbers`)
-- Git config for notes fetch/push
+- `.timbers/` directory and all ledger entries from the repository
+- Git hooks installed by Timbers
 - Optionally, the Timbers binary
 
 ---
@@ -509,7 +501,7 @@ This removes:
 | `timbers pending` | Show undocumented commits |
 | `timbers query --last N` | View recent entries |
 | `timbers prime` | Session context for agents |
-| `timbers notes push` | Sync to remote |
+| `git push` | Sync entries to remote |
 | `timbers draft <template> --model local` | Generate report with built-in LLM |
 
 ### Flags Available Everywhere
@@ -536,22 +528,23 @@ This removes:
 
 Timbers requires a Git repository. Initialize one or navigate to an existing repo.
 
-### "Notes not configured"
+### "Timbers not initialized"
 
-Run `timbers notes init <remote>` to configure notes sync.
+Run `timbers init` to create the `.timbers/` directory and install hooks.
 
-### Notes not syncing
+### Entries not syncing
+
+Entries are tracked files in `.timbers/`. Sync them like any other file:
 
 ```bash
-# Check status
-timbers notes status
+# Pull entries from collaborators
+git pull
 
-# Force fetch
-git fetch origin refs/notes/timbers:refs/notes/timbers
-
-# Force push
-git push origin refs/notes/timbers
+# Push your entries
+git push
 ```
+
+If entries were committed but not pushed, `git status` will show the branch is ahead of the remote.
 
 ### Entry ID format
 
