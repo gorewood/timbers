@@ -34,7 +34,7 @@ func TestIsTimbersSectionInstalled(t *testing.T) {
 					map[string]any{
 						"matcher": "",
 						"hooks": []any{
-							map[string]any{"type": "command", "command": "timbers prime"},
+							map[string]any{"type": "command", "command": timbersHookCommand},
 						},
 					},
 				},
@@ -42,6 +42,25 @@ func TestIsTimbersSectionInstalled(t *testing.T) {
 		})
 		if !IsTimbersSectionInstalled(path) {
 			t.Error("expected true for file with timbers hook")
+		}
+	})
+
+	t.Run("detects legacy hook format", func(t *testing.T) {
+		path := filepath.Join(dir, "has-legacy.json")
+		writeJSON(t, path, map[string]any{
+			"hooks": map[string]any{
+				"SessionStart": []any{
+					map[string]any{
+						"matcher": "",
+						"hooks": []any{
+							map[string]any{"type": "command", "command": "timbers prime"},
+						},
+					},
+				},
+			},
+		})
+		if !IsTimbersSectionInstalled(path) {
+			t.Error("expected true for file with legacy timbers hook")
 		}
 	})
 
@@ -152,13 +171,48 @@ func TestInstallTimbersSection(t *testing.T) {
 		groups := getSessionStartGroups(settings)
 		for _, g := range groups {
 			for _, h := range g.Hooks {
-				if h.Command == timbersHookCommand {
+				if isTimbersPrimeCommand(h.Command) {
 					count++
 				}
 			}
 		}
 		if count != 1 {
 			t.Errorf("expected exactly 1 timbers prime hook, got %d", count)
+		}
+	})
+
+	t.Run("detects legacy format as already installed", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "settings.json")
+		// Write legacy format
+		writeJSON(t, path, map[string]any{
+			"hooks": map[string]any{
+				"SessionStart": []any{
+					map[string]any{
+						"matcher": "",
+						"hooks": []any{
+							map[string]any{"type": "command", "command": "timbers prime"},
+						},
+					},
+				},
+			},
+		})
+		// Install should be a no-op since legacy is detected
+		if err := InstallTimbersSection(path); err != nil {
+			t.Fatal(err)
+		}
+		settings := readJSON(t, path)
+		count := 0
+		groups := getSessionStartGroups(settings)
+		for _, g := range groups {
+			for _, h := range g.Hooks {
+				if isTimbersPrimeCommand(h.Command) {
+					count++
+				}
+			}
+		}
+		if count != 1 {
+			t.Errorf("expected exactly 1 timbers hook, got %d", count)
 		}
 	})
 }
@@ -206,6 +260,30 @@ func TestRemoveTimbersSectionFromHook(t *testing.T) {
 		}
 		if groups[0].Hooks[0].Command != "bd prime" {
 			t.Error("bd prime should be preserved")
+		}
+	})
+
+	t.Run("removes legacy hook format", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "settings.json")
+		writeJSON(t, path, map[string]any{
+			"hooks": map[string]any{
+				"SessionStart": []any{
+					map[string]any{
+						"matcher": "",
+						"hooks": []any{
+							map[string]any{"type": "command", "command": "timbers prime"},
+						},
+					},
+				},
+			},
+		})
+		if err := RemoveTimbersSectionFromHook(path); err != nil {
+			t.Fatal(err)
+		}
+		settings := readJSON(t, path)
+		if hasTimbersPrime(settings) {
+			t.Error("legacy timbers prime should be removed")
 		}
 	})
 

@@ -588,7 +588,7 @@ For Claude Code, this means adding a `SessionStart` hook entry in the JSON setti
         "hooks": [
           {
             "type": "command",
-            "command": "mytool prime"
+            "command": "command -v mytool >/dev/null 2>&1 && mytool prime || echo \"mytool: not installed (https://example.com/mytool)\""
           }
         ]
       }
@@ -599,9 +599,14 @@ For Claude Code, this means adding a `SessionStart` hook entry in the JSON setti
 
 The `setup` command should merge this into existing settings without disturbing other hook entries or permissions.
 
-**Anti-pattern: shell script hooks.** An earlier approach wrote shell scripts to `.claude/hooks/user_prompt_submit.sh`. This is wrong — Claude Code reads hooks from JSON settings files, not shell scripts in a hooks directory. The shell scripts were silently ignored, producing 0% adoption despite appearing installed. Always use the editor's native hook format.
+**Graceful degradation.** The hook command uses `command -v` to check whether the binary exists before running it. If the tool isn't installed, the hook prints a friendly message with the install URL instead of erroring. This matters because:
+- Team members who clone the repo but haven't installed the tool won't get blocked by a hook error at every session start.
+- The message tells them exactly how to install, reducing friction to adoption.
+- The hook exits cleanly (exit 0) so the editor doesn't treat it as a failure.
 
-**Development-time PATH requirement.** The hook references the binary by name (`mytool prime`), which requires the binary to be on PATH. During development, install early with `go install ./cmd/mytool` (or equivalent) so the hook works while you iterate. Without this, the hook silently fails and you don't get context injection — the exact integration you're trying to test.
+This mirrors the same pattern used in git hooks (see §7.4): `if command -v mytool >/dev/null 2>&1; then ... fi`.
+
+**Anti-pattern: shell script hooks.** An earlier approach wrote shell scripts to `.claude/hooks/user_prompt_submit.sh`. This is wrong — Claude Code reads hooks from JSON settings files, not shell scripts in a hooks directory. The shell scripts were silently ignored, producing 0% adoption despite appearing installed. Always use the editor's native hook format.
 
 **Future integrations** might include: Cursor, Windsurf, Aider, Gemini CLI, Copilot.
 

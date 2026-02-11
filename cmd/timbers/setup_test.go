@@ -10,6 +10,12 @@ import (
 	"testing"
 )
 
+// isTimbersPrime checks if a hook command is a timbers prime command
+// (either the current resilient format or the legacy bare command).
+func isTimbersPrime(cmd string) bool {
+	return strings.Contains(cmd, "timbers prime")
+}
+
 // writeSettingsJSON creates a Claude Code settings file with the given content.
 func writeSettingsJSON(t *testing.T, path string, data map[string]any) {
 	t.Helper()
@@ -176,7 +182,7 @@ func TestSetupClaudeInstall(t *testing.T) {
 			rawHooks, _ := group["hooks"].([]any)
 			for _, rawHook := range rawHooks {
 				hook, _ := rawHook.(map[string]any)
-				if cmd, _ := hook["command"].(string); cmd == "timbers prime" {
+				if cmd, _ := hook["command"].(string); isTimbersPrime(cmd) {
 					found = true
 				}
 			}
@@ -215,7 +221,7 @@ func TestSetupClaudeInstall(t *testing.T) {
 			rawHooks, _ := group["hooks"].([]any)
 			for _, rawHook := range rawHooks {
 				hook, _ := rawHook.(map[string]any)
-				if cmd, _ := hook["command"].(string); cmd == "timbers prime" {
+				if cmd, _ := hook["command"].(string); isTimbersPrime(cmd) {
 					count++
 				}
 			}
@@ -276,7 +282,7 @@ func TestSetupClaudeInstall(t *testing.T) {
 				if cmd == "bd prime" {
 					foundBd = true
 				}
-				if cmd == "timbers prime" {
+				if isTimbersPrime(cmd) {
 					foundTimbers = true
 				}
 			}
@@ -338,7 +344,7 @@ func TestSetupClaudeRemove(t *testing.T) {
 			rawHooks, _ := group["hooks"].([]any)
 			for _, rawHook := range rawHooks {
 				hook, _ := rawHook.(map[string]any)
-				if cmd, _ := hook["command"].(string); cmd == "timbers prime" {
+				if cmd, _ := hook["command"].(string); isTimbersPrime(cmd) {
 					t.Error("timbers prime should be removed")
 				}
 			}

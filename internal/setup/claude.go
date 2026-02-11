@@ -20,7 +20,14 @@ type hookGroup struct {
 	Hooks   []hookEntry `json:"hooks"`
 }
 
-const timbersHookCommand = "timbers prime"
+// timbersHookCommand is the resilient hook command that degrades gracefully
+// when timbers is not installed: prints a helpful message instead of erroring.
+//
+//nolint:lll // shell one-liner, splitting would reduce readability
+const timbersHookCommand = `command -v timbers >/dev/null 2>&1 && timbers prime || echo "timbers: not installed (https://github.com/gorewood/timbers)"`
+
+// legacyHookCommand is the old non-resilient format, kept for backward-compat detection and removal.
+const legacyHookCommand = "timbers prime"
 
 // ResolveClaudeSettingsPath determines the settings file path based on scope.
 // If project is true, returns the project-local settings path; otherwise the global path.
@@ -114,12 +121,18 @@ func writeSettings(path string, settings map[string]any) error {
 	return nil
 }
 
+// isTimbersPrimeCommand checks if a command string is a timbers prime hook
+// (either the current resilient format or the legacy bare command).
+func isTimbersPrimeCommand(cmd string) bool {
+	return cmd == timbersHookCommand || cmd == legacyHookCommand
+}
+
 // hasTimbersPrime checks if the SessionStart hooks contain timbers prime.
 func hasTimbersPrime(settings map[string]any) bool {
 	groups := getSessionStartGroups(settings)
 	for _, group := range groups {
 		for _, hook := range group.Hooks {
-			if hook.Command == timbersHookCommand {
+			if isTimbersPrimeCommand(hook.Command) {
 				return true
 			}
 		}
@@ -209,7 +222,7 @@ func filterHooks(rawHooks []any) []any {
 			filtered = append(filtered, rawHook)
 			continue
 		}
-		if cmd, _ := hook["command"].(string); cmd == timbersHookCommand {
+		if cmd, _ := hook["command"].(string); isTimbersPrimeCommand(cmd) {
 			continue
 		}
 		filtered = append(filtered, rawHook)
