@@ -3,6 +3,7 @@ package ledger
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 	"sort"
 
@@ -12,6 +13,11 @@ import (
 
 // ErrNoEntries is returned when no ledger entries exist.
 var ErrNoEntries = errors.New("no ledger entries found")
+
+// ErrStaleAnchor indicates the latest entry's anchor commit no longer exists in git history.
+// This happens after squash merges, rebases, or garbage collection.
+// When this occurs, GetPendingCommits falls back to all reachable commits from HEAD.
+var ErrStaleAnchor = errors.New("anchor commit not found in current history")
 
 // ListStats contains statistics about listing entries.
 type ListStats struct {
@@ -191,10 +197,17 @@ func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 		return commits, nil, nil
 	}
 
-	// Get commits from anchor (exclusive) to HEAD (inclusive)
+	// Get commits from anchor (exclusive) to HEAD (inclusive).
+	// If the anchor no longer exists (squash merge, rebase, GC), fall back
+	// to all reachable commits from HEAD and wrap ErrStaleAnchor so the
+	// caller can emit a warning while still returning useful data.
 	commits, logErr := s.git.Log(latest.Workset.AnchorCommit, head)
 	if logErr != nil {
-		return nil, nil, logErr
+		fallback, reachErr := s.git.CommitsReachableFrom(head)
+		if reachErr != nil {
+			return nil, nil, reachErr
+		}
+		return fallback, latest, fmt.Errorf("%w: %s", ErrStaleAnchor, latest.Workset.AnchorCommit)
 	}
 
 	return commits, latest, nil

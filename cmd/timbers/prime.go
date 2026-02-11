@@ -2,6 +2,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -11,6 +12,9 @@ import (
 	"github.com/gorewood/timbers/internal/ledger"
 	"github.com/gorewood/timbers/internal/output"
 )
+
+// errNotInitialized indicates timbers is not set up in this repo.
+var errNotInitialized = errors.New("timbers not initialized")
 
 // defaultWorkflowContent is the default workflow instructions for agent onboarding.
 // This can be overridden by placing a .timbers/PRIME.md file in the repo root.
@@ -73,7 +77,7 @@ type primeResult struct {
 	Repo            string       `json:"repo"`
 	Branch          string       `json:"branch"`
 	Head            string       `json:"head"`
-	NotesRef        string       `json:"notes_ref"`
+	TimbersDir      string       `json:"timbers_dir"`
 	NotesConfigured bool         `json:"notes_configured"`
 	EntryCount      int          `json:"entry_count"`
 	Pending         primePending `json:"pending"`
@@ -141,109 +145,110 @@ Examples:
 	return cmd
 }
 
+// resolveStorage checks if we're in an initialized timbers repo and returns storage.
+// Returns (nil, nil) if the repo is not initialized (silent skip).
+// Returns (nil, error) on failures.
+// Returns (storage, nil) on success.
+func resolveStorage(storage *ledger.Storage, verbose bool, printer *output.Printer) (*ledger.Storage, error) {
+	if storage != nil {
+		return storage, nil
+	}
+
+	if !git.IsRepo() {
+		return nil, output.NewSystemError("not in a git repository")
+	}
+
+	root, err := git.RepoRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	timbersDir := filepath.Join(root, ".timbers")
+	if _, statErr := os.Stat(timbersDir); os.IsNotExist(statErr) {
+		if verbose {
+			printer.Stderr("timbers not initialized in this repo; run 'timbers init' to activate")
+		}
+		return nil, errNotInitialized
+	}
+
+	return ledger.NewDefaultStorage()
+}
+
 // runPrime executes the prime command.
 func runPrime(cmd *cobra.Command, storage *ledger.Storage, lastN int, verbose bool) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
-	// Check if we're in a git repo (only when using real git)
-	if storage == nil && !git.IsRepo() {
-		err := output.NewSystemError("not in a git repository")
-		printer.Error(err)
-		return err
+	resolved, err := resolveStorage(storage, verbose, printer)
+	if errors.Is(err, errNotInitialized) {
+		return nil // uninitiated repo, silent skip
 	}
-
-	// Skip uninitiated repos — timbers only activates after 'timbers init'
-	if storage == nil && !git.NotesRefExists() {
-		if verbose {
-			printer.Stderr("timbers not initialized in this repo; run 'timbers init' to activate")
-		}
-		return nil
-	}
-
-	// Create storage if not injected
-	if storage == nil {
-		var err error
-		storage, err = ledger.NewDefaultStorage()
-		if err != nil {
-			return err
-		}
-	}
-
-	// Gather all context
-	result, err := gatherPrimeContext(storage, lastN, verbose)
 	if err != nil {
 		printer.Error(err)
 		return err
 	}
 
-	// Output based on mode
-	if printer.IsJSON() {
-		return outputPrimeJSON(printer, result)
+	// Gather all context
+	result, gatherErr := gatherPrimeContext(resolved, lastN, verbose)
+	if gatherErr != nil {
+		printer.Error(gatherErr)
+		return gatherErr
 	}
 
+	if printer.IsJSON() {
+		return printer.WriteJSON(result)
+	}
 	outputPrimeHuman(printer, result)
 	return nil
 }
 
 // gatherPrimeContext collects all prime context information.
 func gatherPrimeContext(storage *ledger.Storage, lastN int, verbose bool) (*primeResult, error) {
-	// Get repo root and extract name
 	root, err := git.RepoRoot()
 	if err != nil {
 		return nil, err
 	}
 	repoName := filepath.Base(root)
 
-	// Get current branch
 	branch, err := git.CurrentBranch()
 	if err != nil {
 		return nil, err
 	}
 
-	// Get HEAD commit
 	head, err := git.HEAD()
 	if err != nil {
 		return nil, err
 	}
 
-	// Check notes configuration
 	notesConfigured := git.NotesConfigured("origin")
 
-	// Get all entries (for count)
 	allEntries, err := storage.ListEntries()
 	if err != nil {
 		return nil, err
 	}
 
-	// Get pending commits
 	pendingCommits, _, err := storage.GetPendingCommits()
 	if err != nil {
 		return nil, err
 	}
 
-	// Get recent entries
 	recentEntries, err := storage.GetLastNEntries(lastN)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get workflow content (from override file or default)
 	workflow := loadWorkflowContent(root)
 
-	// Build result
-	result := &primeResult{
+	return &primeResult{
 		Repo:            repoName,
 		Branch:          branch,
 		Head:            head,
-		NotesRef:        "refs/notes/timbers",
+		TimbersDir:      filepath.Join(root, ".timbers"),
 		NotesConfigured: notesConfigured,
 		EntryCount:      len(allEntries),
 		Pending:         buildPrimePending(pendingCommits),
 		RecentEntries:   buildPrimeEntries(recentEntries, verbose),
 		Workflow:        workflow,
-	}
-
-	return result, nil
+	}, nil
 }
 
 // loadWorkflowContent loads workflow content from .timbers/PRIME.md or returns default.
@@ -293,11 +298,6 @@ func buildPrimeEntries(entries []*ledger.Entry, verbose bool) []primeEntry {
 	}
 
 	return result
-}
-
-// outputPrimeJSON outputs the result as JSON.
-func outputPrimeJSON(printer *output.Printer, result *primeResult) error {
-	return printer.WriteJSON(result)
 }
 
 // outputPrimeHuman outputs the result in human-readable format.

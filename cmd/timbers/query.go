@@ -291,7 +291,7 @@ func outputQueryEntry(printer *output.Printer, entry *ledger.Entry) {
 	printer.KeyValue("What", entry.Summary.What)
 	printer.KeyValue("Why", entry.Summary.Why)
 	printer.KeyValue("How", entry.Summary.How)
-	printer.KeyValue("Anchor", shortSHA(entry.Workset.AnchorCommit))
+	printer.KeyValue("Anchor", anchorDisplay(entry.Workset.AnchorCommit))
 	printer.KeyValue("Created", entry.CreatedAt.Format("2006-01-02 15:04:05 UTC"))
 
 	if len(entry.Tags) > 0 {

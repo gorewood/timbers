@@ -225,3 +225,48 @@ func TestHEAD(t *testing.T) {
 		}
 	})
 }
+
+func TestSHAExists(t *testing.T) {
+	tests := []struct {
+		name string
+		sha  string
+		want bool
+	}{
+		{
+			name: "empty SHA returns false",
+			sha:  "",
+			want: false,
+		},
+		{
+			name: "nonexistent SHA returns false",
+			sha:  "0000000000000000000000000000000000000000",
+			want: false,
+		},
+		{
+			name: "garbage SHA returns false",
+			sha:  "not-a-real-sha",
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := SHAExists(tt.sha); got != tt.want {
+				t.Errorf("SHAExists(%q) = %v, want %v", tt.sha, got, tt.want)
+			}
+		})
+	}
+
+	t.Run("HEAD SHA exists", func(t *testing.T) {
+		chdirToRepoRoot(t)
+
+		headSHA, err := HEAD()
+		if err != nil {
+			t.Fatalf("HEAD() error: %v", err)
+		}
+
+		if !SHAExists(headSHA) {
+			t.Errorf("SHAExists(HEAD) = false, expected true for %s", headSHA)
+		}
+	})
+}

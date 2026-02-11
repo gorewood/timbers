@@ -231,7 +231,7 @@ func TestPrimeCommand(t *testing.T) {
 				}
 				// Verify required fields exist
 				requiredFields := []string{
-					"repo", "branch", "head", "notes_ref", "notes_configured",
+					"repo", "branch", "head", "timbers_dir", "notes_configured",
 					"entry_count", "pending", "recent_entries", "workflow",
 				}
 				for _, field := range requiredFields {
@@ -270,7 +270,7 @@ func TestPrimeResultJSON(t *testing.T) {
 		Repo:            "test-repo",
 		Branch:          "main",
 		Head:            "abc123def456",
-		NotesRef:        "refs/notes/timbers",
+		TimbersDir:      "/tmp/test-repo/.timbers",
 		NotesConfigured: true,
 		EntryCount:      2,
 		Pending: primePending{
@@ -439,7 +439,7 @@ func TestPrimeSilentInUninitRepo(t *testing.T) {
 	runGit(t, tempDir, "add", ".")
 	runGit(t, tempDir, "commit", "-m", "initial")
 
-	// No timbers init — notes ref does not exist
+	// No timbers init — .timbers/ directory does not exist
 	runInDir(t, tempDir, func() {
 		cmd := newPrimeCmdInternal(nil)
 		var buf bytes.Buffer

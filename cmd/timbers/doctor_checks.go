@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
@@ -13,29 +14,41 @@ import (
 
 // runCoreChecks performs core infrastructure checks.
 func runCoreChecks(flags *doctorFlags) []checkResult {
-	checks := make([]checkResult, 0, 4)
-	checks = append(checks, checkNotesRefExists())
+	checks := make([]checkResult, 0, 5)
+	checks = append(checks, checkTimbersDirExists())
 	checks = append(checks, checkRemoteConfigured(flags))
 	checks = append(checks, checkBinaryInPath())
 	checks = append(checks, checkVersion())
+	checks = append(checks, checkGitattributes())
 	return checks
 }
 
-// checkNotesRefExists checks if refs/notes/timbers exists.
-func checkNotesRefExists() checkResult {
-	if git.NotesRefExists() {
+// checkTimbersDirExists checks if the .timbers/ directory exists.
+func checkTimbersDirExists() checkResult {
+	root, err := git.RepoRoot()
+	if err != nil {
 		return checkResult{
-			Name:    "Git Notes Ref",
+			Name:    "Timbers Directory",
+			Status:  checkWarn,
+			Message: "could not determine repo root: " + err.Error(),
+		}
+	}
+
+	timbersDir := filepath.Join(root, ".timbers")
+	info, statErr := os.Stat(timbersDir)
+	if statErr == nil && info.IsDir() {
+		return checkResult{
+			Name:    "Timbers Directory",
 			Status:  checkPass,
-			Message: "refs/notes/timbers exists",
+			Message: ".timbers/ directory exists",
 		}
 	}
 
 	return checkResult{
-		Name:    "Git Notes Ref",
+		Name:    "Timbers Directory",
 		Status:  checkWarn,
-		Message: "refs/notes/timbers does not exist (will be created on first log)",
-		Hint:    "Run 'timbers log' to create the first entry",
+		Message: ".timbers/ directory not found",
+		Hint:    "Run 'timbers init' to initialize",
 	}
 }
 
@@ -143,7 +156,16 @@ func checkPendingCommits() checkResult {
 
 // checkRecentEntries checks if any ledger entries exist.
 func checkRecentEntries() checkResult {
-	commits, err := git.ListNotedCommits()
+	storage, storageErr := ledger.NewDefaultStorage()
+	if storageErr != nil {
+		return checkResult{
+			Name:    "Recent Entries",
+			Status:  checkWarn,
+			Message: "could not check: " + storageErr.Error(),
+		}
+	}
+
+	entries, err := storage.ListEntries()
 	if err != nil {
 		return checkResult{
 			Name:    "Recent Entries",
@@ -152,7 +174,7 @@ func checkRecentEntries() checkResult {
 		}
 	}
 
-	count := len(commits)
+	count := len(entries)
 	if count == 0 {
 		return checkResult{
 			Name:    "Recent Entries",
@@ -166,6 +188,43 @@ func checkRecentEntries() checkResult {
 		Name:    "Recent Entries",
 		Status:  checkPass,
 		Message: strconv.Itoa(count) + " entry(ies) in ledger",
+	}
+}
+
+// checkGitattributes checks if .gitattributes has the linguist-generated rule for .timbers/.
+func checkGitattributes() checkResult {
+	root, err := git.RepoRoot()
+	if err != nil {
+		return checkResult{
+			Name:    "Gitattributes",
+			Status:  checkWarn,
+			Message: "could not determine repo root: " + err.Error(),
+		}
+	}
+
+	data, readErr := os.ReadFile(filepath.Join(root, ".gitattributes"))
+	if readErr != nil {
+		return checkResult{
+			Name:    "Gitattributes",
+			Status:  checkWarn,
+			Message: ".gitattributes missing linguist-generated rule",
+			Hint:    "Run 'timbers init' to configure",
+		}
+	}
+
+	if strings.Contains(string(data), "/.timbers/**") && strings.Contains(string(data), "linguist-generated") {
+		return checkResult{
+			Name:    "Gitattributes",
+			Status:  checkPass,
+			Message: ".gitattributes configured for timbers",
+		}
+	}
+
+	return checkResult{
+		Name:    "Gitattributes",
+		Status:  checkWarn,
+		Message: ".gitattributes missing linguist-generated rule",
+		Hint:    "Run 'timbers init' to configure",
 	}
 }
 

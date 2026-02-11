@@ -3,6 +3,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 
@@ -18,11 +19,12 @@ type statusResult struct {
 	Repo            string `json:"repo"`
 	Branch          string `json:"branch"`
 	Head            string `json:"head"`
-	NotesRef        string `json:"notes_ref"`
+	TimbersDir      string `json:"timbers_dir"`
+	DirExists       bool   `json:"dir_exists"`
 	NotesConfigured bool   `json:"notes_configured"`
 	EntryCount      int    `json:"entry_count"`
-	NotesTotal      int    `json:"notes_total,omitempty"`
-	NotesSkipped    int    `json:"notes_skipped,omitempty"`
+	FilesTotal      int    `json:"files_total,omitempty"`
+	FilesSkipped    int    `json:"files_skipped,omitempty"`
 	NotTimbers      int    `json:"not_timbers,omitempty"`
 	ParseErrors     int    `json:"parse_errors,omitempty"`
 }
@@ -74,14 +76,15 @@ func runStatus(cmd *cobra.Command, _ []string, verbose bool) error {
 			"repo":             result.Repo,
 			"branch":           result.Branch,
 			"head":             result.Head,
-			"notes_ref":        result.NotesRef,
+			"timbers_dir":      result.TimbersDir,
+			"dir_exists":       result.DirExists,
 			"notes_configured": result.NotesConfigured,
 			"entry_count":      result.EntryCount,
 		}
 		// Add verbose stats if present
 		if verbose {
-			data["notes_total"] = result.NotesTotal
-			data["notes_skipped"] = result.NotesSkipped
+			data["files_total"] = result.FilesTotal
+			data["files_skipped"] = result.FilesSkipped
 			data["not_timbers"] = result.NotTimbers
 			data["parse_errors"] = result.ParseErrors
 		}
@@ -124,36 +127,42 @@ func gatherStatus(verbose bool) (*statusResult, error) {
 	// Check notes configuration
 	notesConfigured := git.NotesConfigured("origin")
 
+	// Check .timbers/ directory
+	timbersDir := filepath.Join(root, ".timbers")
+	dirInfo, statErr := os.Stat(timbersDir)
+	dirExists := statErr == nil && dirInfo.IsDir()
+
 	result := &statusResult{
 		Repo:            repoName,
 		Branch:          branch,
 		Head:            head,
-		NotesRef:        "refs/notes/timbers",
+		TimbersDir:      timbersDir,
+		DirExists:       dirExists,
 		NotesConfigured: notesConfigured,
 	}
 
-	// Get entry count with stats if verbose
+	// Get entry count
+	store, storeErr := ledger.NewDefaultStorage()
+	if storeErr != nil {
+		return nil, storeErr
+	}
+
 	if verbose {
-		store, storeErr := ledger.NewDefaultStorage()
-		if storeErr != nil {
-			return nil, storeErr
-		}
 		entries, stats, statsErr := store.ListEntriesWithStats()
 		if statsErr != nil {
 			return nil, statsErr
 		}
 		result.EntryCount = len(entries)
-		result.NotesTotal = stats.Total
-		result.NotesSkipped = stats.Skipped
+		result.FilesTotal = stats.Total
+		result.FilesSkipped = stats.Skipped
 		result.NotTimbers = stats.NotTimbers
 		result.ParseErrors = stats.ParseErrors
 	} else {
-		// Simple count (commits with notes)
-		commits, listErr := git.ListNotedCommits()
+		entries, listErr := store.ListEntries()
 		if listErr != nil {
 			return nil, listErr
 		}
-		result.EntryCount = len(commits)
+		result.EntryCount = len(entries)
 	}
 
 	return result, nil
@@ -166,16 +175,17 @@ func printHumanStatus(printer *output.Printer, status *statusResult, verbose boo
 	printer.KeyValue("Branch", status.Branch)
 	printer.KeyValue("HEAD", status.Head[:min(12, len(status.Head))])
 
-	printer.Section("Timbers Notes")
-	printer.KeyValue("Ref", status.NotesRef)
+	printer.Section("Timbers Storage")
+	printer.KeyValue("Directory", status.TimbersDir)
+	printer.KeyValue("Initialized", formatBool(status.DirExists))
 	printer.KeyValue("Configured", formatBool(status.NotesConfigured))
 
 	if verbose {
-		printer.KeyValue("Notes Total", strconv.Itoa(status.NotesTotal))
+		printer.KeyValue("Files Total", strconv.Itoa(status.FilesTotal))
 		printer.KeyValue("Entries", strconv.Itoa(status.EntryCount))
-		if status.NotesSkipped > 0 {
+		if status.FilesSkipped > 0 {
 			skippedStr := fmt.Sprintf("%d (%d not timbers, %d parse error)",
-				status.NotesSkipped, status.NotTimbers, status.ParseErrors)
+				status.FilesSkipped, status.NotTimbers, status.ParseErrors)
 			printer.KeyValue("Skipped", skippedStr)
 		}
 	} else {

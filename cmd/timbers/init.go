@@ -2,7 +2,9 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
@@ -29,10 +31,12 @@ type initStepResult struct {
 
 // initState holds the current state of timbers setup.
 type initState struct {
-	notesRefExists   bool
-	remoteConfigured bool
-	hooksInstalled   bool
-	claudeInstalled  bool
+	timbersDirExists      bool
+	gitattributesHasEntry bool
+	remoteConfigured      bool
+	hooksInstalled        bool
+	postRewriteInstalled  bool
+	claudeInstalled       bool
 }
 
 // initStyleSet holds lipgloss styles for init output.
@@ -70,9 +74,10 @@ func newInitCmd() *cobra.Command {
 		Long: `Initialize timbers in the current repository.
 
 This command sets up everything needed to use timbers:
-  - Creates the Git notes ref (refs/notes/timbers)
+  - Creates the .timbers/ directory for entry storage
+  - Adds .gitattributes entry to collapse timbers files in diffs
   - Configures remote for notes push/fetch
-  - Installs Git hooks (optional)
+  - Installs Git hooks (optional, includes post-rewrite for rebase safety)
   - Sets up Claude Code integration (optional)
 
 The command is idempotent - safe to run multiple times.
@@ -120,14 +125,25 @@ func runInit(cmd *cobra.Command, flags *initFlags) error {
 // gatherInitState checks the current timbers setup state.
 func gatherInitState() *initState {
 	state := &initState{
-		notesRefExists:   git.NotesRefExists(),
 		remoteConfigured: git.NotesConfigured("origin"),
+	}
+
+	// Check .timbers/ directory
+	if root, err := git.RepoRoot(); err == nil {
+		timbersDir := filepath.Join(root, ".timbers")
+		info, statErr := os.Stat(timbersDir)
+		state.timbersDirExists = statErr == nil && info.IsDir()
+
+		state.gitattributesHasEntry = checkGitattributesEntry(root)
 	}
 
 	if hooksDir, err := setup.GetHooksDir(); err == nil {
 		preCommitPath := filepath.Join(hooksDir, "pre-commit")
 		hookStatus := setup.CheckHookStatus(preCommitPath)
 		state.hooksInstalled = hookStatus.Installed
+
+		postRewritePath := filepath.Join(hooksDir, "post-rewrite")
+		state.postRewriteInstalled = checkPostRewriteHook(postRewritePath)
 	}
 
 	globalHookPath, _, _ := setup.ResolveClaudeSettingsPath(false)
@@ -135,6 +151,36 @@ func gatherInitState() *initState {
 	state.claudeInstalled = setup.IsTimbersSectionInstalled(globalHookPath) || setup.IsTimbersSectionInstalled(projectHookPath)
 
 	return state
+}
+
+// checkGitattributesEntry checks if .gitattributes contains the timbers linguist-generated line.
+func checkGitattributesEntry(repoRoot string) bool {
+	path := filepath.Join(repoRoot, ".gitattributes")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return containsTimbersGitattribute(string(data))
+}
+
+// containsTimbersGitattribute returns true if the content contains the timbers linguist-generated line.
+func containsTimbersGitattribute(content string) bool {
+	for line := range strings.SplitSeq(content, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if line == "/.timbers/** linguist-generated" {
+			return true
+		}
+	}
+	return false
+}
+
+// checkPostRewriteHook checks if a post-rewrite hook contains timbers SHA remapping.
+func checkPostRewriteHook(hookPath string) bool {
+	data, err := os.ReadFile(hookPath)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), ".timbers")
 }
 
 // handleInitDryRun outputs what would be done without making changes.
@@ -151,30 +197,6 @@ func handleInitDryRun(printer *output.Printer, styles initStyleSet, repoName str
 
 	outputDryRunHumanInit(printer, styles, repoName, steps)
 	return nil
-}
-
-// outputDryRunHumanInit prints dry-run output in human format.
-func outputDryRunHumanInit(printer *output.Printer, styles initStyleSet, repoName string, steps []initStepResult) {
-	printer.Println()
-	printer.Print("%s %s\n", styles.heading.Render("Dry run: timbers init in"), styles.dim.Render(repoName))
-	printer.Println()
-
-	for _, step := range steps {
-		icon := styledDryRunIcon(styles, step.Status)
-		printer.Print("  %s %s: %s\n", icon, step.Name, step.Message)
-	}
-}
-
-// styledDryRunIcon returns a styled icon for a dry-run step status.
-func styledDryRunIcon(styles initStyleSet, status string) string {
-	switch status {
-	case "skipped":
-		return styles.dim.Render("--")
-	case "dry_run":
-		return styles.accent.Render(">")
-	default:
-		return "?"
-	}
 }
 
 // performInit runs the actual initialization steps.
@@ -198,9 +220,10 @@ func performInit(
 
 // isAlreadyInitialized checks if timbers is fully initialized.
 func isAlreadyInitialized(state *initState, flags *initFlags) bool {
-	return state.notesRefExists &&
+	return state.timbersDirExists &&
+		state.gitattributesHasEntry &&
 		state.remoteConfigured &&
-		(!flags.hooks || state.hooksInstalled) &&
+		(!flags.hooks || (state.hooksInstalled && state.postRewriteInstalled)) &&
 		(flags.noClaude || state.claudeInstalled)
 }
 
@@ -221,16 +244,17 @@ func outputAlreadyInitialized(printer *output.Printer, styles initStyleSet, repo
 }
 
 // outputInitResult outputs the final initialization result.
-func outputInitResult(printer *output.Printer, styles initStyleSet, repoName string, state *initState, steps []initStepResult) error {
-	remoteConfigured := stepHasStatus(steps, "remote_config", "ok")
-	hooksInstalled := stepHasStatus(steps, "hooks", "ok")
-	claudeInstalled := stepHasStatus(steps, "claude", "ok")
+func outputInitResult(printer *output.Printer, styles initStyleSet, repoName string, _ *initState, steps []initStepResult) error {
+	remoteConfigured := stepSucceeded(steps, "remote_config")
+	hooksInstalled := stepSucceeded(steps, "hooks")
+	claudeInstalled := stepSucceeded(steps, "claude")
+	timbersDirCreated := stepSucceeded(steps, "timbers_dir")
 
 	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"status":              "ok",
 			"repo_name":           repoName,
-			"notes_created":       state.notesRefExists || remoteConfigured,
+			"timbers_dir_created": timbersDirCreated,
 			"remote_configured":   remoteConfigured,
 			"hooks_installed":     hooksInstalled,
 			"claude_installed":    claudeInstalled,
@@ -243,71 +267,14 @@ func outputInitResult(printer *output.Printer, styles initStyleSet, repoName str
 	return nil
 }
 
-// stepHasStatus checks if a step with the given name has the given status.
-func stepHasStatus(steps []initStepResult, name, status string) bool {
+// stepSucceeded checks if a step with the given name completed with "ok" status.
+func stepSucceeded(steps []initStepResult, name string) bool {
 	for _, s := range steps {
-		if s.Name == name && s.Status == status {
+		if s.Name == name && s.Status == "ok" {
 			return true
 		}
 	}
 	return false
-}
-
-// printNextSteps outputs the next steps message.
-func printNextSteps(printer *output.Printer, styles initStyleSet) {
-	printer.Println()
-	printer.Print("%s\n", styles.heading.Render(styles.pass.Render("Timbers initialized!")))
-	printer.Println()
-	printer.Print("Next steps:\n")
-	printer.Print("  1. %s\n", styles.dim.Render("Add the timbers snippet to CLAUDE.md:"))
-	printer.Print("     %s\n", styles.accent.Render("timbers onboard >> CLAUDE.md"))
-	printer.Println()
-	printer.Print("  2. %s\n", styles.dim.Render("Start documenting work:"))
-	printer.Print("     %s\n", styles.accent.Render("timbers log \"what\" --why \"why\" --how \"how\""))
-	printer.Println()
-	printer.Print("  3. %s\n", styles.dim.Render("Verify setup:"))
-	printer.Print("     %s\n", styles.accent.Render("timbers doctor"))
-}
-
-// printStepResult prints a single step result in human format.
-func printStepResult(printer *output.Printer, styles initStyleSet, step initStepResult) {
-	icon := styledStepIcon(styles, step.Status)
-	name := formatStepName(step.Name)
-	printer.Print("  %s %s", icon, name)
-	if step.Message != "" {
-		printer.Print(" %s", styles.dim.Render("("+step.Message+")"))
-	}
-	printer.Println()
-}
-
-// styledStepIcon returns a styled icon for a step status.
-func styledStepIcon(styles initStyleSet, status string) string {
-	switch status {
-	case "ok":
-		return styles.pass.Render("ok")
-	case "skipped":
-		return styles.skip.Render("--")
-	case "failed":
-		return styles.fail.Render("XX")
-	default:
-		return "??"
-	}
-}
-
-// formatStepName converts internal step names to display names.
-func formatStepName(name string) string {
-	switch name {
-	case "notes_ref":
-		return "Git notes ref"
-	case "remote_config":
-		return "Remote configured"
-	case "hooks":
-		return "Git hooks"
-	case "claude":
-		return "Claude integration"
-	default:
-		return name
-	}
 }
 
 // getRepoName returns the name of the current repository.

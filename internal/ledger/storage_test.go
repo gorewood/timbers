@@ -164,6 +164,7 @@ func TestGetPendingCommits(t *testing.T) {
 		wantCommitCount int
 		wantLatestNil   bool
 		wantErr         bool
+		wantStaleAnchor bool
 		errContains     string
 	}{
 		{
@@ -216,6 +217,36 @@ func TestGetPendingCommits(t *testing.T) {
 			wantErr:     true,
 			errContains: "HEAD",
 		},
+		{
+			name: "stale anchor falls back to all reachable commits",
+			entries: []*Entry{
+				makeTestEntry("staleanchor", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "headsha1234"
+				mock.logErr = output.NewSystemError("bad revision 'staleanchor..headsha1234'")
+				mock.reachableFrom = []git.Commit{
+					{SHA: "commit1abc", Short: "commit1"},
+					{SHA: "commit2def", Short: "commit2"},
+				}
+			},
+			wantCommitCount: 2,
+			wantLatestNil:   false,
+			wantStaleAnchor: true,
+		},
+		{
+			name: "stale anchor with reachable error returns error",
+			entries: []*Entry{
+				makeTestEntry("staleanchor", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "headsha1234"
+				mock.logErr = output.NewSystemError("bad revision")
+				mock.reachableErr = output.NewSystemError("reachable failed")
+			},
+			wantErr:     true,
+			errContains: "reachable",
+		},
 	}
 
 	for _, tt := range tests {
@@ -235,7 +266,11 @@ func TestGetPendingCommits(t *testing.T) {
 				return
 			}
 
-			if err != nil {
+			if tt.wantStaleAnchor {
+				if !errors.Is(err, ErrStaleAnchor) {
+					t.Errorf("expected ErrStaleAnchor, got %v", err)
+				}
+			} else if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}

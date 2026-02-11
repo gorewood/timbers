@@ -4,6 +4,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -173,6 +174,22 @@ func TestPendingCommand(t *testing.T) {
 			jsonOutput:   true,
 			wantCount:    0,
 			wantContains: []string{`"count": 0`},
+		},
+		{
+			name: "stale anchor - falls back with warning",
+			mock: &mockGitOpsForPending{
+				head:       "abc123def456",
+				commitsErr: errors.New("bad revision 'staleanchor..abc123def456'"),
+				reachableResult: []git.Commit{
+					{SHA: "abc123def456", Short: "abc123d", Subject: "Recent commit"},
+					{SHA: "def456789012", Short: "def4567", Subject: "Older commit"},
+				},
+			},
+			files: func(t *testing.T) *ledger.FileStorage {
+				return writeEntries(t, makeEntry("staleanchor1234", time.Now().Add(-1*time.Hour)))
+			},
+			wantCount:    2,
+			wantContains: []string{"anchor commit is no longer in git history", "Pending Commits", "abc123d"},
 		},
 	}
 

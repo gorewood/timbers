@@ -83,6 +83,17 @@ func HEAD() (string, error) {
 	return sha, nil
 }
 
+// SHAExists checks if a SHA exists in the current repository.
+// Returns true if the SHA resolves to a known git object, false otherwise.
+// Useful for detecting stale references after squash merges or history rewrites.
+func SHAExists(sha string) bool {
+	if sha == "" {
+		return false
+	}
+	_, err := Run("cat-file", "-t", sha)
+	return err == nil
+}
+
 // HasUncommittedChanges returns true if the working tree has staged or unstaged changes.
 func HasUncommittedChanges() bool {
 	out, err := Run("status", "--porcelain")

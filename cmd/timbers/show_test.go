@@ -267,6 +267,120 @@ func TestShowWithTags(t *testing.T) {
 	}
 }
 
+func TestAnchorDisplay(t *testing.T) {
+	origSHAExists := shaExistsFunc
+	t.Cleanup(func() { shaExistsFunc = origSHAExists })
+
+	tests := []struct {
+		name      string
+		sha       string
+		exists    bool
+		want      string
+		wantAnnot bool
+	}{
+		{
+			name:   "existing SHA - no annotation",
+			sha:    "abc123def456789",
+			exists: true,
+			want:   "abc123d",
+		},
+		{
+			name:      "missing SHA - annotated",
+			sha:       "abc123def456789",
+			exists:    false,
+			want:      "abc123d (not in current history)",
+			wantAnnot: true,
+		},
+		{
+			name:      "empty SHA - annotated",
+			sha:       "",
+			exists:    false,
+			want:      "",
+			wantAnnot: false, // empty SHA returns empty string, no annotation
+		},
+		{
+			name:      "short SHA - annotated when missing",
+			sha:       "abc12",
+			exists:    false,
+			want:      "abc12 (not in current history)",
+			wantAnnot: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			shaExistsFunc = func(_ string) bool { return tt.exists }
+			got := anchorDisplay(tt.sha)
+			if got != tt.want {
+				t.Errorf("anchorDisplay(%q) = %q, want %q", tt.sha, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestShowAnchorAnnotation(t *testing.T) {
+	// Save and restore the original shaExistsFunc.
+	origSHAExists := shaExistsFunc
+	t.Cleanup(func() { shaExistsFunc = origSHAExists })
+
+	now := time.Date(2026, 1, 15, 15, 4, 5, 0, time.UTC)
+
+	t.Run("stale anchor shows annotation", func(t *testing.T) {
+		shaExistsFunc = func(_ string) bool { return false }
+
+		entry := createShowTestEntryStruct("staleanchor12345", now)
+		dir := t.TempDir()
+		writeShowEntryFile(t, dir, entry)
+		files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+		storage := ledger.NewStorage(&mockGitOpsForShow{}, files)
+
+		cmd := newShowCmdWithStorage(storage)
+		_ = cmd.Flags().Set("latest", "true")
+
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		output := buf.String()
+		if !strings.Contains(output, "not in current history") {
+			t.Errorf("expected stale anchor annotation\noutput: %s", output)
+		}
+	})
+
+	t.Run("valid anchor shows no annotation", func(t *testing.T) {
+		shaExistsFunc = func(_ string) bool { return true }
+
+		entry := createShowTestEntryStruct("validanchor12345", now)
+		dir := t.TempDir()
+		writeShowEntryFile(t, dir, entry)
+		files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+		storage := ledger.NewStorage(&mockGitOpsForShow{}, files)
+
+		cmd := newShowCmdWithStorage(storage)
+		_ = cmd.Flags().Set("latest", "true")
+
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		output := buf.String()
+		if strings.Contains(output, "not in current history") {
+			t.Errorf("expected no stale anchor annotation for valid SHA\noutput: %s", output)
+		}
+		if !strings.Contains(output, "validan") {
+			t.Errorf("expected short SHA in output\noutput: %s", output)
+		}
+	})
+}
+
 // createShowTestEntryStruct creates a minimal valid entry struct for testing show command.
 func createShowTestEntryStruct(anchor string, created time.Time) *ledger.Entry {
 	return &ledger.Entry{

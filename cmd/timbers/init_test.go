@@ -422,7 +422,7 @@ func TestInitJSONStructure(t *testing.T) {
 		requiredFields := []string{
 			"status",
 			"repo_name",
-			"notes_created",
+			"timbers_dir_created",
 			"remote_configured",
 			"hooks_installed",
 			"claude_installed",
@@ -455,6 +455,235 @@ func TestInitJSONStructure(t *testing.T) {
 			if _, hasStatus := stepMap["status"]; !hasStatus {
 				t.Errorf("step %d missing 'status' field", i)
 			}
+		}
+	})
+}
+
+func TestInitCreatesTimbersDirAndGitattributes(t *testing.T) {
+	tempDir := t.TempDir()
+
+	runGit(t, tempDir, "init")
+	runGit(t, tempDir, "config", "user.email", "test@test.com")
+	runGit(t, tempDir, "config", "user.name", "Test User")
+
+	testFile := filepath.Join(tempDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test content"), 0o600); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	runGit(t, tempDir, "add", "test.txt")
+	runGit(t, tempDir, "commit", "-m", "Initial commit")
+
+	runInDir(t, tempDir, func() {
+		var buf bytes.Buffer
+
+		cmd := newTestRootCmdWithInit()
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"init", "--yes", "--no-claude", "--json"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command failed: %v\nOutput: %s", err, buf.String())
+		}
+
+		// Verify .timbers/ directory was created
+		timbersDir := filepath.Join(tempDir, ".timbers")
+		info, err := os.Stat(timbersDir)
+		if err != nil {
+			t.Fatalf(".timbers directory not created: %v", err)
+		}
+		if !info.IsDir() {
+			t.Error(".timbers is not a directory")
+		}
+
+		// Verify .gitattributes was created with correct content
+		gaPath := filepath.Join(tempDir, ".gitattributes")
+		content, err := os.ReadFile(gaPath)
+		if err != nil {
+			t.Fatalf(".gitattributes not created: %v", err)
+		}
+		if !strings.Contains(string(content), "/.timbers/** linguist-generated") {
+			t.Errorf(".gitattributes missing timbers entry\nContent: %s", content)
+		}
+	})
+}
+
+func TestInitGitattributesIdempotent(t *testing.T) {
+	tempDir := t.TempDir()
+
+	runGit(t, tempDir, "init")
+	runGit(t, tempDir, "config", "user.email", "test@test.com")
+	runGit(t, tempDir, "config", "user.name", "Test User")
+
+	testFile := filepath.Join(tempDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test content"), 0o600); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	runGit(t, tempDir, "add", "test.txt")
+	runGit(t, tempDir, "commit", "-m", "Initial commit")
+
+	// Pre-create .gitattributes with the timbers line
+	gaPath := filepath.Join(tempDir, ".gitattributes")
+	if err := os.WriteFile(gaPath, []byte("/.timbers/** linguist-generated\n"), 0o600); err != nil { //nolint:gosec // test file
+		t.Fatalf("failed to write .gitattributes: %v", err)
+	}
+
+	runInDir(t, tempDir, func() {
+		var buf bytes.Buffer
+
+		cmd := newTestRootCmdWithInit()
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"init", "--yes", "--no-claude", "--json"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command failed: %v\nOutput: %s", err, buf.String())
+		}
+
+		// Verify .gitattributes only has one copy of the line
+		content, err := os.ReadFile(gaPath)
+		if err != nil {
+			t.Fatalf("failed to read .gitattributes: %v", err)
+		}
+		count := strings.Count(string(content), "/.timbers/** linguist-generated")
+		if count != 1 {
+			t.Errorf("expected 1 timbers entry in .gitattributes, got %d\nContent: %s", count, content)
+		}
+	})
+}
+
+func TestInitGitattributesAppendsToExisting(t *testing.T) {
+	tempDir := t.TempDir()
+
+	runGit(t, tempDir, "init")
+	runGit(t, tempDir, "config", "user.email", "test@test.com")
+	runGit(t, tempDir, "config", "user.name", "Test User")
+
+	testFile := filepath.Join(tempDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test content"), 0o600); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	runGit(t, tempDir, "add", "test.txt")
+	runGit(t, tempDir, "commit", "-m", "Initial commit")
+
+	// Pre-create .gitattributes with other content
+	gaPath := filepath.Join(tempDir, ".gitattributes")
+	if err := os.WriteFile(gaPath, []byte("*.go text\n"), 0o600); err != nil { //nolint:gosec // test file
+		t.Fatalf("failed to write .gitattributes: %v", err)
+	}
+
+	runInDir(t, tempDir, func() {
+		var buf bytes.Buffer
+
+		cmd := newTestRootCmdWithInit()
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"init", "--yes", "--no-claude", "--json"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command failed: %v\nOutput: %s", err, buf.String())
+		}
+
+		// Verify .gitattributes has both lines
+		content, err := os.ReadFile(gaPath)
+		if err != nil {
+			t.Fatalf("failed to read .gitattributes: %v", err)
+		}
+		if !strings.Contains(string(content), "*.go text") {
+			t.Error("original .gitattributes content was lost")
+		}
+		if !strings.Contains(string(content), "/.timbers/** linguist-generated") {
+			t.Error(".gitattributes missing timbers entry")
+		}
+	})
+}
+
+func TestInitPostRewriteHook(t *testing.T) {
+	tempDir := t.TempDir()
+
+	runGit(t, tempDir, "init")
+	runGit(t, tempDir, "config", "user.email", "test@test.com")
+	runGit(t, tempDir, "config", "user.name", "Test User")
+
+	testFile := filepath.Join(tempDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test content"), 0o600); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	runGit(t, tempDir, "add", "test.txt")
+	runGit(t, tempDir, "commit", "-m", "Initial commit")
+
+	runInDir(t, tempDir, func() {
+		var buf bytes.Buffer
+
+		cmd := newTestRootCmdWithInit()
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"init", "--yes", "--hooks", "--no-claude", "--json"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command failed: %v\nOutput: %s", err, buf.String())
+		}
+
+		// Verify post-rewrite hook was created
+		hookPath := filepath.Join(tempDir, ".git", "hooks", "post-rewrite")
+		content, err := os.ReadFile(hookPath)
+		if err != nil {
+			t.Fatalf("post-rewrite hook not created: %v", err)
+		}
+		if !strings.Contains(string(content), ".timbers") {
+			t.Error("post-rewrite hook missing .timbers reference")
+		}
+		if !strings.Contains(string(content), "sed") {
+			t.Error("post-rewrite hook missing sed command for SHA remapping")
+		}
+	})
+}
+
+func TestInitPostRewriteChainsExistingHook(t *testing.T) {
+	tempDir := t.TempDir()
+
+	runGit(t, tempDir, "init")
+	runGit(t, tempDir, "config", "user.email", "test@test.com")
+	runGit(t, tempDir, "config", "user.name", "Test User")
+
+	testFile := filepath.Join(tempDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test content"), 0o600); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	runGit(t, tempDir, "add", "test.txt")
+	runGit(t, tempDir, "commit", "-m", "Initial commit")
+
+	// Create an existing post-rewrite hook
+	hooksDir := filepath.Join(tempDir, ".git", "hooks")
+	hookPath := filepath.Join(hooksDir, "post-rewrite")
+	existingContent := "#!/bin/sh\necho 'existing post-rewrite'\n"
+	// #nosec G306 -- test hook needs execute permission
+	if err := os.WriteFile(hookPath, []byte(existingContent), 0o755); err != nil {
+		t.Fatalf("failed to create existing hook: %v", err)
+	}
+
+	runInDir(t, tempDir, func() {
+		var buf bytes.Buffer
+
+		cmd := newTestRootCmdWithInit()
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"init", "--yes", "--hooks", "--no-claude", "--json"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command failed: %v\nOutput: %s", err, buf.String())
+		}
+
+		// Verify hook was chained (existing + timbers)
+		content, err := os.ReadFile(hookPath)
+		if err != nil {
+			t.Fatalf("failed to read hook: %v", err)
+		}
+		contentStr := string(content)
+		if !strings.Contains(contentStr, "existing post-rewrite") {
+			t.Error("existing hook content was lost")
+		}
+		if !strings.Contains(contentStr, ".timbers") {
+			t.Error("timbers section not appended")
 		}
 	})
 }
@@ -499,13 +728,13 @@ func TestInitDryRunJSONSteps(t *testing.T) {
 			t.Fatalf("steps is not an array: %T", result["steps"])
 		}
 
-		// Should have 4 steps: notes_ref, remote_config, hooks, claude
-		if len(steps) != 4 {
-			t.Errorf("got %d steps, want 4", len(steps))
+		// Should have 6 steps: timbers_dir, gitattributes, remote_config, hooks, post_rewrite, claude
+		if len(steps) != 6 {
+			t.Errorf("got %d steps, want 6", len(steps))
 		}
 
 		// Check step names
-		expectedSteps := []string{"notes_ref", "remote_config", "hooks", "claude"}
+		expectedSteps := []string{"timbers_dir", "gitattributes", "remote_config", "hooks", "post_rewrite", "claude"}
 		for i, step := range steps {
 			if i >= len(expectedSteps) {
 				break

@@ -2,6 +2,7 @@
 package main
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -87,9 +88,12 @@ func runPending(cmd *cobra.Command, storage *ledger.Storage, countOnly bool) err
 
 	// Get pending commits
 	commits, latest, err := storage.GetPendingCommits()
-	if err != nil {
+	if err != nil && !errors.Is(err, ledger.ErrStaleAnchor) {
 		printer.Error(err)
 		return err
+	}
+	if errors.Is(err, ledger.ErrStaleAnchor) {
+		printer.Warn("last entry's anchor commit is no longer in git history (squash merge or rebase?); showing all reachable commits")
 	}
 
 	// Build result

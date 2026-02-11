@@ -141,10 +141,24 @@ func outputShowSummary(printer *output.Printer, entry *ledger.Entry) {
 	printer.KeyValue("How", entry.Summary.How)
 }
 
+// shaExistsFunc is the function used to check if a SHA exists in the repo.
+// Overridable in tests to avoid requiring a real git repo.
+var shaExistsFunc = git.SHAExists
+
+// anchorDisplay returns the display string for an anchor SHA.
+// If the SHA does not exist in the current git history, it appends an annotation.
+func anchorDisplay(sha string) string {
+	display := shortSHA(sha)
+	if sha != "" && !shaExistsFunc(sha) {
+		display += " (not in current history)"
+	}
+	return display
+}
+
 // outputShowWorkset prints the workset information.
 func outputShowWorkset(printer *output.Printer, entry *ledger.Entry) {
 	printer.Section("Workset")
-	printer.KeyValue("Anchor", shortSHA(entry.Workset.AnchorCommit))
+	printer.KeyValue("Anchor", anchorDisplay(entry.Workset.AnchorCommit))
 	if len(entry.Workset.Commits) > 0 {
 		commitValue := strconv.Itoa(len(entry.Workset.Commits))
 		if entry.Workset.Range != "" {

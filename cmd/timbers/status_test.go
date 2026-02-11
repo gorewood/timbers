@@ -33,6 +33,12 @@ func TestStatusCommand(t *testing.T) {
 	branch := strings.TrimSpace(runGitOutput(t, tempDir, "rev-parse", "--abbrev-ref", "HEAD"))
 	repoName := filepath.Base(tempDir)
 
+	// Resolve symlinks to match git's resolved path (macOS /var -> /private/var)
+	resolvedTempDir, err := filepath.EvalSymlinks(tempDir)
+	if err != nil {
+		t.Fatalf("failed to resolve symlinks: %v", err)
+	}
+
 	tests := []struct {
 		name       string
 		args       []string
@@ -45,7 +51,8 @@ func TestStatusCommand(t *testing.T) {
 				"repo":             repoName,
 				"branch":           branch,
 				"head":             head,
-				"notes_ref":        "refs/notes/timbers",
+				"timbers_dir":      filepath.Join(resolvedTempDir, ".timbers"),
+				"dir_exists":       false,
 				"notes_configured": false,
 				"entry_count":      float64(0), // JSON numbers are float64
 			},
