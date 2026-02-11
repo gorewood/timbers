@@ -189,6 +189,10 @@ just fix      # Auto-fix lint issues
 just run      # Run the CLI
 ```
 
+## Acknowledgments
+
+Timbers was built and tracked with [Beads](https://github.com/steveyegge/beads), a lightweight issue tracker stored in Git refs. Beads' CLI design — structured output, agent-friendly ergonomics, Git-native storage — directly inspired the patterns in timbers' [Agent DX Guide](docs/agent-dx-guide.md). If you're building tools that agents need to use, studying beads is a great place to start.
+
 ## License
 
 [MIT](LICENSE)
