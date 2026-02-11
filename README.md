@@ -57,15 +57,15 @@ All commands support `--json`. Write operations support `--dry-run`.
 
 ## Document Generation
 
-The `draft` command renders templates with your ledger entries, producing changelogs, reports, decision logs, and more — either as text for piping to an LLM or with built-in LLM execution via `--model`.
+The `draft` command renders templates with your ledger entries, producing changelogs, reports, decision logs, and more — either by piping to an LLM CLI or with built-in LLM execution via `--model`.
 
 ```bash
-# Pipe to external LLM
-timbers draft changelog --since 7d | claude -p
+# Pipe to Claude Code CLI (recommended for local use — uses subscription, not API tokens)
+timbers draft changelog --since 7d | claude -p --model opus
+timbers draft decision-log --last 20 | claude -p --model opus
 
-# Built-in LLM execution
+# Built-in LLM execution (for CI/CD or when claude CLI isn't available)
 timbers draft exec-summary --last 10 --model opus
-timbers draft decision-log --last 20 --model haiku
 
 # List available templates
 timbers draft --list
@@ -75,7 +75,7 @@ timbers draft --list
 
 The decision-log template is particularly valuable — it extracts the *why* behind each change into an architectural decision record. No other tool produces this from structured commit data.
 
-**Model guidance:** For best output quality, use `opus`. For routine generation at lower cost, `haiku` or `local` models work well. Experiment to find the model that gives you the best output at your preferred price point.
+**Model guidance:** Use `opus` for best output quality. For local generation, pipe to `claude -p` (uses your subscription instead of API tokens). For CI/CD, use `--model opus` with an API key. For high-volume batch operations (e.g., `catchup` over hundreds of commits), `haiku` or `local` models offer a lower-cost alternative.
 
 ## Configuration
 
@@ -165,11 +165,20 @@ Native hooks and setup commands for additional agent environments are planned fo
 - [Spec](docs/spec.md) — Full specification
 - [Agent DX Guide](docs/agent-dx-guide.md) — CLI design patterns for agents
 
-## Dogfood Artifacts
+## Example Artifacts
 
-Timbers' own development ledger is used to generate showcase artifacts via `timbers draft`. These demonstrate what the tool produces from real data.
+Timbers' own development ledger is used to generate these examples via `timbers draft`. Each link is a live artifact produced from real data:
 
-> **A note on quality:** Timbers was bootstrapped late in its own development, so most ledger entries were backfilled using `timbers catchup` — which infers what/why/how from commit messages and diffs. Catchup can only make inferences from what Git already records, producing weaker entries than what you get from documenting work in the moment. This is exactly why timbers exists: the reasoning that *isn't* in the commit message is the part that matters most. The dogfood artifacts are illustrative of the format and pipeline, but a project that uses `timbers log` from day one will produce significantly richer output.
+| Artifact | Description |
+|----------|-------------|
+| [Changelog](https://gorewood.github.io/timbers/examples/changelog/) | Keep a Changelog format, grouped by type |
+| [Decision Log](https://gorewood.github.io/timbers/examples/decision-log/) | ADR-style architectural decisions extracted from the *why* field |
+| [Executive Summary](https://gorewood.github.io/timbers/examples/exec-summary/) | 3-5 bullet standup summary |
+| [Release Notes](https://gorewood.github.io/timbers/examples/release-notes/) | User-facing release notes |
+| [Sprint Report](https://gorewood.github.io/timbers/examples/sprint-report/) | Categorized sprint summary with scope and highlights |
+| [Dev Blog](https://gorewood.github.io/timbers/posts/) | Weekly dev blog posts (Carmack .plan style) |
+
+> **A note on quality:** Most of these entries were backfilled using `timbers catchup`, which infers what/why/how from commit messages and diffs. Projects that use `timbers log` from day one will produce significantly richer output — especially in the decision-log, where the *why* field matters most.
 
 ## Development
 

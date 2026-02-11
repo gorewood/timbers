@@ -108,17 +108,17 @@ watch:
 # REPORTING
 # =============================================================================
 
-# Generate a report using timbers draft + claude
+# Generate a report using timbers draft piped to claude
+# This uses `claude -p` which is cheaper than API token calls.
 # Usage: just draft changelog --since 7d
 #        just draft exec-summary --last 10
-# Model defaults to haiku; override with: just draft-model sonnet changelog --since 7d
 draft +args:
-    @claude -p --model haiku "$(go run ./cmd/timbers draft {{args}})"
+    @go run ./cmd/timbers draft {{args}} | claude -p --model opus
 
 # Generate a report with specific model
 # Usage: just draft-model sonnet devblog --last 20
 draft-model model +args:
-    @claude -p --model {{model}} "$(go run ./cmd/timbers draft {{args}})"
+    @go run ./cmd/timbers draft {{args}} | claude -p --model {{model}}
 
 # =============================================================================
 # RELEASE (goreleaser)
@@ -169,7 +169,7 @@ blog:
         echo "date = '${DATE}'"
         echo "+++"
         echo ""
-        timbers draft devblog --since 7d --model haiku
+        timbers draft devblog --since 7d | claude -p --model opus
     } > "$FILE"
     echo "Created: $FILE"
 

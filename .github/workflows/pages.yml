@@ -2,10 +2,9 @@ name: Deploy Hugo site to Pages
 
 on:
   workflow_dispatch:
-  # Enable push trigger after configuring GitHub Pages:
-  # push:
-  #   branches: [main]
-  #   paths: ['site/**']
+  push:
+    branches: [main]
+    paths: ['site/**']
 
 permissions:
   contents: read
