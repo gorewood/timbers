@@ -76,7 +76,7 @@ Environment variables:
 	cmd.Flags().IntVar(&flags.parallel, "parallel", 5, "Concurrent LLM calls")
 	cmd.Flags().IntVarP(&flags.limit, "limit", "l", 0, "Maximum entries to generate (0 = unlimited)")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Preview entries without writing")
-	cmd.Flags().BoolVar(&flags.push, "push", false, "Push notes after creating entries")
+	cmd.Flags().BoolVar(&flags.push, "push", false, "Push to remote after creating entries")
 	cmd.Flags().StringSliceVar(&flags.tags, "tag", nil, "Tags to add to all entries")
 	cmd.Flags().StringVarP(&flags.groupBy, "group-by", "g", "auto", "Grouping strategy: auto, day, work-item")
 

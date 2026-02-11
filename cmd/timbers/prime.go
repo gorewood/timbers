@@ -22,7 +22,7 @@ const defaultWorkflowContent = `# CRITICAL: Session Protocol
 - [ ] git add && git commit (commit code FIRST)
 - [ ] timbers log "what" --why "why" --how "how" (document committed work)
 - [ ] timbers pending (MUST be zero before session end)
-- [ ] timbers notes push (sync to remote)
+- [ ] git push (entries are committed files, push to sync)
 
 IMPORTANT: Always commit code before running timbers log. Entries must
 describe committed work, not work-in-progress. Timbers will warn if
@@ -51,7 +51,7 @@ Ask yourself: why THIS approach over alternatives? What trade-off did you make?
 - You MUST commit code first, then document with timbers log
 - You MUST capture design decisions in --why, not feature summaries
 - You MUST run ` + "`timbers pending`" + ` before session end (MUST be zero)
-- You MUST run ` + "`timbers notes push`" + ` to sync ledger to remote
+- You MUST run ` + "`git push`" + ` to sync ledger to remote (entries are committed files)
 
 # Essential Commands
 ### Recording Work
@@ -68,21 +68,19 @@ Ask yourself: why THIS approach over alternatives? What trade-off did you make?
 - ` + "`timbers draft devblog --since 7d --model opus`" + ` - Generate directly
 
 ### Sync
-- ` + "`timbers notes push`" + ` - Push notes to remote
-- ` + "`timbers notes fetch`" + ` - Fetch notes from remote
+- Entries are committed files in .timbers/ — use standard git push/pull
 `
 
 // primeResult holds the data for prime output.
 type primeResult struct {
-	Repo            string       `json:"repo"`
-	Branch          string       `json:"branch"`
-	Head            string       `json:"head"`
-	TimbersDir      string       `json:"timbers_dir"`
-	NotesConfigured bool         `json:"notes_configured"`
-	EntryCount      int          `json:"entry_count"`
-	Pending         primePending `json:"pending"`
-	RecentEntries   []primeEntry `json:"recent_entries"`
-	Workflow        string       `json:"workflow"`
+	Repo          string       `json:"repo"`
+	Branch        string       `json:"branch"`
+	Head          string       `json:"head"`
+	TimbersDir    string       `json:"timbers_dir"`
+	EntryCount    int          `json:"entry_count"`
+	Pending       primePending `json:"pending"`
+	RecentEntries []primeEntry `json:"recent_entries"`
+	Workflow      string       `json:"workflow"`
 }
 
 // primePending holds pending commit information.
@@ -219,8 +217,6 @@ func gatherPrimeContext(storage *ledger.Storage, lastN int, verbose bool) (*prim
 		return nil, err
 	}
 
-	notesConfigured := git.NotesConfigured("origin")
-
 	allEntries, err := storage.ListEntries()
 	if err != nil {
 		return nil, err
@@ -239,15 +235,14 @@ func gatherPrimeContext(storage *ledger.Storage, lastN int, verbose bool) (*prim
 	workflow := loadWorkflowContent(root)
 
 	return &primeResult{
-		Repo:            repoName,
-		Branch:          branch,
-		Head:            head,
-		TimbersDir:      filepath.Join(root, ".timbers"),
-		NotesConfigured: notesConfigured,
-		EntryCount:      len(allEntries),
-		Pending:         buildPrimePending(pendingCommits),
-		RecentEntries:   buildPrimeEntries(recentEntries, verbose),
-		Workflow:        workflow,
+		Repo:          repoName,
+		Branch:        branch,
+		Head:          head,
+		TimbersDir:    filepath.Join(root, ".timbers"),
+		EntryCount:    len(allEntries),
+		Pending:       buildPrimePending(pendingCommits),
+		RecentEntries: buildPrimeEntries(recentEntries, verbose),
+		Workflow:      workflow,
 	}, nil
 }
 

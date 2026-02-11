@@ -60,7 +60,7 @@ func TestInitCommand(t *testing.T) {
 			runGit(t, tempDir, "config", "user.email", "test@test.com")
 			runGit(t, tempDir, "config", "user.name", "Test User")
 
-			// Create a file and commit (needed for notes)
+			// Create a file and commit
 			testFile := filepath.Join(tempDir, "test.txt")
 			if err := os.WriteFile(testFile, []byte("test content"), 0o600); err != nil {
 				t.Fatalf("failed to write test file: %v", err)
@@ -423,7 +423,6 @@ func TestInitJSONStructure(t *testing.T) {
 			"status",
 			"repo_name",
 			"timbers_dir_created",
-			"remote_configured",
 			"hooks_installed",
 			"claude_installed",
 			"already_initialized",
@@ -728,13 +727,13 @@ func TestInitDryRunJSONSteps(t *testing.T) {
 			t.Fatalf("steps is not an array: %T", result["steps"])
 		}
 
-		// Should have 6 steps: timbers_dir, gitattributes, remote_config, hooks, post_rewrite, claude
-		if len(steps) != 6 {
-			t.Errorf("got %d steps, want 6", len(steps))
+		// Should have 5 steps: timbers_dir, gitattributes, hooks, post_rewrite, claude
+		if len(steps) != 5 {
+			t.Errorf("got %d steps, want 5", len(steps))
 		}
 
 		// Check step names
-		expectedSteps := []string{"timbers_dir", "gitattributes", "remote_config", "hooks", "post_rewrite", "claude"}
+		expectedSteps := []string{"timbers_dir", "gitattributes", "hooks", "post_rewrite", "claude"}
 		for i, step := range steps {
 			if i >= len(expectedSteps) {
 				break

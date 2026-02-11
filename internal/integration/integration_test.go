@@ -433,81 +433,6 @@ func TestShowCommand(t *testing.T) {
 	}
 }
 
-// TestNotesStatus tests the notes status command.
-func TestNotesStatus(t *testing.T) {
-	repo := newTestRepo(t)
-
-	repo.createFile("file.txt", "content")
-	repo.commit("Initial")
-
-	// Before any entries, status should work
-	statusOut := repo.timbersOK("notes", "status", "--json")
-	var statusResult struct {
-		RefExists  bool   `json:"ref_exists"`
-		Configured bool   `json:"configured"`
-		EntryCount int    `json:"entry_count"`
-		Remote     string `json:"remote"`
-	}
-	if err := json.Unmarshal([]byte(statusOut), &statusResult); err != nil {
-		t.Fatalf("failed to parse notes status JSON: %v", err)
-	}
-	if statusResult.RefExists {
-		t.Error("expected ref_exists to be false before any entries")
-	}
-	if statusResult.EntryCount != 0 {
-		t.Errorf("expected 0 entries, got %d", statusResult.EntryCount)
-	}
-
-	// Create an entry
-	repo.timbersOK("log", "Work", "--why", "Reason", "--how", "Method")
-
-	// After entry, ref should exist
-	statusOut2 := repo.timbersOK("notes", "status", "--json")
-	if err := json.Unmarshal([]byte(statusOut2), &statusResult); err != nil {
-		t.Fatalf("failed to parse notes status JSON: %v", err)
-	}
-	if !statusResult.RefExists {
-		t.Error("expected ref_exists to be true after creating entry")
-	}
-	if statusResult.EntryCount != 1 {
-		t.Errorf("expected 1 entry, got %d", statusResult.EntryCount)
-	}
-}
-
-// TestNotesInit tests the notes init command.
-func TestNotesInit(t *testing.T) {
-	repo := newTestRepo(t)
-
-	repo.createFile("file.txt", "content")
-	repo.commit("Initial")
-
-	// Add a remote (we'll use a fake one for testing)
-	repo.git("remote", "add", "origin", "https://example.com/repo.git")
-
-	// Run notes init
-	initOut := repo.timbersOK("notes", "init", "--json")
-	var initResult struct {
-		Status     string `json:"status"`
-		Remote     string `json:"remote"`
-		Configured bool   `json:"configured"`
-	}
-	if err := json.Unmarshal([]byte(initOut), &initResult); err != nil {
-		t.Fatalf("failed to parse notes init JSON: %v", err)
-	}
-	if initResult.Status != "ok" {
-		t.Errorf("expected status 'ok', got %q", initResult.Status)
-	}
-	if !initResult.Configured {
-		t.Error("expected configured to be true")
-	}
-
-	// Verify notes fetch config was added
-	fetchConfig := repo.git("config", "--get-all", "remote.origin.fetch")
-	if !strings.Contains(fetchConfig, "refs/notes/timbers") {
-		t.Errorf("expected notes fetch config, got: %s", fetchConfig)
-	}
-}
-
 // TestErrorNotGitRepo tests error when running outside a git repo.
 func TestErrorNotGitRepo(t *testing.T) {
 	// Create a directory that is NOT a git repo
@@ -798,12 +723,10 @@ func TestStatusCommand(t *testing.T) {
 	// Status should work
 	statusOut := repo.timbersOK("status", "--json")
 	var statusResult struct {
-		Repo            string `json:"repo"`
-		Branch          string `json:"branch"`
-		Head            string `json:"head"`
-		NotesRef        string `json:"notes_ref"`
-		NotesConfigured bool   `json:"notes_configured"`
-		EntryCount      int    `json:"entry_count"`
+		Repo       string `json:"repo"`
+		Branch     string `json:"branch"`
+		Head       string `json:"head"`
+		EntryCount int    `json:"entry_count"`
 	}
 	if err := json.Unmarshal([]byte(statusOut), &statusResult); err != nil {
 		t.Fatalf("failed to parse status JSON: %v", err)
@@ -816,9 +739,6 @@ func TestStatusCommand(t *testing.T) {
 	}
 	if statusResult.Head == "" {
 		t.Error("expected head to be non-empty")
-	}
-	if statusResult.NotesRef != "refs/notes/timbers" {
-		t.Errorf("expected notes_ref 'refs/notes/timbers', got %q", statusResult.NotesRef)
 	}
 }
 

@@ -65,7 +65,7 @@ func registerLogFlags(cmd *cobra.Command, flagVars *logFlagVars) {
 	cmd.Flags().StringVar(flagVars.anchor, "anchor", "", "Override anchor commit (default: HEAD)")
 	cmd.Flags().BoolVar(flagVars.minor, "minor", false, "Trivial change - makes why/how optional")
 	cmd.Flags().BoolVar(flagVars.dryRun, "dry-run", false, "Show what would be written without writing")
-	cmd.Flags().BoolVar(flagVars.push, "push", false, "Push notes after writing")
+	cmd.Flags().BoolVar(flagVars.push, "push", false, "Push to remote after writing")
 	cmd.Flags().BoolVar(flagVars.auto, "auto", false, "Extract what/why/how from commit messages")
 	cmd.Flags().BoolVar(flagVars.yes, "yes", false, "Skip confirmation in auto mode")
 	cmd.Flags().BoolVar(flagVars.batch, "batch", false, "Create entries grouped by work-item trailer or day")

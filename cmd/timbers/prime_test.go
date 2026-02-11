@@ -231,7 +231,7 @@ func TestPrimeCommand(t *testing.T) {
 				}
 				// Verify required fields exist
 				requiredFields := []string{
-					"repo", "branch", "head", "timbers_dir", "notes_configured",
+					"repo", "branch", "head", "timbers_dir",
 					"entry_count", "pending", "recent_entries", "workflow",
 				}
 				for _, field := range requiredFields {
@@ -267,12 +267,11 @@ func makePrimeTestEntry(anchor string, created time.Time, what string) *ledger.E
 func TestPrimeResultJSON(t *testing.T) {
 	// Test that primeResult serializes correctly
 	result := &primeResult{
-		Repo:            "test-repo",
-		Branch:          "main",
-		Head:            "abc123def456",
-		TimbersDir:      "/tmp/test-repo/.timbers",
-		NotesConfigured: true,
-		EntryCount:      2,
+		Repo:       "test-repo",
+		Branch:     "main",
+		Head:       "abc123def456",
+		TimbersDir: "/tmp/test-repo/.timbers",
+		EntryCount: 2,
 		Pending: primePending{
 			Count: 1,
 			Commits: []commitSummary{
@@ -362,7 +361,7 @@ func TestPrimeExportFlag(t *testing.T) {
 		"Essential Commands",
 		"timbers pending",
 		"timbers log",
-		"timbers notes push",
+		"git push",
 	}
 
 	for _, want := range expectedParts {

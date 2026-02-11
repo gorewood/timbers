@@ -22,7 +22,7 @@ func TestOnboardCommand(t *testing.T) {
 				"timbers prime",
 				"timbers pending",
 				"timbers log",
-				"timbers notes push",
+				"git push",
 			},
 		},
 		{

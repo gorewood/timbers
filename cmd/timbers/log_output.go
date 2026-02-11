@@ -65,7 +65,6 @@ func outputLogSuccess(printer *output.Printer, entry *ledger.Entry, pushedMsg st
 			"commits": commitSHAs,
 			"suggested_commands": []string{
 				"timbers show --latest",
-				"timbers notes push",
 			},
 		})
 	}

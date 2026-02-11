@@ -16,17 +16,16 @@ import (
 
 // statusResult holds the data for status output.
 type statusResult struct {
-	Repo            string `json:"repo"`
-	Branch          string `json:"branch"`
-	Head            string `json:"head"`
-	TimbersDir      string `json:"timbers_dir"`
-	DirExists       bool   `json:"dir_exists"`
-	NotesConfigured bool   `json:"notes_configured"`
-	EntryCount      int    `json:"entry_count"`
-	FilesTotal      int    `json:"files_total,omitempty"`
-	FilesSkipped    int    `json:"files_skipped,omitempty"`
-	NotTimbers      int    `json:"not_timbers,omitempty"`
-	ParseErrors     int    `json:"parse_errors,omitempty"`
+	Repo         string `json:"repo"`
+	Branch       string `json:"branch"`
+	Head         string `json:"head"`
+	TimbersDir   string `json:"timbers_dir"`
+	DirExists    bool   `json:"dir_exists"`
+	EntryCount   int    `json:"entry_count"`
+	FilesTotal   int    `json:"files_total,omitempty"`
+	FilesSkipped int    `json:"files_skipped,omitempty"`
+	NotTimbers   int    `json:"not_timbers,omitempty"`
+	ParseErrors  int    `json:"parse_errors,omitempty"`
 }
 
 // newStatusCmd creates the status command.
@@ -34,21 +33,21 @@ func newStatusCmd() *cobra.Command {
 	var verboseFlag bool
 	cmd := &cobra.Command{
 		Use:   "status",
-		Short: "Show repository and notes state",
-		Long: `Show the current state of the repository and timbers notes configuration.
+		Short: "Show repository and ledger state",
+		Long: `Show the current state of the repository and timbers ledger.
 
-Displays repository info (name, branch, HEAD), notes ref status, whether
-notes fetch is configured for the remote, and total entry count.
+Displays repository info (name, branch, HEAD), .timbers/ directory status,
+and total entry count.
 
 Examples:
   timbers status            # Show human-readable status
-  timbers status --verbose  # Show detailed notes statistics
+  timbers status --verbose  # Show detailed storage statistics
   timbers status --json     # Output status as JSON for scripting`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runStatus(cmd, args, verboseFlag)
 		},
 	}
-	cmd.Flags().BoolVarP(&verboseFlag, "verbose", "v", false, "Show detailed notes statistics")
+	cmd.Flags().BoolVarP(&verboseFlag, "verbose", "v", false, "Show detailed entry statistics")
 	return cmd
 }
 
@@ -73,13 +72,12 @@ func runStatus(cmd *cobra.Command, _ []string, verbose bool) error {
 	// Output based on mode
 	if printer.IsJSON() {
 		data := map[string]any{
-			"repo":             result.Repo,
-			"branch":           result.Branch,
-			"head":             result.Head,
-			"timbers_dir":      result.TimbersDir,
-			"dir_exists":       result.DirExists,
-			"notes_configured": result.NotesConfigured,
-			"entry_count":      result.EntryCount,
+			"repo":        result.Repo,
+			"branch":      result.Branch,
+			"head":        result.Head,
+			"timbers_dir": result.TimbersDir,
+			"dir_exists":  result.DirExists,
+			"entry_count": result.EntryCount,
 		}
 		// Add verbose stats if present
 		if verbose {
@@ -89,12 +87,7 @@ func runStatus(cmd *cobra.Command, _ []string, verbose bool) error {
 			data["parse_errors"] = result.ParseErrors
 		}
 		// Add suggested commands based on state
-		var suggestions []string
-		if !result.NotesConfigured {
-			suggestions = append(suggestions, "timbers notes init")
-		}
-		suggestions = append(suggestions, "timbers pending")
-		data["suggested_commands"] = suggestions
+		data["suggested_commands"] = []string{"timbers pending"}
 		return printer.Success(data)
 	}
 
@@ -124,21 +117,17 @@ func gatherStatus(verbose bool) (*statusResult, error) {
 		return nil, err
 	}
 
-	// Check notes configuration
-	notesConfigured := git.NotesConfigured("origin")
-
 	// Check .timbers/ directory
 	timbersDir := filepath.Join(root, ".timbers")
 	dirInfo, statErr := os.Stat(timbersDir)
 	dirExists := statErr == nil && dirInfo.IsDir()
 
 	result := &statusResult{
-		Repo:            repoName,
-		Branch:          branch,
-		Head:            head,
-		TimbersDir:      timbersDir,
-		DirExists:       dirExists,
-		NotesConfigured: notesConfigured,
+		Repo:       repoName,
+		Branch:     branch,
+		Head:       head,
+		TimbersDir: timbersDir,
+		DirExists:  dirExists,
 	}
 
 	// Get entry count
@@ -178,7 +167,6 @@ func printHumanStatus(printer *output.Printer, status *statusResult, verbose boo
 	printer.Section("Timbers Storage")
 	printer.KeyValue("Directory", status.TimbersDir)
 	printer.KeyValue("Initialized", formatBool(status.DirExists))
-	printer.KeyValue("Configured", formatBool(status.NotesConfigured))
 
 	if verbose {
 		printer.KeyValue("Files Total", strconv.Itoa(status.FilesTotal))

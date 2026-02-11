@@ -74,8 +74,6 @@ func formatStepName(name string) string {
 		return ".timbers directory"
 	case "gitattributes":
 		return ".gitattributes"
-	case "remote_config":
-		return "Remote configured"
 	case "hooks":
 		return "Git hooks"
 	case "post_rewrite":

@@ -33,7 +33,6 @@ type initStepResult struct {
 type initState struct {
 	timbersDirExists      bool
 	gitattributesHasEntry bool
-	remoteConfigured      bool
 	hooksInstalled        bool
 	postRewriteInstalled  bool
 	claudeInstalled       bool
@@ -76,7 +75,7 @@ func newInitCmd() *cobra.Command {
 This command sets up everything needed to use timbers:
   - Creates the .timbers/ directory for entry storage
   - Adds .gitattributes entry to collapse timbers files in diffs
-  - Configures remote for notes push/fetch
+  - Configures .gitattributes for diff collapsing
   - Installs Git hooks (optional, includes post-rewrite for rebase safety)
   - Sets up Claude Code integration (optional)
 
@@ -124,9 +123,7 @@ func runInit(cmd *cobra.Command, flags *initFlags) error {
 
 // gatherInitState checks the current timbers setup state.
 func gatherInitState() *initState {
-	state := &initState{
-		remoteConfigured: git.NotesConfigured("origin"),
-	}
+	state := &initState{}
 
 	// Check .timbers/ directory
 	if root, err := git.RepoRoot(); err == nil {
@@ -222,7 +219,6 @@ func performInit(
 func isAlreadyInitialized(state *initState, flags *initFlags) bool {
 	return state.timbersDirExists &&
 		state.gitattributesHasEntry &&
-		state.remoteConfigured &&
 		(!flags.hooks || (state.hooksInstalled && state.postRewriteInstalled)) &&
 		(flags.noClaude || state.claudeInstalled)
 }
@@ -245,7 +241,6 @@ func outputAlreadyInitialized(printer *output.Printer, styles initStyleSet, repo
 
 // outputInitResult outputs the final initialization result.
 func outputInitResult(printer *output.Printer, styles initStyleSet, repoName string, _ *initState, steps []initStepResult) error {
-	remoteConfigured := stepSucceeded(steps, "remote_config")
 	hooksInstalled := stepSucceeded(steps, "hooks")
 	claudeInstalled := stepSucceeded(steps, "claude")
 	timbersDirCreated := stepSucceeded(steps, "timbers_dir")
@@ -255,7 +250,6 @@ func outputInitResult(printer *output.Printer, styles initStyleSet, repoName str
 			"status":              "ok",
 			"repo_name":           repoName,
 			"timbers_dir_created": timbersDirCreated,
-			"remote_configured":   remoteConfigured,
 			"hooks_installed":     hooksInstalled,
 			"claude_installed":    claudeInstalled,
 			"already_initialized": false,

@@ -13,10 +13,9 @@ import (
 )
 
 // runCoreChecks performs core infrastructure checks.
-func runCoreChecks(flags *doctorFlags) []checkResult {
-	checks := make([]checkResult, 0, 5)
+func runCoreChecks() []checkResult {
+	checks := make([]checkResult, 0, 4)
 	checks = append(checks, checkTimbersDirExists())
-	checks = append(checks, checkRemoteConfigured(flags))
 	checks = append(checks, checkBinaryInPath())
 	checks = append(checks, checkVersion())
 	checks = append(checks, checkGitattributes())
@@ -49,37 +48,6 @@ func checkTimbersDirExists() checkResult {
 		Status:  checkWarn,
 		Message: ".timbers/ directory not found",
 		Hint:    "Run 'timbers init' to initialize",
-	}
-}
-
-// checkRemoteConfigured checks if notes fetch is configured for origin.
-func checkRemoteConfigured(flags *doctorFlags) checkResult {
-	remote := "origin"
-
-	if git.NotesConfigured(remote) {
-		return checkResult{
-			Name:    "Remote Configured",
-			Status:  checkPass,
-			Message: "fetch/push configured for " + remote,
-		}
-	}
-
-	// Attempt auto-fix if requested
-	if flags.fix {
-		if err := git.ConfigureNotesFetch(remote); err == nil {
-			return checkResult{
-				Name:    "Remote Configured",
-				Status:  checkPass,
-				Message: "fetch/push configured for " + remote + " (auto-fixed)",
-			}
-		}
-	}
-
-	return checkResult{
-		Name:    "Remote Configured",
-		Status:  checkWarn,
-		Message: "notes fetch not configured for " + remote,
-		Hint:    "Run 'timbers notes init' or 'timbers doctor --fix'",
 	}
 }
 

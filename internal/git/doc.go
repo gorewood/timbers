@@ -2,8 +2,7 @@
 //
 // This package wraps git commands by shelling out to the git executable,
 // capturing stdout/stderr and translating exit codes to appropriate errors.
-// It provides both general git operations and specialized notes operations
-// for the timbers ledger storage.
+// It provides general git operations used by the timbers CLI.
 //
 // # General Operations
 //
@@ -20,15 +19,6 @@
 //
 //	output, err := git.Run("status", "--short")
 //	output, err := git.RunContext(ctx, "log", "--oneline", "-5")
-//
-// # Notes Operations
-//
-// The package provides specialized functions for git notes manipulation,
-// which is the storage mechanism for timbers ledger entries:
-//
-//	git.NotesRef()           // Get the timbers notes reference
-//	git.FetchNotes(remote)   // Fetch notes from a remote
-//	git.PushNotes(remote)    // Push notes to a remote
 //
 // # Commit Operations
 //

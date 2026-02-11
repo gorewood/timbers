@@ -23,7 +23,7 @@ func TestDoctorCommand(t *testing.T) {
 	// Create a temp directory for test repo
 	tempDir := t.TempDir()
 
-	// Initialize a git repo with notes configured
+	// Initialize a git repo
 	runGit(t, tempDir, "init")
 	runGit(t, tempDir, "config", "user.email", "test@test.com")
 	runGit(t, tempDir, "config", "user.name", "Test User")
@@ -244,9 +244,6 @@ func TestDoctorQuietMode(t *testing.T) {
 	runGit(t, tempDir, "add", "test.txt")
 	runGit(t, tempDir, "commit", "-m", "Initial commit")
 
-	// Configure notes to ensure most checks pass
-	runGit(t, tempDir, "config", "--add", "remote.origin.fetch", "+refs/notes/timbers:refs/notes/timbers")
-
 	runInDir(t, tempDir, func() {
 		var buf bytes.Buffer
 
@@ -337,66 +334,6 @@ func TestDoctorFixClaudeIntegration(t *testing.T) {
 		globalSettingsPath := filepath.Join(tmpHome, ".claude", "settings.json")
 		if _, err := os.Stat(globalSettingsPath); !os.IsNotExist(err) {
 			t.Error("--fix should not install Claude settings at global level")
-		}
-	})
-}
-
-func TestDoctorWithConfiguredNotes(t *testing.T) {
-	tempDir := t.TempDir()
-
-	runGit(t, tempDir, "init")
-	runGit(t, tempDir, "config", "user.email", "test@test.com")
-	runGit(t, tempDir, "config", "user.name", "Test User")
-
-	testFile := filepath.Join(tempDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test content"), 0600); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
-	}
-	runGit(t, tempDir, "add", "test.txt")
-	runGit(t, tempDir, "commit", "-m", "Initial commit")
-
-	// Configure notes fetch
-	runGit(t, tempDir, "config", "--add", "remote.origin.fetch", "+refs/notes/timbers:refs/notes/timbers")
-
-	runInDir(t, tempDir, func() {
-		var buf bytes.Buffer
-
-		cmd := newTestRootCmdWithDoctor()
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetArgs([]string{"doctor", "--json"})
-
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("command failed: %v", err)
-		}
-
-		var result map[string]any
-		if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
-			t.Fatalf("failed to parse JSON output: %v\nOutput: %s", err, buf.String())
-		}
-
-		// Find the notes configured check in core
-		core, ok := result["core"].([]any)
-		if !ok {
-			t.Fatalf("core is not an array: %T", result["core"])
-		}
-
-		var foundNotesCheck bool
-		for _, item := range core {
-			check, checkOK := item.(map[string]any)
-			if !checkOK {
-				continue
-			}
-			if check["name"] == "Remote Configured" {
-				foundNotesCheck = true
-				if check["status"] != "pass" {
-					t.Errorf("notes configured check status = %v, want pass", check["status"])
-				}
-			}
-		}
-
-		if !foundNotesCheck {
-			t.Error("did not find 'Remote Configured' check in core")
 		}
 	})
 }

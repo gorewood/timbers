@@ -48,13 +48,12 @@ func TestStatusCommand(t *testing.T) {
 			name: "JSON output contains all fields",
 			args: []string{"status", "--json"},
 			wantFields: map[string]any{
-				"repo":             repoName,
-				"branch":           branch,
-				"head":             head,
-				"timbers_dir":      filepath.Join(resolvedTempDir, ".timbers"),
-				"dir_exists":       false,
-				"notes_configured": false,
-				"entry_count":      float64(0), // JSON numbers are float64
+				"repo":        repoName,
+				"branch":      branch,
+				"head":        head,
+				"timbers_dir": filepath.Join(resolvedTempDir, ".timbers"),
+				"dir_exists":  false,
+				"entry_count": float64(0), // JSON numbers are float64
 			},
 		},
 	}

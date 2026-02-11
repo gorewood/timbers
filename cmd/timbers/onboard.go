@@ -17,7 +17,7 @@ Run ` + "`timbers prime`" + ` for workflow context, or install hooks (` + "`timb
 **Quick reference:**
 - ` + "`timbers pending`" + ` - MUST be zero before session end
 - ` + "`timbers log \"what\" --why \"why\" --how \"how\"`" + ` - Run after EVERY commit
-- ` + "`timbers notes push`" + ` - Sync ledger to remote
+- Entries are files in .timbers/ — sync via ` + "`git push`" + `
 
 For full workflow details: ` + "`timbers prime`"
 

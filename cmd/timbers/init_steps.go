@@ -16,10 +16,9 @@ import (
 
 // buildDryRunSteps constructs the list of dry-run step results.
 func buildDryRunSteps(state *initState, flags *initFlags) []initStepResult {
-	steps := make([]initStepResult, 0, 6)
+	steps := make([]initStepResult, 0, 5)
 	steps = append(steps, buildTimbersDirStep(state))
 	steps = append(steps, buildGitattributesStep(state))
-	steps = append(steps, buildRemoteConfigStep(state))
 	steps = append(steps, buildHooksStep(state, flags))
 	steps = append(steps, buildPostRewriteStep(state, flags))
 	steps = append(steps, buildClaudeStep(state, flags))
@@ -40,14 +39,6 @@ func buildGitattributesStep(state *initState) initStepResult {
 		return initStepResult{Name: "gitattributes", Status: "skipped", Message: "already configured"}
 	}
 	return initStepResult{Name: "gitattributes", Status: "dry_run", Message: "would add linguist-generated entry"}
-}
-
-// buildRemoteConfigStep creates the dry-run step for remote config.
-func buildRemoteConfigStep(state *initState) initStepResult {
-	if state.remoteConfigured {
-		return initStepResult{Name: "remote_config", Status: "skipped", Message: "already configured"}
-	}
-	return initStepResult{Name: "remote_config", Status: "dry_run", Message: "would configure notes fetch for origin"}
 }
 
 // buildHooksStep creates the dry-run step for hooks.
@@ -93,12 +84,11 @@ func executeInitSteps(
 	cmd *cobra.Command, printer *output.Printer, styles initStyleSet,
 	state *initState, flags *initFlags,
 ) []initStepResult {
-	steps := make([]initStepResult, 0, 6)
+	steps := make([]initStepResult, 0, 5)
 
 	for _, stepFn := range []func() initStepResult{
 		func() initStepResult { return performTimbersDirInit(state) },
 		func() initStepResult { return performGitattributesInit(state) },
-		func() initStepResult { return performRemoteConfig(state) },
 		func() initStepResult { return executeHooksStep(state, flags) },
 		func() initStepResult { return executePostRewriteStep(state, flags) },
 		func() initStepResult { return executeClaudeStep(cmd, printer, styles, state, flags) },
@@ -234,19 +224,6 @@ func performGitattributesInit(state *initState) initStepResult {
 
 	state.gitattributesHasEntry = true
 	return initStepResult{Name: "gitattributes", Status: "ok", Message: "added linguist-generated entry"}
-}
-
-// performRemoteConfig configures notes fetch for origin.
-func performRemoteConfig(state *initState) initStepResult {
-	if state.remoteConfigured {
-		return initStepResult{Name: "remote_config", Status: "skipped", Message: "already configured"}
-	}
-
-	if err := git.ConfigureNotesFetch("origin"); err != nil {
-		return initStepResult{Name: "remote_config", Status: "failed", Message: err.Error()}
-	}
-
-	return initStepResult{Name: "remote_config", Status: "ok", Message: "configured for origin"}
 }
 
 // performHooksInstall installs the pre-commit hook.

@@ -1,9 +1,9 @@
 package setup
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/output"
@@ -18,10 +18,11 @@ type UninstallInfo struct {
 	RepoName            string
 	PreCommitHookPath   string
 	PreCommitBackupPath string
-	ConfigsRemoved      []string
-	NotesEntryCount     int
+	EntryCount          int
+	TimbersDirPath      string
+	TimbersDirExists    bool
+	TimbersDirRemoved   bool
 	BinaryRemoved       bool
-	NotesRefRemoved     bool
 	HooksRemoved        bool
 	HooksRestored       bool
 	ClaudeRemoved       bool
@@ -40,18 +41,31 @@ func GatherBinaryPath() (string, error) {
 	return execPath, nil
 }
 
-// GatherRepoInfo collects repository-level state: name, notes ref, entry count.
+// GatherRepoInfo collects repository-level state: name, .timbers dir, entry count.
 func GatherRepoInfo(info *UninstallInfo) {
-	if root, err := git.RepoRoot(); err == nil {
-		info.RepoName = filepath.Base(root)
+	root, err := git.RepoRoot()
+	if err != nil {
+		return
 	}
-	if git.NotesRefExists() {
-		info.NotesRefRemoved = true
-		if commits, err := git.ListNotedCommits(); err == nil {
-			info.NotesEntryCount = len(commits)
+	info.RepoName = filepath.Base(root)
+	timbersDir := filepath.Join(root, ".timbers")
+	info.TimbersDirPath = timbersDir
+
+	dirInfo, statErr := os.Stat(timbersDir)
+	if statErr != nil || !dirInfo.IsDir() {
+		return
+	}
+	info.TimbersDirExists = true
+
+	entries, readErr := os.ReadDir(timbersDir)
+	if readErr != nil {
+		return
+	}
+	for _, e := range entries {
+		if !e.IsDir() && filepath.Ext(e.Name()) == ".json" {
+			info.EntryCount++
 		}
 	}
-	info.ConfigsRemoved = FindNotesConfigs()
 }
 
 // GatherHookInfo collects pre-commit hook state.
@@ -82,21 +96,6 @@ func GatherClaudeInfo(info *UninstallInfo) {
 	}
 }
 
-// FindNotesConfigs returns remotes that have timbers notes fetch configured.
-func FindNotesConfigs() []string {
-	var configs []string
-	remotesOut, err := git.Run("remote")
-	if err != nil {
-		return configs
-	}
-	for remote := range strings.SplitSeq(strings.TrimSpace(remotesOut), "\n") {
-		if remote = strings.TrimSpace(remote); remote != "" && git.NotesConfigured(remote) {
-			configs = append(configs, remote)
-		}
-	}
-	return configs
-}
-
 // RemoveClaudeIntegration removes the timbers section from a Claude hook file.
 func RemoveClaudeIntegration(hookPath string) error {
 	return RemoveTimbersSectionFromHook(hookPath)
@@ -117,24 +116,16 @@ func RemoveGitHook(hookPath string, hasBackup bool, backupPath string) (removed,
 	return true, true, nil
 }
 
-// RemoveNotesRef deletes the timbers notes ref from the repository.
-func RemoveNotesRef() error {
-	_, err := git.Run("update-ref", "-d", "refs/notes/timbers")
-	return err
-}
-
-// RemoveNotesConfig removes the timbers notes fetch refspec from a remote.
-// Returns nil if no config exists for the remote.
-func RemoveNotesConfig(remote string) error {
-	configKey := "remote." + remote + ".fetch"
-	out, err := git.Run("config", "--get-all", configKey)
+// RemoveTimbersDirContents removes all JSON entry files from .timbers/.
+func RemoveTimbersDirContents(dirPath string) error {
+	entries, err := os.ReadDir(dirPath)
 	if err != nil {
-		return nil // No config exists for this remote
+		return fmt.Errorf("reading %s: %w", dirPath, err)
 	}
-	for line := range strings.SplitSeq(out, "\n") {
-		if line = strings.TrimSpace(line); strings.Contains(line, "refs/notes/timbers") {
-			if _, err := git.Run("config", "--unset", configKey, line); err != nil {
-				return err
+	for _, e := range entries {
+		if !e.IsDir() && filepath.Ext(e.Name()) == ".json" {
+			if err := os.Remove(filepath.Join(dirPath, e.Name())); err != nil {
+				return fmt.Errorf("removing %s: %w", e.Name(), err)
 			}
 		}
 	}

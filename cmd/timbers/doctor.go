@@ -59,7 +59,7 @@ func newDoctorCmd() *cobra.Command {
 		Long: `Check timbers installation health and suggest fixes.
 
 Runs a series of health checks across four categories:
-  CORE        - Git notes, binary, and version update check
+  CORE        - Storage directory, binary, and version update check
   CONFIG      - Config directory, env files, API keys, templates
   WORKFLOW    - Pending commits and recent entries
   INTEGRATION - Git hooks and Claude Code integration
@@ -79,7 +79,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().BoolVar(&flags.fix, "fix", false, "Auto-fix what can be fixed (notes init, etc.)")
+	cmd.Flags().BoolVar(&flags.fix, "fix", false, "Auto-fix what can be fixed")
 	cmd.Flags().BoolVar(&flags.quiet, "quiet", false, "Only show failures and warnings")
 
 	return cmd
@@ -112,7 +112,7 @@ func runDoctor(cmd *cobra.Command, flags *doctorFlags) error {
 func gatherDoctorChecks(flags *doctorFlags) *doctorResult {
 	result := &doctorResult{
 		Version:     version,
-		Core:        runCoreChecks(flags),
+		Core:        runCoreChecks(),
 		Config:      runConfigChecks(flags),
 		Workflow:    runWorkflowChecks(),
 		Integration: runIntegrationChecks(flags),

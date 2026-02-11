@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/gorewood/timbers/internal/setup"
 )
 
 func TestUninstallDryRunJSON(t *testing.T) {
@@ -133,20 +131,21 @@ func TestUninstallDryRunHuman(t *testing.T) {
 	})
 }
 
-func TestUninstallDryRunWithNotesRef(t *testing.T) {
+func TestUninstallDryRunWithTimbersDir(t *testing.T) {
 	tempDir := t.TempDir()
 
 	runGit(t, tempDir, "init")
 	runGit(t, tempDir, "config", "user.email", "test@test.com")
 	runGit(t, tempDir, "config", "user.name", "Test User")
 
-	testFile := filepath.Join(tempDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test content"), 0600); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
+	timbersDir := filepath.Join(tempDir, ".timbers")
+	if err := os.MkdirAll(timbersDir, 0o755); err != nil {
+		t.Fatalf("failed to create .timbers dir: %v", err)
 	}
-	runGit(t, tempDir, "add", "test.txt")
-	runGit(t, tempDir, "commit", "-m", "Initial commit")
-	runGit(t, tempDir, "notes", "--ref=refs/notes/timbers", "add", "-m", "test note", "HEAD")
+	entryFile := filepath.Join(timbersDir, "tb_test.json")
+	if err := os.WriteFile(entryFile, []byte(`{"id":"tb_test"}`), 0o600); err != nil {
+		t.Fatalf("failed to write entry: %v", err)
+	}
 
 	runInDir(t, tempDir, func() {
 		var buf bytes.Buffer
@@ -164,11 +163,11 @@ func TestUninstallDryRunWithNotesRef(t *testing.T) {
 			t.Fatalf("failed to parse JSON: %v\nOutput: %s", err, buf.String())
 		}
 
-		if result["notes_ref_exists"] != true {
-			t.Errorf("notes_ref_exists = %v, want true", result["notes_ref_exists"])
+		if result["timbers_dir_exists"] != true {
+			t.Errorf("timbers_dir_exists = %v, want true", result["timbers_dir_exists"])
 		}
-		if count, ok := result["notes_entry_count"].(float64); !ok || count != 1 {
-			t.Errorf("notes_entry_count = %v, want 1", result["notes_entry_count"])
+		if count, ok := result["entry_count"].(float64); !ok || count != 1 {
+			t.Errorf("entry_count = %v, want 1", result["entry_count"])
 		}
 	})
 }
@@ -247,37 +246,13 @@ func TestUninstallHelpText(t *testing.T) {
 	output := buf.String()
 	checks := []string{
 		"uninstall", "--dry-run", "--force", "--json",
-		"--binary", "--keep-notes", "hooks", "Claude",
+		"--binary", "--keep-data", "hooks", "Claude",
 	}
 	for _, check := range checks {
 		if !strings.Contains(output, check) {
 			t.Errorf("help output missing %q\nOutput: %s", check, output)
 		}
 	}
-}
-
-func TestFindNotesConfigs(t *testing.T) {
-	tempDir := t.TempDir()
-
-	runGit(t, tempDir, "init")
-	runGit(t, tempDir, "config", "user.email", "test@test.com")
-	runGit(t, tempDir, "config", "user.name", "Test User")
-
-	testFile := filepath.Join(tempDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test content"), 0600); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
-	}
-	runGit(t, tempDir, "add", "test.txt")
-	runGit(t, tempDir, "commit", "-m", "Initial commit")
-	runGit(t, tempDir, "remote", "add", "origin", "https://github.com/example/repo.git")
-	runGit(t, tempDir, "config", "--add", "remote.origin.fetch", "+refs/notes/timbers:refs/notes/timbers")
-
-	runInDir(t, tempDir, func() {
-		configs := setup.FindNotesConfigs()
-		if len(configs) != 1 || configs[0] != "origin" {
-			t.Errorf("configs = %v, want [origin]", configs)
-		}
-	})
 }
 
 func TestUninstallWithHooks(t *testing.T) {
@@ -327,20 +302,22 @@ func TestUninstallWithHooks(t *testing.T) {
 	})
 }
 
-func TestUninstallKeepNotes(t *testing.T) {
+func TestUninstallKeepData(t *testing.T) {
 	tempDir := t.TempDir()
 
 	runGit(t, tempDir, "init")
 	runGit(t, tempDir, "config", "user.email", "test@test.com")
 	runGit(t, tempDir, "config", "user.name", "Test User")
 
-	testFile := filepath.Join(tempDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test content"), 0600); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
+	// Create .timbers/ with an entry
+	timbersDir := filepath.Join(tempDir, ".timbers")
+	if err := os.MkdirAll(timbersDir, 0o755); err != nil {
+		t.Fatalf("failed to create .timbers dir: %v", err)
 	}
-	runGit(t, tempDir, "add", "test.txt")
-	runGit(t, tempDir, "commit", "-m", "Initial commit")
-	runGit(t, tempDir, "notes", "--ref=refs/notes/timbers", "add", "-m", "test note", "HEAD")
+	entryFile := filepath.Join(timbersDir, "tb_test.json")
+	if err := os.WriteFile(entryFile, []byte(`{"id":"tb_test"}`), 0o600); err != nil {
+		t.Fatalf("failed to write entry: %v", err)
+	}
 
 	hooksDir := filepath.Join(tempDir, ".git", "hooks")
 	hookPath := filepath.Join(hooksDir, "pre-commit")
@@ -354,7 +331,7 @@ func TestUninstallKeepNotes(t *testing.T) {
 		cmd := newRootCmd()
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
-		cmd.SetArgs([]string{"uninstall", "--force", "--keep-notes", "--json"})
+		cmd.SetArgs([]string{"uninstall", "--force", "--keep-data", "--json"})
 
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("command failed: %v", err)
@@ -368,20 +345,20 @@ func TestUninstallKeepNotes(t *testing.T) {
 		if result["hooks_removed"] != true {
 			t.Errorf("hooks_removed = %v, want true", result["hooks_removed"])
 		}
-		if result["notes_removed"] != false {
-			t.Errorf("notes_removed = %v, want false", result["notes_removed"])
+		if result["timbers_dir_removed"] != false {
+			t.Errorf("timbers_dir_removed = %v, want false", result["timbers_dir_removed"])
 		}
-		if result["keep_notes"] != true {
-			t.Errorf("keep_notes = %v, want true", result["keep_notes"])
+		if result["keep_data"] != true {
+			t.Errorf("keep_data = %v, want true", result["keep_data"])
 		}
 
 		if _, err := os.Stat(hookPath); !os.IsNotExist(err) {
 			t.Error("hook file should be removed")
 		}
 
-		out := runGitOutput(t, tempDir, "show-ref", "--verify", "refs/notes/timbers")
-		if out == "" {
-			t.Error("notes ref should still exist with --keep-notes")
+		// .timbers/ dir should still exist with --keep-data
+		if _, err := os.Stat(entryFile); os.IsNotExist(err) {
+			t.Error("entry file should still exist with --keep-data")
 		}
 	})
 }

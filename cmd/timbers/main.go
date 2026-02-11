@@ -69,7 +69,7 @@ func newRootCmd() *cobra.Command {
 Timbers turns Git history into a durable development ledger by:
   - Harvesting objective facts from Git (commits, diffstat, changed files)
   - Pairing them with agent/human-authored rationale (what/why/how)
-  - Storing as portable Git notes that sync to remotes
+  - Storing as .timbers/ files that travel with the repository
   - Exporting structured data for downstream narrative generation
 
 All commands support --json for structured output.`,
@@ -146,9 +146,6 @@ func addCommands(cmd *cobra.Command) {
 	addGroupedCommand(cmd, newShowCmd(), "query")
 	addGroupedCommand(cmd, newQueryCmd(), "query")
 	addGroupedCommand(cmd, newExportCmd(), "query")
-
-	// Sync commands: notes
-	addGroupedCommand(cmd, newNotesCmd(), "sync")
 
 	// Agent commands: prime, draft, generate, catchup
 	addGroupedCommand(cmd, newPrimeCmd(), "agent")
