@@ -114,7 +114,7 @@ func runLog(cmd *cobra.Command, storage *ledger.Storage, isDirty dirtyChecker, a
 		return outputDryRun(printer, entry)
 	}
 
-	return executeLogWrite(storage, entry, flags, printer)
+	return executeLogWrite(storage, entry, printer)
 }
 
 // initLogStorage initializes the storage, checking for git repo if needed.
@@ -126,7 +126,12 @@ func initLogStorage(storage *ledger.Storage, printer *output.Printer) (*ledger.S
 	}
 
 	if storage == nil {
-		storage = ledger.NewStorage(nil)
+		var err error
+		storage, err = ledger.NewDefaultStorage()
+		if err != nil {
+			printer.Error(err)
+			return nil, err
+		}
 	}
 	return storage, nil
 }
@@ -187,11 +192,10 @@ func prepareLogContext(
 	}, nil
 }
 
-// executeLogWrite writes the entry and optionally pushes.
+// executeLogWrite writes the entry to the .timbers/ directory.
 func executeLogWrite(
 	storage *ledger.Storage,
 	entry *ledger.Entry,
-	flags logFlags,
 	printer *output.Printer,
 ) error {
 	if err := storage.WriteEntry(entry, false); err != nil {
@@ -200,13 +204,6 @@ func executeLogWrite(
 	}
 
 	pushedMsg := ""
-	if flags.push {
-		if pushErr := storage.PushNotes("origin"); pushErr != nil {
-			pushedMsg = " (push failed: " + pushErr.Error() + ")"
-		} else {
-			pushedMsg = " (Pushed to origin)"
-		}
-	}
 
 	return outputLogSuccess(printer, entry, pushedMsg)
 }

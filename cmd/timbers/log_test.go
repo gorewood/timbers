@@ -4,6 +4,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -22,45 +24,12 @@ type mockGitOpsForLog struct {
 	commitsErr      error
 	reachableResult []git.Commit
 	reachableErr    error
-	notes           map[string][]byte
-	writeNoteErr    error
-	writtenNotes    map[string]string // Track written notes for assertions
 	diffstat        git.Diffstat
 	diffstatErr     error
-	pushNotesErr    error
-	pushedRemotes   []string // Track push calls
 }
 
 func newMockGitOpsForLog() *mockGitOpsForLog {
-	return &mockGitOpsForLog{
-		notes:         make(map[string][]byte),
-		writtenNotes:  make(map[string]string),
-		pushedRemotes: []string{},
-	}
-}
-
-func (m *mockGitOpsForLog) ReadNote(commit string) ([]byte, error) {
-	if data, ok := m.notes[commit]; ok {
-		return data, nil
-	}
-	// Return "not found" error like the real git.ReadNote does
-	return nil, output.NewUserError("note not found for commit: " + commit)
-}
-
-func (m *mockGitOpsForLog) WriteNote(commit string, content string, _ bool) error {
-	if m.writeNoteErr != nil {
-		return m.writeNoteErr
-	}
-	m.writtenNotes[commit] = content
-	return nil
-}
-
-func (m *mockGitOpsForLog) ListNotedCommits() ([]string, error) {
-	commits := make([]string, 0, len(m.notes))
-	for commit := range m.notes {
-		commits = append(commits, commit)
-	}
-	return commits, nil
+	return &mockGitOpsForLog{}
 }
 
 func (m *mockGitOpsForLog) HEAD() (string, error) {
@@ -79,12 +48,12 @@ func (m *mockGitOpsForLog) GetDiffstat(_, _ string) (git.Diffstat, error) {
 	return m.diffstat, m.diffstatErr
 }
 
-func (m *mockGitOpsForLog) PushNotes(remote string) error {
-	if m.pushNotesErr != nil {
-		return m.pushNotesErr
-	}
-	m.pushedRemotes = append(m.pushedRemotes, remote)
-	return nil
+// newLogTestStorage creates a Storage with a temp dir for writing entries.
+func newLogTestStorage(t *testing.T, mock *mockGitOpsForLog) (*ledger.Storage, string) {
+	t.Helper()
+	dir := t.TempDir()
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	return ledger.NewStorage(mock, files), dir
 }
 
 func TestLogCommand(t *testing.T) {
@@ -96,7 +65,7 @@ func TestLogCommand(t *testing.T) {
 		wantErr        bool
 		wantContains   []string
 		wantNotContain []string
-		checkMock      func(t *testing.T, mock *mockGitOpsForLog)
+		checkDir       func(t *testing.T, dir string)
 	}{
 		{
 			name: "successful log with all flags",
@@ -113,12 +82,16 @@ func TestLogCommand(t *testing.T) {
 			args:         []string{"Fixed authentication bug", "--why", "Security vulnerability", "--how", "Added input validation"},
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
-			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
-				if len(mock.writtenNotes) != 1 {
-					t.Errorf("expected 1 note written, got %d", len(mock.writtenNotes))
+			checkDir: func(t *testing.T, dir string) {
+				entries, _ := os.ReadDir(dir)
+				jsonFiles := 0
+				for _, e := range entries {
+					if strings.HasSuffix(e.Name(), ".json") {
+						jsonFiles++
+					}
 				}
-				if _, ok := mock.writtenNotes["abc123def456789"]; !ok {
-					t.Error("expected note written to HEAD commit")
+				if jsonFiles != 1 {
+					t.Errorf("expected 1 entry file written, got %d", jsonFiles)
 				}
 			},
 		},
@@ -139,13 +112,16 @@ func TestLogCommand(t *testing.T) {
 			},
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
-			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
-				if len(mock.writtenNotes) != 1 {
-					t.Errorf("expected 1 note written, got %d", len(mock.writtenNotes))
-				}
-				for _, content := range mock.writtenNotes {
+			checkDir: func(t *testing.T, dir string) {
+				entries, _ := os.ReadDir(dir)
+				for _, e := range entries {
+					if !strings.HasSuffix(e.Name(), ".json") {
+						continue
+					}
+					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+					content := string(data)
 					if !strings.Contains(content, "security") || !strings.Contains(content, "auth") {
-						t.Error("expected tags to be in written note")
+						t.Error("expected tags to be in written entry")
 					}
 				}
 			},
@@ -167,13 +143,16 @@ func TestLogCommand(t *testing.T) {
 			},
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
-			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
-				if len(mock.writtenNotes) != 1 {
-					t.Errorf("expected 1 note written, got %d", len(mock.writtenNotes))
-				}
-				for _, content := range mock.writtenNotes {
+			checkDir: func(t *testing.T, dir string) {
+				entries, _ := os.ReadDir(dir)
+				for _, e := range entries {
+					if !strings.HasSuffix(e.Name(), ".json") {
+						continue
+					}
+					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+					content := string(data)
 					if !strings.Contains(content, "beads") || !strings.Contains(content, "bd-abc123") {
-						t.Error("expected work items to be in written note")
+						t.Error("expected work items to be in written entry")
 					}
 				}
 			},
@@ -192,13 +171,16 @@ func TestLogCommand(t *testing.T) {
 			args:         []string{"Updated README", "--minor"},
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
-			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
-				if len(mock.writtenNotes) != 1 {
-					t.Errorf("expected 1 note written, got %d", len(mock.writtenNotes))
-				}
-				for _, content := range mock.writtenNotes {
+			checkDir: func(t *testing.T, dir string) {
+				entries, _ := os.ReadDir(dir)
+				for _, e := range entries {
+					if !strings.HasSuffix(e.Name(), ".json") {
+						continue
+					}
+					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+					content := string(data)
 					if !strings.Contains(content, "Minor change") {
-						t.Error("expected 'Minor change' to be in written note for --minor mode")
+						t.Error("expected 'Minor change' to be in written entry for --minor mode")
 					}
 				}
 			},
@@ -217,29 +199,16 @@ func TestLogCommand(t *testing.T) {
 			args:         []string{"Test feature", "--why", "Testing", "--how", "Test code", "--dry-run"},
 			wantErr:      false,
 			wantContains: []string{"Dry Run Preview", "Test feature", "Testing", "Test code"},
-			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
-				if len(mock.writtenNotes) != 0 {
-					t.Errorf("expected no notes written in dry-run mode, got %d", len(mock.writtenNotes))
+			checkDir: func(t *testing.T, dir string) {
+				entries, _ := os.ReadDir(dir)
+				jsonFiles := 0
+				for _, e := range entries {
+					if strings.HasSuffix(e.Name(), ".json") {
+						jsonFiles++
+					}
 				}
-			},
-		},
-		{
-			name: "push flag - pushes notes after writing",
-			mock: func() *mockGitOpsForLog {
-				mock := newMockGitOpsForLog()
-				mock.head = "abc123def456789"
-				mock.reachableResult = []git.Commit{
-					{SHA: "abc123def456789", Short: "abc123d", Subject: "Latest commit"},
-				}
-				mock.diffstat = git.Diffstat{Files: 1, Insertions: 5, Deletions: 2}
-				return mock
-			}(),
-			args:         []string{"Feature complete", "--why", "Done", "--how", "Implemented", "--push"},
-			wantErr:      false,
-			wantContains: []string{"Created entry", "Pushed"},
-			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
-				if len(mock.pushedRemotes) != 1 || mock.pushedRemotes[0] != "origin" {
-					t.Errorf("expected push to origin, got %v", mock.pushedRemotes)
+				if jsonFiles != 0 {
+					t.Errorf("expected no entries written in dry-run mode, got %d", jsonFiles)
 				}
 			},
 		},
@@ -387,9 +356,17 @@ func TestLogCommand(t *testing.T) {
 			},
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
-			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
-				if _, ok := mock.writtenNotes["custom123456"]; !ok {
-					t.Error("expected note written to custom anchor commit")
+			checkDir: func(t *testing.T, dir string) {
+				entries, _ := os.ReadDir(dir)
+				for _, e := range entries {
+					if !strings.HasSuffix(e.Name(), ".json") {
+						continue
+					}
+					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+					content := string(data)
+					if !strings.Contains(content, "custom123456") {
+						t.Error("expected entry written with custom anchor commit")
+					}
 				}
 			},
 		},
@@ -397,8 +374,8 @@ func TestLogCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create storage with mock
-			storage := ledger.NewStorage(tt.mock)
+			// Create storage with mock and temp dir
+			storage, dir := newLogTestStorage(t, tt.mock)
 
 			// Create command
 			cmd := newLogCmdWithStorage(storage)
@@ -450,9 +427,9 @@ func TestLogCommand(t *testing.T) {
 				}
 			}
 
-			// Run mock checks if provided
-			if tt.checkMock != nil && err == nil {
-				tt.checkMock(t, tt.mock)
+			// Run dir checks if provided
+			if tt.checkDir != nil && err == nil {
+				tt.checkDir(t, dir)
 			}
 		})
 	}
@@ -529,7 +506,7 @@ func TestLogDirtyTreeWarning(t *testing.T) {
 	}
 	mock.diffstat = git.Diffstat{Files: 1, Insertions: 10, Deletions: 0}
 
-	storage := ledger.NewStorage(mock)
+	storage, _ := newLogTestStorage(t, mock)
 
 	// Test with dirty tree
 	cmd := newLogCmdInternal(storage, func() bool { return true })
@@ -546,16 +523,21 @@ func TestLogDirtyTreeWarning(t *testing.T) {
 		t.Errorf("expected dirty-tree warning in output, got: %s", out)
 	}
 
-	// Test with clean tree
-	cmd2 := newLogCmdInternal(storage, func() bool { return false })
+	// Test with clean tree - need fresh storage since entry ID may conflict
+	mock2 := newMockGitOpsForLog()
+	mock2.head = "def456789012345"
+	mock2.reachableResult = []git.Commit{
+		{SHA: "def456789012345", Short: "def4567", Subject: "Another commit"},
+	}
+	mock2.diffstat = git.Diffstat{Files: 1, Insertions: 10, Deletions: 0}
+
+	storage2, _ := newLogTestStorage(t, mock2)
+	cmd2 := newLogCmdInternal(storage2, func() bool { return false })
 	cmd2.SetArgs([]string{"Test entry 2", "--why", "Testing", "--how", "Via test"})
 
 	var buf2 bytes.Buffer
 	cmd2.SetOut(&buf2)
 	cmd2.SetErr(&buf2)
-
-	// Reset mock to allow a second write (different anchor needed)
-	mock.writtenNotes = make(map[string]string)
 
 	_ = cmd2.Execute()
 	out2 := buf2.String()
@@ -702,7 +684,7 @@ func TestLogCommandAutoMode(t *testing.T) {
 		wantErr        bool
 		wantContains   []string
 		wantNotContain []string
-		checkMock      func(t *testing.T, mock *mockGitOpsForLog)
+		checkDir       func(t *testing.T, dir string)
 	}{
 		{
 			name: "auto mode - extracts from commit subjects",
@@ -719,16 +701,20 @@ func TestLogCommandAutoMode(t *testing.T) {
 			args:         []string{"--auto"},
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
-			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
-				if len(mock.writtenNotes) != 1 {
-					t.Errorf("expected 1 note written, got %d", len(mock.writtenNotes))
-				}
-				content := mock.writtenNotes["abc123def456789"]
-				if !strings.Contains(content, "Add feature X; Fix tests") {
-					t.Errorf("expected combined subjects in note, got: %s", content)
-				}
-				if !strings.Contains(content, "Auto-documented") {
-					t.Errorf("expected Auto-documented default in note, got: %s", content)
+			checkDir: func(t *testing.T, dir string) {
+				entries, _ := os.ReadDir(dir)
+				for _, e := range entries {
+					if !strings.HasSuffix(e.Name(), ".json") {
+						continue
+					}
+					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+					content := string(data)
+					if !strings.Contains(content, "Add feature X; Fix tests") {
+						t.Errorf("expected combined subjects in entry, got: %s", content)
+					}
+					if !strings.Contains(content, "Auto-documented") {
+						t.Errorf("expected Auto-documented default in entry, got: %s", content)
+					}
 				}
 			},
 		},
@@ -751,16 +737,23 @@ func TestLogCommandAutoMode(t *testing.T) {
 			args:         []string{"--auto"},
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
-			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
-				content := mock.writtenNotes["abc123def456789"]
-				if !strings.Contains(content, "Fix auth bug") {
-					t.Errorf("expected subject as what, got: %s", content)
-				}
-				if !strings.Contains(content, "Users couldn't login.") {
-					t.Errorf("expected first paragraph as why, got: %s", content)
-				}
-				if !strings.Contains(content, "Added null check to auth handler.") {
-					t.Errorf("expected second paragraph as how, got: %s", content)
+			checkDir: func(t *testing.T, dir string) {
+				entries, _ := os.ReadDir(dir)
+				for _, e := range entries {
+					if !strings.HasSuffix(e.Name(), ".json") {
+						continue
+					}
+					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+					content := string(data)
+					if !strings.Contains(content, "Fix auth bug") {
+						t.Errorf("expected subject as what, got: %s", content)
+					}
+					if !strings.Contains(content, "Users couldn't login.") {
+						t.Errorf("expected first paragraph as why, got: %s", content)
+					}
+					if !strings.Contains(content, "Added null check to auth handler.") {
+						t.Errorf("expected second paragraph as how, got: %s", content)
+					}
 				}
 			},
 		},
@@ -778,13 +771,20 @@ func TestLogCommandAutoMode(t *testing.T) {
 			args:         []string{"Custom what", "--auto"},
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
-			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
-				content := mock.writtenNotes["abc123def456789"]
-				if !strings.Contains(content, "Custom what") {
-					t.Errorf("expected custom what in note, got: %s", content)
-				}
-				if strings.Contains(content, "Original subject") {
-					t.Errorf("should not contain original subject when overridden, got: %s", content)
+			checkDir: func(t *testing.T, dir string) {
+				entries, _ := os.ReadDir(dir)
+				for _, e := range entries {
+					if !strings.HasSuffix(e.Name(), ".json") {
+						continue
+					}
+					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+					content := string(data)
+					if !strings.Contains(content, "Custom what") {
+						t.Errorf("expected custom what in entry, got: %s", content)
+					}
+					if strings.Contains(content, "Original subject") {
+						t.Errorf("should not contain original subject when overridden, got: %s", content)
+					}
 				}
 			},
 		},
@@ -807,13 +807,20 @@ func TestLogCommandAutoMode(t *testing.T) {
 			args:         []string{"--auto", "--why", "Custom why", "--how", "Custom how"},
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
-			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
-				content := mock.writtenNotes["abc123def456789"]
-				if !strings.Contains(content, "Custom why") {
-					t.Errorf("expected custom why in note, got: %s", content)
-				}
-				if !strings.Contains(content, "Custom how") {
-					t.Errorf("expected custom how in note, got: %s", content)
+			checkDir: func(t *testing.T, dir string) {
+				entries, _ := os.ReadDir(dir)
+				for _, e := range entries {
+					if !strings.HasSuffix(e.Name(), ".json") {
+						continue
+					}
+					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+					content := string(data)
+					if !strings.Contains(content, "Custom why") {
+						t.Errorf("expected custom why in entry, got: %s", content)
+					}
+					if !strings.Contains(content, "Custom how") {
+						t.Errorf("expected custom how in entry, got: %s", content)
+					}
 				}
 			},
 		},
@@ -831,9 +838,16 @@ func TestLogCommandAutoMode(t *testing.T) {
 			args:         []string{"--auto", "--yes"},
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
-			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
-				if len(mock.writtenNotes) != 1 {
-					t.Errorf("expected 1 note written, got %d", len(mock.writtenNotes))
+			checkDir: func(t *testing.T, dir string) {
+				entries, _ := os.ReadDir(dir)
+				jsonFiles := 0
+				for _, e := range entries {
+					if strings.HasSuffix(e.Name(), ".json") {
+						jsonFiles++
+					}
+				}
+				if jsonFiles != 1 {
+					t.Errorf("expected 1 entry file written, got %d", jsonFiles)
 				}
 			},
 		},
@@ -851,9 +865,16 @@ func TestLogCommandAutoMode(t *testing.T) {
 			args:         []string{"--auto", "--dry-run"},
 			wantErr:      false,
 			wantContains: []string{"Dry Run Preview", "Preview this", "Auto-documented"},
-			checkMock: func(t *testing.T, mock *mockGitOpsForLog) {
-				if len(mock.writtenNotes) != 0 {
-					t.Errorf("expected no notes in dry-run mode, got %d", len(mock.writtenNotes))
+			checkDir: func(t *testing.T, dir string) {
+				entries, _ := os.ReadDir(dir)
+				jsonFiles := 0
+				for _, e := range entries {
+					if strings.HasSuffix(e.Name(), ".json") {
+						jsonFiles++
+					}
+				}
+				if jsonFiles != 0 {
+					t.Errorf("expected no entries in dry-run mode, got %d", jsonFiles)
 				}
 			},
 		},
@@ -877,8 +898,8 @@ func TestLogCommandAutoMode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create storage with mock
-			storage := ledger.NewStorage(tt.mock)
+			// Create storage with mock and temp dir
+			storage, dir := newLogTestStorage(t, tt.mock)
 
 			// Create command
 			cmd := newLogCmdWithStorage(storage)
@@ -930,9 +951,9 @@ func TestLogCommandAutoMode(t *testing.T) {
 				}
 			}
 
-			// Run mock checks if provided
-			if tt.checkMock != nil && err == nil {
-				tt.checkMock(t, tt.mock)
+			// Run dir checks if provided
+			if tt.checkDir != nil && err == nil {
+				tt.checkDir(t, dir)
 			}
 		})
 	}
@@ -994,5 +1015,31 @@ func TestSplitIntoParagraphs(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestLogWriteError(t *testing.T) {
+	mock := newMockGitOpsForLog()
+	mock.head = "abc123def456789"
+	mock.reachableResult = []git.Commit{
+		{SHA: "abc123def456789", Short: "abc123d", Subject: "Latest commit"},
+	}
+	mock.diffstat = git.Diffstat{Files: 1, Insertions: 5, Deletions: 2}
+
+	dir := t.TempDir()
+	failAdd := func(_ string) error { return output.NewSystemError("write failed") }
+	files := ledger.NewFileStorage(dir, failAdd)
+	storage := ledger.NewStorage(mock, files)
+
+	cmd := newLogCmdWithStorage(storage)
+	cmd.SetArgs([]string{"Test feature", "--why", "Testing", "--how", "Test code"})
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Error("expected error when git add fails")
 	}
 }

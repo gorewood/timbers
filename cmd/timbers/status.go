@@ -134,7 +134,10 @@ func gatherStatus(verbose bool) (*statusResult, error) {
 
 	// Get entry count with stats if verbose
 	if verbose {
-		store := ledger.NewStorage(nil)
+		store, storeErr := ledger.NewDefaultStorage()
+		if storeErr != nil {
+			return nil, storeErr
+		}
 		entries, stats, statsErr := store.ListEntriesWithStats()
 		if statsErr != nil {
 			return nil, statsErr

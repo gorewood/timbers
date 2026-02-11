@@ -2,6 +2,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -11,28 +13,7 @@ import (
 )
 
 // mockGitOpsForQuery implements ledger.GitOps for testing query command.
-type mockGitOpsForQuery struct {
-	notes map[string][]byte
-}
-
-func (m *mockGitOpsForQuery) ReadNote(commit string) ([]byte, error) {
-	if data, ok := m.notes[commit]; ok {
-		return data, nil
-	}
-	return nil, nil
-}
-
-func (m *mockGitOpsForQuery) WriteNote(string, string, bool) error {
-	return nil
-}
-
-func (m *mockGitOpsForQuery) ListNotedCommits() ([]string, error) {
-	commits := make([]string, 0, len(m.notes))
-	for commit := range m.notes {
-		commits = append(commits, commit)
-	}
-	return commits, nil
-}
+type mockGitOpsForQuery struct{}
 
 func (m *mockGitOpsForQuery) HEAD() (string, error) {
 	return "abc123def456", nil
@@ -50,8 +31,16 @@ func (m *mockGitOpsForQuery) GetDiffstat(fromRef, toRef string) (git.Diffstat, e
 	return git.Diffstat{}, nil
 }
 
-func (m *mockGitOpsForQuery) PushNotes(remote string) error {
-	return nil
+// writeQueryEntryFile writes an entry JSON file to the given directory.
+func writeQueryEntryFile(t *testing.T, dir string, entry *ledger.Entry) {
+	t.Helper()
+	data, err := entry.ToJSON()
+	if err != nil {
+		t.Fatalf("failed to serialize entry: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, entry.ID+".json"), data, 0o600); err != nil {
+		t.Fatalf("failed to write entry file: %v", err)
+	}
 }
 
 // TestQueryCommand tests the query command with various inputs.
@@ -64,7 +53,7 @@ func TestQueryCommand(t *testing.T) {
 		tagFlags       []string
 		onelineFlag    bool
 		jsonOutput     bool
-		notes          map[string][]byte
+		entries        []*ledger.Entry
 		wantErr        bool
 		wantContains   []string
 		wantNotContain []string
@@ -72,46 +61,46 @@ func TestQueryCommand(t *testing.T) {
 		{
 			name:         "no --last flag",
 			lastFlag:     "",
-			notes:        map[string][]byte{},
+			entries:      nil,
 			wantErr:      true,
 			wantContains: []string{"specify --last N, --since"},
 		},
 		{
 			name:         "--last with zero",
 			lastFlag:     "0",
-			notes:        map[string][]byte{},
+			entries:      nil,
 			wantErr:      true,
 			wantContains: []string{"--last must be a positive integer"},
 		},
 		{
 			name:         "--last with negative",
 			lastFlag:     "-5",
-			notes:        map[string][]byte{},
+			entries:      nil,
 			wantErr:      true,
 			wantContains: []string{"--last must be a positive integer"},
 		},
 		{
 			name:         "--last with non-integer",
 			lastFlag:     "abc",
-			notes:        map[string][]byte{},
+			entries:      nil,
 			wantErr:      true,
 			wantContains: []string{"--last must be a positive integer"},
 		},
 		{
 			name:     "empty entries",
 			lastFlag: "5",
-			notes:    map[string][]byte{},
+			entries:  nil,
 			wantErr:  false,
 		},
 		{
 			name:     "--last 1 with 5 entries",
 			lastFlag: "1",
-			notes: map[string][]byte{
-				"anchor1": createQueryTestEntry("anchor1", "first", now.Add(-4*time.Hour)),
-				"anchor2": createQueryTestEntry("anchor2", "second", now.Add(-3*time.Hour)),
-				"anchor3": createQueryTestEntry("anchor3", "third", now.Add(-2*time.Hour)),
-				"anchor4": createQueryTestEntry("anchor4", "fourth", now.Add(-1*time.Hour)),
-				"anchor5": createQueryTestEntry("anchor5", "fifth", now),
+			entries: []*ledger.Entry{
+				createQueryTestEntryStruct("anchor1", "first", now.Add(-4*time.Hour)),
+				createQueryTestEntryStruct("anchor2", "second", now.Add(-3*time.Hour)),
+				createQueryTestEntryStruct("anchor3", "third", now.Add(-2*time.Hour)),
+				createQueryTestEntryStruct("anchor4", "fourth", now.Add(-1*time.Hour)),
+				createQueryTestEntryStruct("anchor5", "fifth", now),
 			},
 			wantErr:      false,
 			wantContains: []string{"fifth"},
@@ -119,12 +108,12 @@ func TestQueryCommand(t *testing.T) {
 		{
 			name:     "--last 3 with 5 entries",
 			lastFlag: "3",
-			notes: map[string][]byte{
-				"anchor1": createQueryTestEntry("anchor1", "first", now.Add(-4*time.Hour)),
-				"anchor2": createQueryTestEntry("anchor2", "second", now.Add(-3*time.Hour)),
-				"anchor3": createQueryTestEntry("anchor3", "third", now.Add(-2*time.Hour)),
-				"anchor4": createQueryTestEntry("anchor4", "fourth", now.Add(-1*time.Hour)),
-				"anchor5": createQueryTestEntry("anchor5", "fifth", now),
+			entries: []*ledger.Entry{
+				createQueryTestEntryStruct("anchor1", "first", now.Add(-4*time.Hour)),
+				createQueryTestEntryStruct("anchor2", "second", now.Add(-3*time.Hour)),
+				createQueryTestEntryStruct("anchor3", "third", now.Add(-2*time.Hour)),
+				createQueryTestEntryStruct("anchor4", "fourth", now.Add(-1*time.Hour)),
+				createQueryTestEntryStruct("anchor5", "fifth", now),
 			},
 			wantErr:        false,
 			wantContains:   []string{"third", "fourth", "fifth"},
@@ -133,12 +122,12 @@ func TestQueryCommand(t *testing.T) {
 		{
 			name:     "--last 10 with 5 entries",
 			lastFlag: "10",
-			notes: map[string][]byte{
-				"anchor1": createQueryTestEntry("anchor1", "first", now.Add(-4*time.Hour)),
-				"anchor2": createQueryTestEntry("anchor2", "second", now.Add(-3*time.Hour)),
-				"anchor3": createQueryTestEntry("anchor3", "third", now.Add(-2*time.Hour)),
-				"anchor4": createQueryTestEntry("anchor4", "fourth", now.Add(-1*time.Hour)),
-				"anchor5": createQueryTestEntry("anchor5", "fifth", now),
+			entries: []*ledger.Entry{
+				createQueryTestEntryStruct("anchor1", "first", now.Add(-4*time.Hour)),
+				createQueryTestEntryStruct("anchor2", "second", now.Add(-3*time.Hour)),
+				createQueryTestEntryStruct("anchor3", "third", now.Add(-2*time.Hour)),
+				createQueryTestEntryStruct("anchor4", "fourth", now.Add(-1*time.Hour)),
+				createQueryTestEntryStruct("anchor5", "fifth", now),
 			},
 			wantErr:      false,
 			wantContains: []string{"first", "second", "third", "fourth", "fifth"},
@@ -147,9 +136,9 @@ func TestQueryCommand(t *testing.T) {
 			name:        "--oneline output",
 			lastFlag:    "2",
 			onelineFlag: true,
-			notes: map[string][]byte{
-				"anchor1": createQueryTestEntry("anchor1", "first", now.Add(-1*time.Hour)),
-				"anchor2": createQueryTestEntry("anchor2", "second", now),
+			entries: []*ledger.Entry{
+				createQueryTestEntryStruct("anchor1", "first", now.Add(-1*time.Hour)),
+				createQueryTestEntryStruct("anchor2", "second", now),
 			},
 			wantErr:      false,
 			wantContains: []string{"first", "second"},
@@ -158,9 +147,9 @@ func TestQueryCommand(t *testing.T) {
 			name:       "--json output",
 			lastFlag:   "2",
 			jsonOutput: true,
-			notes: map[string][]byte{
-				"anchor1": createQueryTestEntry("anchor1", "first", now.Add(-1*time.Hour)),
-				"anchor2": createQueryTestEntry("anchor2", "second", now),
+			entries: []*ledger.Entry{
+				createQueryTestEntryStruct("anchor1", "first", now.Add(-1*time.Hour)),
+				createQueryTestEntryStruct("anchor2", "second", now),
 			},
 			wantErr:      false,
 			wantContains: []string{`"id"`, `"summary"`},
@@ -169,12 +158,12 @@ func TestQueryCommand(t *testing.T) {
 			name:     "filter by single tag",
 			lastFlag: "10",
 			tagFlags: []string{"security"},
-			notes: map[string][]byte{
-				"anchor1": createQueryTestEntryWithTags("anchor1", "first", now.Add(-4*time.Hour), []string{"security", "auth"}),
-				"anchor2": createQueryTestEntryWithTags("anchor2", "second", now.Add(-3*time.Hour), []string{"feature"}),
-				"anchor3": createQueryTestEntryWithTags("anchor3", "third", now.Add(-2*time.Hour), []string{"security"}),
-				"anchor4": createQueryTestEntry("anchor4", "fourth", now.Add(-1*time.Hour)),
-				"anchor5": createQueryTestEntryWithTags("anchor5", "fifth", now, []string{"bugfix"}),
+			entries: []*ledger.Entry{
+				createQueryTestEntryStructWithTags("anchor1", "first", now.Add(-4*time.Hour), []string{"security", "auth"}),
+				createQueryTestEntryStructWithTags("anchor2", "second", now.Add(-3*time.Hour), []string{"feature"}),
+				createQueryTestEntryStructWithTags("anchor3", "third", now.Add(-2*time.Hour), []string{"security"}),
+				createQueryTestEntryStruct("anchor4", "fourth", now.Add(-1*time.Hour)),
+				createQueryTestEntryStructWithTags("anchor5", "fifth", now, []string{"bugfix"}),
 			},
 			wantErr:        false,
 			wantContains:   []string{"first", "third"},
@@ -184,12 +173,12 @@ func TestQueryCommand(t *testing.T) {
 			name:     "filter by multiple tags (OR logic)",
 			lastFlag: "10",
 			tagFlags: []string{"security", "bugfix"},
-			notes: map[string][]byte{
-				"anchor1": createQueryTestEntryWithTags("anchor1", "first", now.Add(-4*time.Hour), []string{"security", "auth"}),
-				"anchor2": createQueryTestEntryWithTags("anchor2", "second", now.Add(-3*time.Hour), []string{"feature"}),
-				"anchor3": createQueryTestEntryWithTags("anchor3", "third", now.Add(-2*time.Hour), []string{"security"}),
-				"anchor4": createQueryTestEntry("anchor4", "fourth", now.Add(-1*time.Hour)),
-				"anchor5": createQueryTestEntryWithTags("anchor5", "fifth", now, []string{"bugfix"}),
+			entries: []*ledger.Entry{
+				createQueryTestEntryStructWithTags("anchor1", "first", now.Add(-4*time.Hour), []string{"security", "auth"}),
+				createQueryTestEntryStructWithTags("anchor2", "second", now.Add(-3*time.Hour), []string{"feature"}),
+				createQueryTestEntryStructWithTags("anchor3", "third", now.Add(-2*time.Hour), []string{"security"}),
+				createQueryTestEntryStruct("anchor4", "fourth", now.Add(-1*time.Hour)),
+				createQueryTestEntryStructWithTags("anchor5", "fifth", now, []string{"bugfix"}),
 			},
 			wantErr:        false,
 			wantContains:   []string{"first", "third", "fifth"},
@@ -199,9 +188,9 @@ func TestQueryCommand(t *testing.T) {
 			name:     "filter by tag with no matches",
 			lastFlag: "10",
 			tagFlags: []string{"nonexistent"},
-			notes: map[string][]byte{
-				"anchor1": createQueryTestEntryWithTags("anchor1", "first", now, []string{"security"}),
-				"anchor2": createQueryTestEntryWithTags("anchor2", "second", now, []string{"feature"}),
+			entries: []*ledger.Entry{
+				createQueryTestEntryStructWithTags("anchor1", "first", now, []string{"security"}),
+				createQueryTestEntryStructWithTags("anchor2", "second", now, []string{"feature"}),
 			},
 			wantErr: false,
 		},
@@ -209,9 +198,9 @@ func TestQueryCommand(t *testing.T) {
 			name:     "filter by tag with entries that have no tags",
 			lastFlag: "10",
 			tagFlags: []string{"security"},
-			notes: map[string][]byte{
-				"anchor1": createQueryTestEntry("anchor1", "first", now.Add(-1*time.Hour)),
-				"anchor2": createQueryTestEntryWithTags("anchor2", "second", now, []string{"security"}),
+			entries: []*ledger.Entry{
+				createQueryTestEntryStruct("anchor1", "first", now.Add(-1*time.Hour)),
+				createQueryTestEntryStructWithTags("anchor2", "second", now, []string{"security"}),
 			},
 			wantErr:        false,
 			wantContains:   []string{"second"},
@@ -221,8 +210,16 @@ func TestQueryCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create storage with mock
-			storage := ledger.NewStorage(&mockGitOpsForQuery{notes: tt.notes})
+			// Create storage with file-backed entries
+			var files *ledger.FileStorage
+			if tt.entries != nil {
+				dir := t.TempDir()
+				for _, entry := range tt.entries {
+					writeQueryEntryFile(t, dir, entry)
+				}
+				files = ledger.NewFileStorage(dir, func(_ string) error { return nil })
+			}
+			storage := ledger.NewStorage(&mockGitOpsForQuery{}, files)
 
 			// Create command
 			cmd := newQueryCmdInternal(storage)
@@ -281,14 +278,14 @@ func TestQueryCommand(t *testing.T) {
 	}
 }
 
-// createQueryTestEntry creates a minimal valid entry for testing query command.
-func createQueryTestEntry(anchor, what string, created time.Time) []byte {
-	return createQueryTestEntryWithTags(anchor, what, created, nil)
+// createQueryTestEntryStruct creates a minimal valid entry struct for testing query command.
+func createQueryTestEntryStruct(anchor, what string, created time.Time) *ledger.Entry {
+	return createQueryTestEntryStructWithTags(anchor, what, created, nil)
 }
 
-// createQueryTestEntryWithTags creates a valid entry with tags for testing query command.
-func createQueryTestEntryWithTags(anchor, what string, created time.Time, tags []string) []byte {
-	entry := &ledger.Entry{
+// createQueryTestEntryStructWithTags creates a valid entry struct with tags for testing query command.
+func createQueryTestEntryStructWithTags(anchor, what string, created time.Time, tags []string) *ledger.Entry {
+	return &ledger.Entry{
 		Schema:    ledger.SchemaVersion,
 		Kind:      ledger.KindEntry,
 		ID:        ledger.GenerateID(anchor, created),
@@ -305,6 +302,4 @@ func createQueryTestEntryWithTags(anchor, what string, created time.Time, tags [
 		},
 		Tags: tags,
 	}
-	data, _ := entry.ToJSON()
-	return data
 }

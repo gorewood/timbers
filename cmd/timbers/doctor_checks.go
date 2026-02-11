@@ -107,7 +107,14 @@ func runWorkflowChecks() []checkResult {
 
 // checkPendingCommits checks for undocumented commits.
 func checkPendingCommits() checkResult {
-	storage := ledger.NewStorage(nil)
+	storage, storageErr := ledger.NewDefaultStorage()
+	if storageErr != nil {
+		return checkResult{
+			Name:    "Pending Commits",
+			Status:  checkWarn,
+			Message: "could not check: " + storageErr.Error(),
+		}
+	}
 	commits, _, err := storage.GetPendingCommits()
 	if err != nil {
 		return checkResult{

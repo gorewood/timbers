@@ -4,12 +4,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gorewood/timbers/internal/git"
-	"github.com/gorewood/timbers/internal/ledger"
 )
 
 func TestExtractWorkItemTrailer(t *testing.T) {
@@ -254,7 +254,7 @@ func TestBatchLog_MultipleEntries(t *testing.T) {
 	}
 	mock.diffstat = git.Diffstat{Files: 2, Insertions: 30, Deletions: 10}
 
-	storage := ledger.NewStorage(mock)
+	storage, dir := newLogTestStorage(t, mock)
 	cmd := newLogCmdWithStorage(storage)
 	cmd.SetArgs([]string{"--batch"})
 
@@ -274,9 +274,16 @@ func TestBatchLog_MultipleEntries(t *testing.T) {
 		t.Errorf("expected 'Created 2 entries' in output, got: %s", output)
 	}
 
-	// Verify notes were written
-	if len(mock.writtenNotes) != 2 {
-		t.Errorf("expected 2 notes written, got %d", len(mock.writtenNotes))
+	// Verify entries were written to directory
+	dirEntries, _ := os.ReadDir(dir)
+	jsonFiles := 0
+	for _, de := range dirEntries {
+		if strings.HasSuffix(de.Name(), ".json") {
+			jsonFiles++
+		}
+	}
+	if jsonFiles != 2 {
+		t.Errorf("expected 2 entry files written, got %d", jsonFiles)
 	}
 }
 
@@ -292,7 +299,7 @@ func TestBatchLog_GroupByWorkItem(t *testing.T) {
 	}
 	mock.diffstat = git.Diffstat{Files: 2, Insertions: 30, Deletions: 10}
 
-	storage := ledger.NewStorage(mock)
+	storage, _ := newLogTestStorage(t, mock)
 	cmd := newLogCmdWithStorage(storage)
 	cmd.SetArgs([]string{"--batch"})
 
@@ -332,7 +339,7 @@ func TestBatchLog_DryRun(t *testing.T) {
 	}
 	mock.diffstat = git.Diffstat{Files: 1, Insertions: 10, Deletions: 5}
 
-	storage := ledger.NewStorage(mock)
+	storage, dir := newLogTestStorage(t, mock)
 	cmd := newLogCmdWithStorage(storage)
 	cmd.SetArgs([]string{"--batch", "--dry-run"})
 
@@ -352,9 +359,16 @@ func TestBatchLog_DryRun(t *testing.T) {
 		t.Errorf("expected 'would create' in dry-run output, got: %s", output)
 	}
 
-	// Should NOT have written any notes
-	if len(mock.writtenNotes) != 0 {
-		t.Errorf("expected no notes written in dry-run mode, got %d", len(mock.writtenNotes))
+	// Should NOT have written any entry files
+	dirEntries, _ := os.ReadDir(dir)
+	jsonFiles := 0
+	for _, de := range dirEntries {
+		if strings.HasSuffix(de.Name(), ".json") {
+			jsonFiles++
+		}
+	}
+	if jsonFiles != 0 {
+		t.Errorf("expected no entry files in dry-run mode, got %d", jsonFiles)
 	}
 }
 
@@ -370,7 +384,7 @@ func TestBatchLog_JSONOutput(t *testing.T) {
 	}
 	mock.diffstat = git.Diffstat{Files: 2, Insertions: 30, Deletions: 10}
 
-	storage := ledger.NewStorage(mock)
+	storage, _ := newLogTestStorage(t, mock)
 	cmd := newLogCmdWithStorage(storage)
 	cmd.PersistentFlags().Bool("json", false, "")
 	_ = cmd.PersistentFlags().Set("json", "true")
@@ -414,7 +428,7 @@ func TestBatchLog_JSONDryRun(t *testing.T) {
 	}
 	mock.diffstat = git.Diffstat{Files: 1, Insertions: 5, Deletions: 2}
 
-	storage := ledger.NewStorage(mock)
+	storage, _ := newLogTestStorage(t, mock)
 	cmd := newLogCmdWithStorage(storage)
 	cmd.PersistentFlags().Bool("json", false, "")
 	_ = cmd.PersistentFlags().Set("json", "true")
@@ -446,7 +460,7 @@ func TestBatchLog_NoPendingCommits(t *testing.T) {
 	mock.head = "abc123def456789"
 	mock.reachableResult = []git.Commit{} // No commits
 
-	storage := ledger.NewStorage(mock)
+	storage, _ := newLogTestStorage(t, mock)
 	cmd := newLogCmdWithStorage(storage)
 	cmd.SetArgs([]string{"--batch"})
 
@@ -476,7 +490,7 @@ func TestBatchLog_WithUntrackedGroup(t *testing.T) {
 	}
 	mock.diffstat = git.Diffstat{Files: 1, Insertions: 5, Deletions: 2}
 
-	storage := ledger.NewStorage(mock)
+	storage, _ := newLogTestStorage(t, mock)
 	cmd := newLogCmdWithStorage(storage)
 	cmd.SetArgs([]string{"--batch"})
 

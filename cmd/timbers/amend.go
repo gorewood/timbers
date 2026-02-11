@@ -112,7 +112,11 @@ func initAmendStorage(storage *ledger.Storage, printer *output.Printer) (*ledger
 	}
 
 	if storage == nil {
-		storage = ledger.NewStorage(nil)
+		var err error
+		storage, err = ledger.NewDefaultStorage()
+		if err != nil {
+			return nil, err
+		}
 	}
 	return storage, nil
 }

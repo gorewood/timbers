@@ -159,7 +159,7 @@ func ensureStorage(printer *output.Printer, storage *ledger.Storage) (*ledger.St
 		return nil, err
 	}
 
-	return ledger.NewStorage(nil), nil
+	return ledger.NewDefaultStorage()
 }
 
 // getExportEntries retrieves entries based on --last, --since, --until, --range, or --tag flags.

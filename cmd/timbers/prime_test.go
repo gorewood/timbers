@@ -22,26 +22,6 @@ type mockGitOpsForPrime struct {
 	commitsErr      error
 	reachableResult []git.Commit
 	reachableErr    error
-	notes           map[string][]byte
-}
-
-func (m *mockGitOpsForPrime) ReadNote(commit string) ([]byte, error) {
-	if data, ok := m.notes[commit]; ok {
-		return data, nil
-	}
-	return nil, nil
-}
-
-func (m *mockGitOpsForPrime) WriteNote(string, string, bool) error {
-	return nil
-}
-
-func (m *mockGitOpsForPrime) ListNotedCommits() ([]string, error) {
-	commits := make([]string, 0, len(m.notes))
-	for commit := range m.notes {
-		commits = append(commits, commit)
-	}
-	return commits, nil
 }
 
 func (m *mockGitOpsForPrime) HEAD() (string, error) {
@@ -60,18 +40,31 @@ func (m *mockGitOpsForPrime) GetDiffstat(fromRef, toRef string) (git.Diffstat, e
 	return git.Diffstat{}, nil
 }
 
-func (m *mockGitOpsForPrime) PushNotes(remote string) error {
-	return nil
-}
-
 func TestPrimeCommand(t *testing.T) {
 	now := time.Now()
 	oneHourAgo := now.Add(-1 * time.Hour)
 	twoHoursAgo := now.Add(-2 * time.Hour)
 
+	// Helper to write entry files into a temp dir and return FileStorage.
+	writeEntries := func(t *testing.T, entries ...*ledger.Entry) *ledger.FileStorage {
+		t.Helper()
+		dir := t.TempDir()
+		for _, entry := range entries {
+			data, err := entry.ToJSON()
+			if err != nil {
+				t.Fatalf("failed to serialize entry: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, entry.ID+".json"), data, 0o600); err != nil {
+				t.Fatalf("failed to write entry file: %v", err)
+			}
+		}
+		return ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	}
+
 	tests := []struct {
 		name           string
 		mock           *mockGitOpsForPrime
+		files          func(t *testing.T) *ledger.FileStorage
 		lastN          int
 		jsonOutput     bool
 		wantContains   []string
@@ -81,13 +74,13 @@ func TestPrimeCommand(t *testing.T) {
 		{
 			name: "no entries - shows pending commits and workflow",
 			mock: &mockGitOpsForPrime{
-				head:  "abc123def456",
-				notes: map[string][]byte{},
+				head: "abc123def456",
 				reachableResult: []git.Commit{
 					{SHA: "abc123def456", Short: "abc123d", Subject: "Third commit"},
 					{SHA: "def456789012", Short: "def4567", Subject: "Second commit"},
 				},
 			},
+			files: nil,
 			lastN: 3,
 			wantContains: []string{
 				"Timbers Session Context", "2 undocumented", "(no entries)",
@@ -98,13 +91,15 @@ func TestPrimeCommand(t *testing.T) {
 			name: "has entries and pending",
 			mock: &mockGitOpsForPrime{
 				head: "abc123def456",
-				notes: map[string][]byte{
-					"oldanchor1234": createPrimeTestEntry("oldanchor1234", oneHourAgo, "Fixed bug"),
-					"oldanchor5678": createPrimeTestEntry("oldanchor5678", twoHoursAgo, "Added feature"),
-				},
 				commits: []git.Commit{
 					{SHA: "abc123def456", Short: "abc123d", Subject: "New commit"},
 				},
+			},
+			files: func(t *testing.T) *ledger.FileStorage {
+				return writeEntries(t,
+					makePrimeTestEntry("oldanchor1234", oneHourAgo, "Fixed bug"),
+					makePrimeTestEntry("oldanchor5678", twoHoursAgo, "Added feature"),
+				)
 			},
 			lastN: 3,
 			wantContains: []string{
@@ -115,11 +110,11 @@ func TestPrimeCommand(t *testing.T) {
 		{
 			name: "no pending commits",
 			mock: &mockGitOpsForPrime{
-				head: "abc123def456",
-				notes: map[string][]byte{
-					"abc123def456": createPrimeTestEntry("abc123def456", now, "Latest work"),
-				},
+				head:    "abc123def456",
 				commits: []git.Commit{},
+			},
+			files: func(t *testing.T) *ledger.FileStorage {
+				return writeEntries(t, makePrimeTestEntry("abc123def456", now, "Latest work"))
 			},
 			lastN:        3,
 			wantContains: []string{"all work documented", "Latest work", "CRITICAL: Session Protocol"},
@@ -127,13 +122,15 @@ func TestPrimeCommand(t *testing.T) {
 		{
 			name: "respects lastN flag",
 			mock: &mockGitOpsForPrime{
-				head: "abc123def456",
-				notes: map[string][]byte{
-					"abc123def456": createPrimeTestEntry("abc123def456", now, "Latest"),
-					"def456789012": createPrimeTestEntry("def456789012", oneHourAgo, "Middle"),
-					"789012345678": createPrimeTestEntry("789012345678", twoHoursAgo, "Oldest"),
-				},
+				head:    "abc123def456",
 				commits: []git.Commit{},
+			},
+			files: func(t *testing.T) *ledger.FileStorage {
+				return writeEntries(t,
+					makePrimeTestEntry("abc123def456", now, "Latest"),
+					makePrimeTestEntry("def456789012", oneHourAgo, "Middle"),
+					makePrimeTestEntry("789012345678", twoHoursAgo, "Oldest"),
+				)
 			},
 			lastN:          1,
 			wantContains:   []string{"Latest"},
@@ -143,12 +140,12 @@ func TestPrimeCommand(t *testing.T) {
 			name: "json output - structured format with workflow",
 			mock: &mockGitOpsForPrime{
 				head: "abc123def456",
-				notes: map[string][]byte{
-					"oldanchor1234": createPrimeTestEntry("oldanchor1234", oneHourAgo, "Test entry"),
-				},
 				commits: []git.Commit{
 					{SHA: "abc123def456", Short: "abc123d", Subject: "New commit"},
 				},
+			},
+			files: func(t *testing.T) *ledger.FileStorage {
+				return writeEntries(t, makePrimeTestEntry("oldanchor1234", oneHourAgo, "Test entry"))
 			},
 			lastN:        3,
 			jsonOutput:   true,
@@ -157,12 +154,12 @@ func TestPrimeCommand(t *testing.T) {
 		{
 			name: "json output - no entries",
 			mock: &mockGitOpsForPrime{
-				head:  "abc123def456",
-				notes: map[string][]byte{},
+				head: "abc123def456",
 				reachableResult: []git.Commit{
 					{SHA: "abc123def456", Short: "abc123d", Subject: "First commit"},
 				},
 			},
+			files:        nil,
 			lastN:        3,
 			jsonOutput:   true,
 			wantContains: []string{`"entry_count": 0`, `"recent_entries": []`, `"workflow":`},
@@ -171,8 +168,14 @@ func TestPrimeCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create storage with mock
-			storage := ledger.NewStorage(tt.mock)
+			// Build FileStorage from entries if provided
+			var files *ledger.FileStorage
+			if tt.files != nil {
+				files = tt.files(t)
+			}
+
+			// Create storage with mock and file storage
+			storage := ledger.NewStorage(tt.mock, files)
 
 			// Create command
 			cmd := newPrimeCmdInternal(storage)
@@ -241,9 +244,9 @@ func TestPrimeCommand(t *testing.T) {
 	}
 }
 
-// createPrimeTestEntry creates a minimal valid entry for testing.
-func createPrimeTestEntry(anchor string, created time.Time, what string) []byte {
-	entry := &ledger.Entry{
+// makePrimeTestEntry creates a minimal valid entry for testing.
+func makePrimeTestEntry(anchor string, created time.Time, what string) *ledger.Entry {
+	return &ledger.Entry{
 		Schema:    ledger.SchemaVersion,
 		Kind:      ledger.KindEntry,
 		ID:        ledger.GenerateID(anchor, created),
@@ -259,8 +262,6 @@ func createPrimeTestEntry(anchor string, created time.Time, what string) []byte 
 			How:  "Via test",
 		},
 	}
-	data, _ := entry.ToJSON()
-	return data
 }
 
 func TestPrimeResultJSON(t *testing.T) {
@@ -375,13 +376,18 @@ func TestPrimeVerboseFlag(t *testing.T) {
 	now := time.Now()
 
 	mock := &mockGitOpsForPrime{
-		head: "abc123def456",
-		notes: map[string][]byte{
-			"anchor1234": createPrimeTestEntry("anchor1234", now, "Fixed auth bug"),
-		},
+		head:    "abc123def456",
 		commits: []git.Commit{},
 	}
-	storage := ledger.NewStorage(mock)
+
+	entry := makePrimeTestEntry("anchor1234", now, "Fixed auth bug")
+	dir := t.TempDir()
+	data, _ := entry.ToJSON()
+	if err := os.WriteFile(filepath.Join(dir, entry.ID+".json"), data, 0o600); err != nil {
+		t.Fatalf("failed to write entry file: %v", err)
+	}
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	storage := ledger.NewStorage(mock, files)
 
 	// Without verbose: should show what but not why/how
 	cmd := newPrimeCmdInternal(storage)
@@ -456,13 +462,18 @@ func TestPrimeVerboseJSON(t *testing.T) {
 	now := time.Now()
 
 	mock := &mockGitOpsForPrime{
-		head: "abc123def456",
-		notes: map[string][]byte{
-			"anchor1234": createPrimeTestEntry("anchor1234", now, "Fixed auth bug"),
-		},
+		head:    "abc123def456",
 		commits: []git.Commit{},
 	}
-	storage := ledger.NewStorage(mock)
+
+	entry := makePrimeTestEntry("anchor1234", now, "Fixed auth bug")
+	dir := t.TempDir()
+	data, _ := entry.ToJSON()
+	if err := os.WriteFile(filepath.Join(dir, entry.ID+".json"), data, 0o600); err != nil {
+		t.Fatalf("failed to write entry file: %v", err)
+	}
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	storage := ledger.NewStorage(mock, files)
 
 	// JSON with verbose: should include why/how fields
 	cmd := newPrimeCmdInternal(storage)
@@ -485,12 +496,12 @@ func TestPrimeVerboseJSON(t *testing.T) {
 	if len(result.RecentEntries) == 0 {
 		t.Fatal("expected at least one recent entry")
 	}
-	entry := result.RecentEntries[0]
-	if entry.Why != "For testing" {
-		t.Errorf("why = %q, want %q", entry.Why, "For testing")
+	recentEntry := result.RecentEntries[0]
+	if recentEntry.Why != "For testing" {
+		t.Errorf("why = %q, want %q", recentEntry.Why, "For testing")
 	}
-	if entry.How != "Via test" {
-		t.Errorf("how = %q, want %q", entry.How, "Via test")
+	if recentEntry.How != "Via test" {
+		t.Errorf("how = %q, want %q", recentEntry.How, "Via test")
 	}
 
 	// JSON without verbose: why/how should be empty (omitted)

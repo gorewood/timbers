@@ -59,7 +59,10 @@ func runPreCommitHook(cmd *cobra.Command) error {
 	}
 
 	// Create storage and get pending count
-	storage := ledger.NewStorage(nil)
+	storage, storageErr := ledger.NewDefaultStorage()
+	if storageErr != nil {
+		return nil //nolint:nilerr // hook must not block git operations
+	}
 	commits, _, err := storage.GetPendingCommits()
 	if err != nil {
 		// Error getting pending - silently succeed to not block commits

@@ -4,6 +4,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,49 +16,10 @@ import (
 )
 
 // mockGitOpsForAmend implements ledger.GitOps for testing amend command.
-type mockGitOpsForAmend struct {
-	notes        map[string]*ledger.Entry
-	writtenEntry *ledger.Entry
-	writeForce   bool
-	writeErr     error
-}
+type mockGitOpsForAmend struct{}
 
 func newMockGitOpsForAmend() *mockGitOpsForAmend {
-	return &mockGitOpsForAmend{
-		notes: make(map[string]*ledger.Entry),
-	}
-}
-
-func (m *mockGitOpsForAmend) ReadNote(commit string) ([]byte, error) {
-	if entry, ok := m.notes[commit]; ok {
-		return entry.ToJSON()
-	}
-	return nil, output.NewUserError("note not found for commit: " + commit)
-}
-
-func (m *mockGitOpsForAmend) WriteNote(commit string, content string, force bool) error {
-	if m.writeErr != nil {
-		return m.writeErr
-	}
-
-	// Parse the JSON to track what was written
-	var entry ledger.Entry
-	if err := json.Unmarshal([]byte(content), &entry); err != nil {
-		return output.NewSystemError("failed to unmarshal entry: " + err.Error())
-	}
-
-	m.writtenEntry = &entry
-	m.writeForce = force
-	m.notes[commit] = &entry
-	return nil
-}
-
-func (m *mockGitOpsForAmend) ListNotedCommits() ([]string, error) {
-	commits := make([]string, 0, len(m.notes))
-	for commit := range m.notes {
-		commits = append(commits, commit)
-	}
-	return commits, nil
+	return &mockGitOpsForAmend{}
 }
 
 func (m *mockGitOpsForAmend) HEAD() (string, error) {
@@ -75,8 +38,36 @@ func (m *mockGitOpsForAmend) GetDiffstat(_, _ string) (git.Diffstat, error) {
 	return git.Diffstat{}, nil
 }
 
-func (m *mockGitOpsForAmend) PushNotes(_ string) error {
-	return nil
+// setupAmendTestStorage creates a temp dir, writes the entry file if non-nil,
+// and returns the storage and dir path. The gitAdd function is a no-op by default.
+func setupAmendTestStorage(t *testing.T, mock *mockGitOpsForAmend, entry *ledger.Entry) (*ledger.Storage, string) {
+	t.Helper()
+	dir := t.TempDir()
+	if entry != nil {
+		data, err := entry.ToJSON()
+		if err != nil {
+			t.Fatalf("failed to serialize setup entry: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, entry.ID+".json"), data, 0o600); err != nil {
+			t.Fatalf("failed to write setup entry file: %v", err)
+		}
+	}
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	return ledger.NewStorage(mock, files), dir
+}
+
+// readEntryFromDir reads and parses the entry file for the given ID from the dir.
+func readEntryFromDir(t *testing.T, dir, id string) *ledger.Entry {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, id+".json"))
+	if err != nil {
+		t.Fatalf("failed to read entry file: %v", err)
+	}
+	entry, err := ledger.FromJSON(data)
+	if err != nil {
+		t.Fatalf("failed to parse entry file: %v", err)
+	}
+	return entry
 }
 
 func TestAmendCommand(t *testing.T) {
@@ -89,7 +80,8 @@ func TestAmendCommand(t *testing.T) {
 		args         []string
 		wantErr      bool
 		wantContains []string
-		checkResult  func(t *testing.T, mock *mockGitOpsForAmend)
+		failAdd      bool // if true, use a failing gitAdd to simulate write errors
+		checkResult  func(t *testing.T, dir string, entryID string)
 	}{
 		{
 			name: "amend what field",
@@ -111,23 +103,18 @@ func TestAmendCommand(t *testing.T) {
 			},
 			args:         []string{"tb_2026-01-15T15:04:05Z_abc123", "--what", "Updated what"},
 			wantContains: []string{"Entry amended successfully", "tb_2026-01-15T15:04:05Z_abc123"},
-			checkResult: func(t *testing.T, mock *mockGitOpsForAmend) {
-				if mock.writtenEntry == nil {
-					t.Fatal("expected entry to be written")
+			checkResult: func(t *testing.T, dir string, entryID string) {
+				entry := readEntryFromDir(t, dir, entryID)
+				if entry.Summary.What != "Updated what" {
+					t.Errorf("expected what='Updated what', got %q", entry.Summary.What)
 				}
-				if mock.writtenEntry.Summary.What != "Updated what" {
-					t.Errorf("expected what='Updated what', got %q", mock.writtenEntry.Summary.What)
+				if entry.Summary.Why != "Original why" {
+					t.Errorf("expected why='Original why', got %q", entry.Summary.Why)
 				}
-				if mock.writtenEntry.Summary.Why != "Original why" {
-					t.Errorf("expected why='Original why', got %q", mock.writtenEntry.Summary.Why)
+				if entry.Summary.How != "Original how" {
+					t.Errorf("expected how='Original how', got %q", entry.Summary.How)
 				}
-				if mock.writtenEntry.Summary.How != "Original how" {
-					t.Errorf("expected how='Original how', got %q", mock.writtenEntry.Summary.How)
-				}
-				if !mock.writeForce {
-					t.Error("expected force=true when writing")
-				}
-				if !mock.writtenEntry.UpdatedAt.After(baseTime) {
+				if !entry.UpdatedAt.After(baseTime) {
 					t.Error("expected updated_at to be after original time")
 				}
 			},
@@ -152,12 +139,13 @@ func TestAmendCommand(t *testing.T) {
 			},
 			args:         []string{"tb_2026-01-15T15:04:05Z_abc123", "--why", "Updated why"},
 			wantContains: []string{"Entry amended successfully"},
-			checkResult: func(t *testing.T, mock *mockGitOpsForAmend) {
-				if mock.writtenEntry.Summary.Why != "Updated why" {
-					t.Errorf("expected why='Updated why', got %q", mock.writtenEntry.Summary.Why)
+			checkResult: func(t *testing.T, dir string, entryID string) {
+				entry := readEntryFromDir(t, dir, entryID)
+				if entry.Summary.Why != "Updated why" {
+					t.Errorf("expected why='Updated why', got %q", entry.Summary.Why)
 				}
-				if mock.writtenEntry.Summary.What != "Original what" {
-					t.Errorf("expected what unchanged, got %q", mock.writtenEntry.Summary.What)
+				if entry.Summary.What != "Original what" {
+					t.Errorf("expected what unchanged, got %q", entry.Summary.What)
 				}
 			},
 		},
@@ -181,9 +169,10 @@ func TestAmendCommand(t *testing.T) {
 			},
 			args:         []string{"tb_2026-01-15T15:04:05Z_abc123", "--how", "Updated how"},
 			wantContains: []string{"Entry amended successfully"},
-			checkResult: func(t *testing.T, mock *mockGitOpsForAmend) {
-				if mock.writtenEntry.Summary.How != "Updated how" {
-					t.Errorf("expected how='Updated how', got %q", mock.writtenEntry.Summary.How)
+			checkResult: func(t *testing.T, dir string, entryID string) {
+				entry := readEntryFromDir(t, dir, entryID)
+				if entry.Summary.How != "Updated how" {
+					t.Errorf("expected how='Updated how', got %q", entry.Summary.How)
 				}
 			},
 		},
@@ -207,15 +196,16 @@ func TestAmendCommand(t *testing.T) {
 			},
 			args:         []string{"tb_2026-01-15T15:04:05Z_abc123", "--what", "New what", "--why", "New why"},
 			wantContains: []string{"Entry amended successfully"},
-			checkResult: func(t *testing.T, mock *mockGitOpsForAmend) {
-				if mock.writtenEntry.Summary.What != "New what" {
-					t.Errorf("expected what='New what', got %q", mock.writtenEntry.Summary.What)
+			checkResult: func(t *testing.T, dir string, entryID string) {
+				entry := readEntryFromDir(t, dir, entryID)
+				if entry.Summary.What != "New what" {
+					t.Errorf("expected what='New what', got %q", entry.Summary.What)
 				}
-				if mock.writtenEntry.Summary.Why != "New why" {
-					t.Errorf("expected why='New why', got %q", mock.writtenEntry.Summary.Why)
+				if entry.Summary.Why != "New why" {
+					t.Errorf("expected why='New why', got %q", entry.Summary.Why)
 				}
-				if mock.writtenEntry.Summary.How != "Original how" {
-					t.Errorf("expected how unchanged, got %q", mock.writtenEntry.Summary.How)
+				if entry.Summary.How != "Original how" {
+					t.Errorf("expected how unchanged, got %q", entry.Summary.How)
 				}
 			},
 		},
@@ -240,12 +230,13 @@ func TestAmendCommand(t *testing.T) {
 			},
 			args:         []string{"tb_2026-01-15T15:04:05Z_abc123", "--tag", "new-tag", "--tag", "another-tag"},
 			wantContains: []string{"Entry amended successfully"},
-			checkResult: func(t *testing.T, mock *mockGitOpsForAmend) {
-				if len(mock.writtenEntry.Tags) != 2 {
-					t.Errorf("expected 2 tags, got %d", len(mock.writtenEntry.Tags))
+			checkResult: func(t *testing.T, dir string, entryID string) {
+				entry := readEntryFromDir(t, dir, entryID)
+				if len(entry.Tags) != 2 {
+					t.Errorf("expected 2 tags, got %d", len(entry.Tags))
 				}
-				if mock.writtenEntry.Tags[0] != "new-tag" || mock.writtenEntry.Tags[1] != "another-tag" {
-					t.Errorf("expected tags [new-tag, another-tag], got %v", mock.writtenEntry.Tags)
+				if entry.Tags[0] != "new-tag" || entry.Tags[1] != "another-tag" {
+					t.Errorf("expected tags [new-tag, another-tag], got %v", entry.Tags)
 				}
 			},
 		},
@@ -270,9 +261,10 @@ func TestAmendCommand(t *testing.T) {
 			},
 			args:         []string{"tb_2026-01-15T15:04:05Z_abc123", "--tag", "new-tag"},
 			wantContains: []string{"Entry amended successfully"},
-			checkResult: func(t *testing.T, mock *mockGitOpsForAmend) {
-				if len(mock.writtenEntry.Tags) != 1 || mock.writtenEntry.Tags[0] != "new-tag" {
-					t.Errorf("expected tags ['new-tag'], got %v", mock.writtenEntry.Tags)
+			checkResult: func(t *testing.T, dir string, entryID string) {
+				entry := readEntryFromDir(t, dir, entryID)
+				if len(entry.Tags) != 1 || entry.Tags[0] != "new-tag" {
+					t.Errorf("expected tags ['new-tag'], got %v", entry.Tags)
 				}
 			},
 		},
@@ -296,9 +288,11 @@ func TestAmendCommand(t *testing.T) {
 			},
 			args:         []string{"tb_2026-01-15T15:04:05Z_abc123", "--what", "Updated what", "--dry-run"},
 			wantContains: []string{"Dry run", "Before:", "After:", "Original what", "Updated what"},
-			checkResult: func(t *testing.T, mock *mockGitOpsForAmend) {
-				if mock.writtenEntry != nil {
-					t.Error("expected no write in dry-run mode")
+			checkResult: func(t *testing.T, dir string, entryID string) {
+				// In dry-run mode, the file should still contain the original entry
+				entry := readEntryFromDir(t, dir, entryID)
+				if entry.Summary.What != "Original what" {
+					t.Errorf("expected no write in dry-run mode, but what was changed to %q", entry.Summary.What)
 				}
 			},
 		},
@@ -323,9 +317,11 @@ func TestAmendCommand(t *testing.T) {
 			args:         []string{"tb_2026-01-15T15:04:05Z_abc123"},
 			wantErr:      true,
 			wantContains: []string{"at least one field must be specified"},
-			checkResult: func(t *testing.T, mock *mockGitOpsForAmend) {
-				if mock.writtenEntry != nil {
-					t.Error("expected no write when no fields specified")
+			checkResult: func(t *testing.T, dir string, entryID string) {
+				// File should still contain the original entry (no write occurred)
+				entry := readEntryFromDir(t, dir, entryID)
+				if entry.Summary.What != "Original what" {
+					t.Errorf("expected no write when no fields specified, but what was changed to %q", entry.Summary.What)
 				}
 			},
 		},
@@ -336,18 +332,57 @@ func TestAmendCommand(t *testing.T) {
 			wantErr:      true,
 			wantContains: []string{"entry not found"},
 		},
+		{
+			name: "error: write failure",
+			setupEntry: &ledger.Entry{
+				Schema:    ledger.SchemaVersion,
+				Kind:      ledger.KindEntry,
+				ID:        ledger.GenerateID(anchorSHA, baseTime),
+				CreatedAt: baseTime,
+				UpdatedAt: baseTime,
+				Workset: ledger.Workset{
+					AnchorCommit: anchorSHA,
+					Commits:      []string{anchorSHA},
+				},
+				Summary: ledger.Summary{
+					What: "Original what",
+					Why:  "Original why",
+					How:  "Original how",
+				},
+			},
+			args:         []string{"tb_2026-01-15T15:04:05Z_abc123", "--what", "Updated what"},
+			failAdd:      true,
+			wantErr:      true,
+			wantContains: []string{"failed to stage entry file"},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := newMockGitOpsForAmend()
 
-			// Setup entry in mock storage if provided
-			if tt.setupEntry != nil {
-				mock.notes[tt.setupEntry.Workset.AnchorCommit] = tt.setupEntry
+			var storage *ledger.Storage
+			var dir string
+
+			if tt.failAdd {
+				// Use a failing gitAdd to simulate write errors
+				dir = t.TempDir()
+				if tt.setupEntry != nil {
+					data, err := tt.setupEntry.ToJSON()
+					if err != nil {
+						t.Fatalf("failed to serialize setup entry: %v", err)
+					}
+					if err := os.WriteFile(filepath.Join(dir, tt.setupEntry.ID+".json"), data, 0o600); err != nil {
+						t.Fatalf("failed to write setup entry file: %v", err)
+					}
+				}
+				failAdd := func(_ string) error { return output.NewSystemError("write failed") }
+				files := ledger.NewFileStorage(dir, failAdd)
+				storage = ledger.NewStorage(mock, files)
+			} else {
+				storage, dir = setupAmendTestStorage(t, mock, tt.setupEntry)
 			}
 
-			storage := ledger.NewStorage(mock)
 			cmd := newAmendCmdInternal(storage)
 
 			// Capture output
@@ -365,16 +400,20 @@ func TestAmendCommand(t *testing.T) {
 			}
 
 			// Check output contains expected strings
-			output := buf.String()
+			cmdOutput := buf.String()
 			for _, want := range tt.wantContains {
-				if !strings.Contains(output, want) {
-					t.Errorf("expected output to contain %q, got:\n%s", want, output)
+				if !strings.Contains(cmdOutput, want) {
+					t.Errorf("expected output to contain %q, got:\n%s", want, cmdOutput)
 				}
 			}
 
 			// Run custom check if provided
 			if tt.checkResult != nil {
-				tt.checkResult(t, mock)
+				entryID := ""
+				if tt.setupEntry != nil {
+					entryID = tt.setupEntry.ID
+				}
+				tt.checkResult(t, dir, entryID)
 			}
 		})
 	}
@@ -465,13 +504,8 @@ func TestAmendCommandJSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := newMockGitOpsForAmend()
+			storage, _ := setupAmendTestStorage(t, mock, tt.setupEntry)
 
-			// Setup entry in mock storage if provided
-			if tt.setupEntry != nil {
-				mock.notes[tt.setupEntry.Workset.AnchorCommit] = tt.setupEntry
-			}
-
-			storage := ledger.NewStorage(mock)
 			cmd := newAmendCmdInternal(storage)
 
 			// Set JSON mode for testing

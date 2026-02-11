@@ -9,6 +9,7 @@ import (
 	"github.com/gorewood/timbers/internal/draft"
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/output"
 )
 
 // buildRenderContext creates a RenderContext from entries and flags.
@@ -20,8 +21,12 @@ func buildRenderContext(entries []*ledger.Entry, appendFlag string) *draft.Rende
 	branch, _ := git.CurrentBranch()
 
 	// Get total entries and check if this batch includes the earliest
-	storage := ledger.NewStorage(nil)
-	totalEntries, isFirstBatch := computeFirstBatchInfo(storage, entries)
+	var totalEntries int
+	var isFirstBatch bool
+	storage, storageErr := ledger.NewDefaultStorage()
+	if storageErr == nil {
+		totalEntries, isFirstBatch = computeFirstBatchInfo(storage, entries)
+	}
 
 	// Get project description from CLAUDE.md or default
 	projectDesc := getProjectDescription()
@@ -96,4 +101,43 @@ func getProjectDescription() string {
 	}
 
 	return desc.String()
+}
+
+// parseTimeCutoffs parses --since and --until flags into time cutoffs.
+func parseTimeCutoffs(printer *output.Printer, sinceFlag, untilFlag string) (time.Time, time.Time, error) {
+	var sinceCutoff, untilCutoff time.Time
+	var err error
+	if sinceFlag != "" {
+		if sinceCutoff, err = parseSinceValue(sinceFlag); err != nil {
+			userErr := output.NewUserError(err.Error())
+			printer.Error(userErr)
+			return time.Time{}, time.Time{}, userErr
+		}
+	}
+	if untilFlag != "" {
+		if untilCutoff, err = parseUntilValue(untilFlag); err != nil {
+			userErr := output.NewUserError(err.Error())
+			printer.Error(userErr)
+			return time.Time{}, time.Time{}, userErr
+		}
+	}
+	return sinceCutoff, untilCutoff, nil
+}
+
+// getEntriesByRangeWithFilters retrieves entries by commit range with time filters.
+func getEntriesByRangeWithFilters(
+	printer *output.Printer, storage *ledger.Storage,
+	rangeFlag string, sinceCutoff, untilCutoff time.Time,
+) ([]*ledger.Entry, error) {
+	entries, err := getEntriesByRange(printer, storage, rangeFlag)
+	if err != nil {
+		return nil, err
+	}
+	if !sinceCutoff.IsZero() {
+		entries = filterEntriesSince(entries, sinceCutoff)
+	}
+	if !untilCutoff.IsZero() {
+		entries = filterEntriesUntil(entries, untilCutoff)
+	}
+	return entries, nil
 }

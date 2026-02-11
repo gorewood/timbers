@@ -77,7 +77,12 @@ func runPending(cmd *cobra.Command, storage *ledger.Storage, countOnly bool) err
 
 	// Create storage if not injected
 	if storage == nil {
-		storage = ledger.NewStorage(nil)
+		var err error
+		storage, err = ledger.NewDefaultStorage()
+		if err != nil {
+			printer.Error(err)
+			return err
+		}
 	}
 
 	// Get pending commits

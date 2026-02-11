@@ -162,7 +162,11 @@ func runPrime(cmd *cobra.Command, storage *ledger.Storage, lastN int, verbose bo
 
 	// Create storage if not injected
 	if storage == nil {
-		storage = ledger.NewStorage(nil)
+		var err error
+		storage, err = ledger.NewDefaultStorage()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Gather all context
@@ -298,12 +302,9 @@ func outputPrimeJSON(printer *output.Printer, result *primeResult) error {
 
 // outputPrimeHuman outputs the result in human-readable format.
 func outputPrimeHuman(printer *output.Printer, result *primeResult) {
-	// Title
 	printer.Println("Timbers Session Context")
 	printer.Println("=======================")
 	printer.Println()
-
-	// Repository info
 	shortHead := result.Head
 	if len(shortHead) > 7 {
 		shortHead = shortHead[:7]
@@ -311,8 +312,6 @@ func outputPrimeHuman(printer *output.Printer, result *primeResult) {
 	printer.Print("Repository: %s (%s)\n", result.Repo, result.Branch)
 	printer.Print("HEAD: %s\n", shortHead)
 	printer.Println()
-
-	// Ledger status
 	printer.Println("Ledger Status")
 	printer.Println("-------------")
 	printer.Print("  Entries: %d\n", result.EntryCount)

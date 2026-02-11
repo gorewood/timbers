@@ -4,6 +4,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -22,26 +24,6 @@ type mockGitOpsForPending struct {
 	commitsErr      error
 	reachableResult []git.Commit
 	reachableErr    error
-	notes           map[string][]byte
-}
-
-func (m *mockGitOpsForPending) ReadNote(commit string) ([]byte, error) {
-	if data, ok := m.notes[commit]; ok {
-		return data, nil
-	}
-	return nil, nil
-}
-
-func (m *mockGitOpsForPending) WriteNote(string, string, bool) error {
-	return nil
-}
-
-func (m *mockGitOpsForPending) ListNotedCommits() ([]string, error) {
-	commits := make([]string, 0, len(m.notes))
-	for commit := range m.notes {
-		commits = append(commits, commit)
-	}
-	return commits, nil
 }
 
 func (m *mockGitOpsForPending) HEAD() (string, error) {
@@ -60,14 +42,47 @@ func (m *mockGitOpsForPending) GetDiffstat(fromRef, toRef string) (git.Diffstat,
 	return git.Diffstat{}, nil
 }
 
-func (m *mockGitOpsForPending) PushNotes(remote string) error {
-	return nil
-}
-
 func TestPendingCommand(t *testing.T) {
+	// Helper to create a test entry struct.
+	makeEntry := func(anchor string, created time.Time) *ledger.Entry {
+		return &ledger.Entry{
+			Schema:    ledger.SchemaVersion,
+			Kind:      ledger.KindEntry,
+			ID:        ledger.GenerateID(anchor, created),
+			CreatedAt: created,
+			UpdatedAt: created,
+			Workset: ledger.Workset{
+				AnchorCommit: anchor,
+				Commits:      []string{anchor},
+			},
+			Summary: ledger.Summary{
+				What: "Test entry",
+				Why:  "For testing",
+				How:  "Via test",
+			},
+		}
+	}
+
+	// Helper to write entry files into a temp dir and return FileStorage.
+	writeEntries := func(t *testing.T, entries ...*ledger.Entry) *ledger.FileStorage {
+		t.Helper()
+		dir := t.TempDir()
+		for _, entry := range entries {
+			data, err := entry.ToJSON()
+			if err != nil {
+				t.Fatalf("failed to serialize entry: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, entry.ID+".json"), data, 0o600); err != nil {
+				t.Fatalf("failed to write entry file: %v", err)
+			}
+		}
+		return ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	}
+
 	tests := []struct {
 		name           string
 		mock           *mockGitOpsForPending
+		files          func(t *testing.T) *ledger.FileStorage
 		countOnly      bool
 		jsonOutput     bool
 		wantCount      int
@@ -78,14 +93,14 @@ func TestPendingCommand(t *testing.T) {
 		{
 			name: "no entries - shows all reachable commits",
 			mock: &mockGitOpsForPending{
-				head:  "abc123def456",
-				notes: map[string][]byte{},
+				head: "abc123def456",
 				reachableResult: []git.Commit{
 					{SHA: "abc123def456", Short: "abc123d", Subject: "Third commit"},
 					{SHA: "def456789012", Short: "def4567", Subject: "Second commit"},
 					{SHA: "789012345678", Short: "7890123", Subject: "First commit"},
 				},
 			},
+			files:        nil,
 			wantCount:    3,
 			wantContains: []string{"Pending Commits", "Count: 3", "abc123d", "Third commit"},
 		},
@@ -93,13 +108,13 @@ func TestPendingCommand(t *testing.T) {
 			name: "has entry - shows commits since anchor",
 			mock: &mockGitOpsForPending{
 				head: "abc123def456",
-				notes: map[string][]byte{
-					"oldanchor1234": createTestEntry("oldanchor1234", time.Now().Add(-1*time.Hour)),
-				},
 				commits: []git.Commit{
 					{SHA: "abc123def456", Short: "abc123d", Subject: "New commit"},
 					{SHA: "def456789012", Short: "def4567", Subject: "Another new commit"},
 				},
+			},
+			files: func(t *testing.T) *ledger.FileStorage {
+				return writeEntries(t, makeEntry("oldanchor1234", time.Now().Add(-1*time.Hour)))
 			},
 			wantCount:    2,
 			wantContains: []string{"Pending Commits", "Count: 2", "abc123d", "New commit"},
@@ -107,11 +122,11 @@ func TestPendingCommand(t *testing.T) {
 		{
 			name: "no pending commits",
 			mock: &mockGitOpsForPending{
-				head: "abc123def456",
-				notes: map[string][]byte{
-					"abc123def456": createTestEntry("abc123def456", time.Now()),
-				},
+				head:    "abc123def456",
 				commits: []git.Commit{},
+			},
+			files: func(t *testing.T) *ledger.FileStorage {
+				return writeEntries(t, makeEntry("abc123def456", time.Now()))
 			},
 			wantCount:    0,
 			wantContains: []string{"No pending commits"},
@@ -119,13 +134,13 @@ func TestPendingCommand(t *testing.T) {
 		{
 			name: "count flag - shows count only",
 			mock: &mockGitOpsForPending{
-				head:  "abc123def456",
-				notes: map[string][]byte{},
+				head: "abc123def456",
 				reachableResult: []git.Commit{
 					{SHA: "abc123def456", Short: "abc123d", Subject: "Third commit"},
 					{SHA: "def456789012", Short: "def4567", Subject: "Second commit"},
 				},
 			},
+			files:          nil,
 			countOnly:      true,
 			wantCount:      2,
 			wantContains:   []string{"2"},
@@ -135,12 +150,12 @@ func TestPendingCommand(t *testing.T) {
 			name: "json output - structured format",
 			mock: &mockGitOpsForPending{
 				head: "abc123def456",
-				notes: map[string][]byte{
-					"oldanchor1234": createTestEntry("oldanchor1234", time.Now().Add(-1*time.Hour)),
-				},
 				commits: []git.Commit{
 					{SHA: "abc123def456", Short: "abc123d", Subject: "New commit"},
 				},
+			},
+			files: func(t *testing.T) *ledger.FileStorage {
+				return writeEntries(t, makeEntry("oldanchor1234", time.Now().Add(-1*time.Hour)))
 			},
 			jsonOutput:   true,
 			wantCount:    1,
@@ -149,11 +164,11 @@ func TestPendingCommand(t *testing.T) {
 		{
 			name: "json output - no pending",
 			mock: &mockGitOpsForPending{
-				head: "abc123def456",
-				notes: map[string][]byte{
-					"abc123def456": createTestEntry("abc123def456", time.Now()),
-				},
+				head:    "abc123def456",
 				commits: []git.Commit{},
+			},
+			files: func(t *testing.T) *ledger.FileStorage {
+				return writeEntries(t, makeEntry("abc123def456", time.Now()))
 			},
 			jsonOutput:   true,
 			wantCount:    0,
@@ -163,8 +178,14 @@ func TestPendingCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create storage with mock
-			storage := ledger.NewStorage(tt.mock)
+			// Build FileStorage from entries if provided
+			var files *ledger.FileStorage
+			if tt.files != nil {
+				files = tt.files(t)
+			}
+
+			// Create storage with mock and file storage
+			storage := ledger.NewStorage(tt.mock, files)
 
 			// Create command
 			cmd := newPendingCmdWithStorage(storage)
@@ -226,28 +247,6 @@ func TestPendingCommand(t *testing.T) {
 			}
 		})
 	}
-}
-
-// createTestEntry creates a minimal valid entry for testing.
-func createTestEntry(anchor string, created time.Time) []byte {
-	entry := &ledger.Entry{
-		Schema:    ledger.SchemaVersion,
-		Kind:      ledger.KindEntry,
-		ID:        ledger.GenerateID(anchor, created),
-		CreatedAt: created,
-		UpdatedAt: created,
-		Workset: ledger.Workset{
-			AnchorCommit: anchor,
-			Commits:      []string{anchor},
-		},
-		Summary: ledger.Summary{
-			What: "Test entry",
-			Why:  "For testing",
-			How:  "Via test",
-		},
-	}
-	data, _ := entry.ToJSON()
-	return data
 }
 
 // newPendingCmdWithStorage is a helper for tests that injects a storage.

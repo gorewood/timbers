@@ -174,7 +174,12 @@ func initQueryStorage(storage *ledger.Storage, printer *output.Printer) (*ledger
 	}
 
 	if storage == nil {
-		storage = ledger.NewStorage(nil)
+		var err error
+		storage, err = ledger.NewDefaultStorage()
+		if err != nil {
+			printer.Error(err)
+			return nil, err
+		}
 	}
 
 	return storage, nil

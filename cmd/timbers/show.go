@@ -48,28 +48,15 @@ Examples:
 func runShow(cmd *cobra.Command, storage *ledger.Storage, args []string, latestFlag bool) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
-	// Validate arguments
-	if len(args) == 0 && !latestFlag {
-		err := output.NewUserError("specify an entry ID or use --latest")
-		printer.Error(err)
-		return err
-	}
-	if len(args) > 0 && latestFlag {
-		err := output.NewUserError("cannot use both ID argument and --latest flag")
+	if err := validateShowArgs(args, latestFlag); err != nil {
 		printer.Error(err)
 		return err
 	}
 
-	// Check if we're in a git repo (only when using real git)
-	if storage == nil && !git.IsRepo() {
-		err := output.NewSystemError("not in a git repository")
+	storage, err := resolveShowStorage(storage)
+	if err != nil {
 		printer.Error(err)
 		return err
-	}
-
-	// Create storage if not injected
-	if storage == nil {
-		storage = ledger.NewStorage(nil)
 	}
 
 	// Get the entry
@@ -86,6 +73,28 @@ func runShow(cmd *cobra.Command, storage *ledger.Storage, args []string, latestF
 
 	outputShowHuman(printer, entry)
 	return nil
+}
+
+// validateShowArgs checks that the arguments are valid.
+func validateShowArgs(args []string, latestFlag bool) error {
+	if len(args) == 0 && !latestFlag {
+		return output.NewUserError("specify an entry ID or use --latest")
+	}
+	if len(args) > 0 && latestFlag {
+		return output.NewUserError("cannot use both ID argument and --latest flag")
+	}
+	return nil
+}
+
+// resolveShowStorage returns the injected storage or creates a default one.
+func resolveShowStorage(storage *ledger.Storage) (*ledger.Storage, error) {
+	if storage != nil {
+		return storage, nil
+	}
+	if !git.IsRepo() {
+		return nil, output.NewSystemError("not in a git repository")
+	}
+	return ledger.NewDefaultStorage()
 }
 
 // getShowEntry retrieves the entry based on arguments.

@@ -11,67 +11,18 @@ import (
 
 // --- Test Helpers ---
 
-// mockGitOps implements GitOps for testing.
+// mockGitOps implements GitOps for testing (git operations only, no storage).
 type mockGitOps struct {
-	notes         map[string][]byte // commit -> note content
-	notedCommits  []string
-	listNotesErr  error
-	readNoteErr   map[string]error
-	writeNoteErr  error
 	headSHA       string
 	headErr       error
 	logCommits    []git.Commit
 	logErr        error
 	reachableFrom []git.Commit
 	reachableErr  error
-	writtenNotes  []writtenNote // track writes for verification
-	existingNotes map[string]bool
-}
-
-type writtenNote struct {
-	commit  string
-	content string
-	force   bool
 }
 
 func newMockGitOps() *mockGitOps {
-	return &mockGitOps{
-		notes:         make(map[string][]byte),
-		readNoteErr:   make(map[string]error),
-		existingNotes: make(map[string]bool),
-	}
-}
-
-func (m *mockGitOps) ReadNote(commit string) ([]byte, error) {
-	if err, ok := m.readNoteErr[commit]; ok {
-		return nil, err
-	}
-	content, ok := m.notes[commit]
-	if !ok {
-		return nil, output.NewUserError("note not found for commit: " + commit)
-	}
-	return content, nil
-}
-
-func (m *mockGitOps) WriteNote(commit string, content string, force bool) error {
-	m.writtenNotes = append(m.writtenNotes, writtenNote{commit, content, force})
-	if m.writeNoteErr != nil {
-		return m.writeNoteErr
-	}
-	// Simulate conflict: if note exists and force=false
-	if m.existingNotes[commit] && !force {
-		return output.NewSystemError("note already exists")
-	}
-	m.notes[commit] = []byte(content)
-	m.existingNotes[commit] = true
-	return nil
-}
-
-func (m *mockGitOps) ListNotedCommits() ([]string, error) {
-	if m.listNotesErr != nil {
-		return nil, m.listNotesErr
-	}
-	return m.notedCommits, nil
+	return &mockGitOps{}
 }
 
 func (m *mockGitOps) HEAD() (string, error) {
@@ -99,10 +50,6 @@ func (m *mockGitOps) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
 	return git.Diffstat{}, nil
 }
 
-func (m *mockGitOps) PushNotes(remote string) error {
-	return nil
-}
-
 // makeTestEntry creates a valid entry for testing.
 func makeTestEntry(anchor string, createdAt time.Time) *Entry {
 	return &Entry{
@@ -123,158 +70,15 @@ func makeTestEntry(anchor string, createdAt time.Time) *Entry {
 	}
 }
 
-// --- ReadEntry Tests ---
-
-func TestReadEntry(t *testing.T) {
-	tests := []struct {
-		name        string
-		anchor      string
-		setupMock   func(*mockGitOps)
-		wantErr     bool
-		errContains string
-	}{
-		{
-			name:   "reads entry successfully",
-			anchor: "abc123def456",
-			setupMock: func(mock *mockGitOps) {
-				entry := makeTestEntry("abc123def456", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
-				data, _ := entry.ToJSON()
-				mock.notes["abc123def456"] = data
-			},
-			wantErr: false,
-		},
-		{
-			name:   "returns error for missing entry",
-			anchor: "nonexistent",
-			setupMock: func(mock *mockGitOps) {
-				// no note added
-			},
-			wantErr:     true,
-			errContains: "not found",
-		},
-		{
-			name:   "returns error for invalid JSON",
-			anchor: "baddata123",
-			setupMock: func(mock *mockGitOps) {
-				mock.notes["baddata123"] = []byte("not valid json")
-			},
-			wantErr:     true,
-			errContains: "parse",
-		},
+// newTestStorage creates a Storage with a temp dir containing the given entries.
+func newTestStorage(t *testing.T, mock *mockGitOps, entries ...*Entry) *Storage {
+	t.Helper()
+	dir := t.TempDir()
+	for _, entry := range entries {
+		writeTestEntryFile(t, dir, entry)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mock := newMockGitOps()
-			tt.setupMock(mock)
-			store := NewStorage(mock)
-
-			entry, err := store.ReadEntry(tt.anchor)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Error("expected error, got nil")
-				} else if tt.errContains != "" && !containsString(err.Error(), tt.errContains) {
-					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
-			}
-			if entry == nil {
-				t.Error("expected entry, got nil")
-				return
-			}
-			if entry.Workset.AnchorCommit != tt.anchor {
-				t.Errorf("anchor = %q, want %q", entry.Workset.AnchorCommit, tt.anchor)
-			}
-		})
-	}
-}
-
-// --- ListEntries Tests ---
-
-func TestListEntries(t *testing.T) {
-	tests := []struct {
-		name        string
-		setupMock   func(*mockGitOps)
-		wantCount   int
-		wantErr     bool
-		errContains string
-	}{
-		{
-			name: "lists multiple entries",
-			setupMock: func(mock *mockGitOps) {
-				e1 := makeTestEntry("commit1aaa", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
-				e2 := makeTestEntry("commit2bbb", time.Date(2026, 1, 15, 11, 0, 0, 0, time.UTC))
-				d1, _ := e1.ToJSON()
-				d2, _ := e2.ToJSON()
-				mock.notes["commit1aaa"] = d1
-				mock.notes["commit2bbb"] = d2
-				mock.notedCommits = []string{"commit1aaa", "commit2bbb"}
-			},
-			wantCount: 2,
-			wantErr:   false,
-		},
-		{
-			name: "returns empty list for empty ledger",
-			setupMock: func(mock *mockGitOps) {
-				mock.notedCommits = []string{}
-			},
-			wantCount: 0,
-			wantErr:   false,
-		},
-		{
-			name: "handles list error",
-			setupMock: func(mock *mockGitOps) {
-				mock.listNotesErr = output.NewSystemError("git notes list failed")
-			},
-			wantErr:     true,
-			errContains: "failed",
-		},
-		{
-			name: "skips entries with parse errors",
-			setupMock: func(mock *mockGitOps) {
-				e1 := makeTestEntry("goodcommit", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
-				d1, _ := e1.ToJSON()
-				mock.notes["goodcommit"] = d1
-				mock.notes["badcommit"] = []byte("invalid json")
-				mock.notedCommits = []string{"goodcommit", "badcommit"}
-			},
-			wantCount: 1, // only the valid one
-			wantErr:   false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mock := newMockGitOps()
-			tt.setupMock(mock)
-			store := NewStorage(mock)
-
-			entries, err := store.ListEntries()
-
-			if tt.wantErr {
-				if err == nil {
-					t.Error("expected error, got nil")
-				} else if tt.errContains != "" && !containsString(err.Error(), tt.errContains) {
-					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
-			}
-			if len(entries) != tt.wantCount {
-				t.Errorf("got %d entries, want %d", len(entries), tt.wantCount)
-			}
-		})
-	}
+	files := NewFileStorage(dir, noopGitAdd)
+	return NewStorage(mock, files)
 }
 
 // --- GetLatestEntry Tests ---
@@ -282,7 +86,7 @@ func TestListEntries(t *testing.T) {
 func TestGetLatestEntry(t *testing.T) {
 	tests := []struct {
 		name        string
-		setupMock   func(*mockGitOps)
+		entries     []*Entry
 		wantAnchor  string
 		wantNil     bool
 		wantErr     bool
@@ -290,47 +94,31 @@ func TestGetLatestEntry(t *testing.T) {
 	}{
 		{
 			name: "returns entry with latest created_at",
-			setupMock: func(mock *mockGitOps) {
-				older := makeTestEntry("oldercommit", time.Date(2026, 1, 10, 10, 0, 0, 0, time.UTC))
-				newer := makeTestEntry("newercommit", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
-				d1, _ := older.ToJSON()
-				d2, _ := newer.ToJSON()
-				mock.notes["oldercommit"] = d1
-				mock.notes["newercommit"] = d2
-				mock.notedCommits = []string{"oldercommit", "newercommit"}
+			entries: []*Entry{
+				makeTestEntry("oldercommit", time.Date(2026, 1, 10, 10, 0, 0, 0, time.UTC)),
+				makeTestEntry("newercommit", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
 			},
 			wantAnchor: "newercommit",
-			wantNil:    false,
-			wantErr:    false,
 		},
 		{
-			name: "returns ErrNoEntries for empty ledger",
-			setupMock: func(mock *mockGitOps) {
-				mock.notedCommits = []string{}
-			},
+			name:        "returns ErrNoEntries for empty ledger",
+			entries:     nil,
 			wantNil:     true,
 			wantErr:     true,
 			errContains: "no ledger entries",
 		},
 		{
 			name: "handles single entry",
-			setupMock: func(mock *mockGitOps) {
-				entry := makeTestEntry("onlycommit", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
-				data, _ := entry.ToJSON()
-				mock.notes["onlycommit"] = data
-				mock.notedCommits = []string{"onlycommit"}
+			entries: []*Entry{
+				makeTestEntry("onlycommit", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
 			},
 			wantAnchor: "onlycommit",
-			wantNil:    false,
-			wantErr:    false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := newMockGitOps()
-			tt.setupMock(mock)
-			store := NewStorage(mock)
+			store := newTestStorage(t, newMockGitOps(), tt.entries...)
 
 			entry, err := store.GetLatestEntry()
 
@@ -366,111 +154,12 @@ func TestGetLatestEntry(t *testing.T) {
 	}
 }
 
-// --- WriteEntry Tests ---
-
-func TestWriteEntry(t *testing.T) {
-	tests := []struct {
-		name        string
-		entry       *Entry
-		force       bool
-		setupMock   func(*mockGitOps)
-		wantErr     bool
-		wantCode    int
-		errContains string
-	}{
-		{
-			name:  "writes valid entry successfully",
-			entry: makeTestEntry("newcommit12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
-			force: false,
-			setupMock: func(mock *mockGitOps) {
-				// no existing note
-			},
-			wantErr: false,
-		},
-		{
-			name: "rejects invalid entry",
-			entry: &Entry{
-				// Missing required fields
-				Schema: SchemaVersion,
-				Kind:   KindEntry,
-			},
-			force:       false,
-			setupMock:   func(mock *mockGitOps) {},
-			wantErr:     true,
-			errContains: "missing required fields",
-		},
-		{
-			name:  "returns conflict when note exists and force=false",
-			entry: makeTestEntry("existingabc", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
-			force: false,
-			setupMock: func(mock *mockGitOps) {
-				// Need actual note content for ReadNote to succeed
-				existing := makeTestEntry("existingabc", time.Date(2026, 1, 14, 10, 0, 0, 0, time.UTC))
-				data, _ := existing.ToJSON()
-				mock.notes["existingabc"] = data
-				mock.existingNotes["existingabc"] = true
-			},
-			wantErr:  true,
-			wantCode: output.ExitConflict,
-		},
-		{
-			name:  "overwrites when force=true",
-			entry: makeTestEntry("existingdef", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
-			force: true,
-			setupMock: func(mock *mockGitOps) {
-				// Need actual note content for the existing entry
-				existing := makeTestEntry("existingdef", time.Date(2026, 1, 14, 10, 0, 0, 0, time.UTC))
-				data, _ := existing.ToJSON()
-				mock.notes["existingdef"] = data
-				mock.existingNotes["existingdef"] = true
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mock := newMockGitOps()
-			tt.setupMock(mock)
-			store := NewStorage(mock)
-
-			err := store.WriteEntry(tt.entry, tt.force)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Error("expected error, got nil")
-				} else {
-					if tt.errContains != "" && !containsString(err.Error(), tt.errContains) {
-						t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
-					}
-					if tt.wantCode != 0 {
-						code := output.GetExitCode(err)
-						if code != tt.wantCode {
-							t.Errorf("exit code = %d, want %d", code, tt.wantCode)
-						}
-					}
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
-			}
-
-			// Verify the note was written
-			if len(mock.writtenNotes) == 0 {
-				t.Error("expected note to be written")
-			}
-		})
-	}
-}
-
 // --- GetPendingCommits Tests ---
 
 func TestGetPendingCommits(t *testing.T) {
 	tests := []struct {
 		name            string
+		entries         []*Entry
 		setupMock       func(*mockGitOps)
 		wantCommitCount int
 		wantLatestNil   bool
@@ -479,12 +168,10 @@ func TestGetPendingCommits(t *testing.T) {
 	}{
 		{
 			name: "returns commits since latest entry",
+			entries: []*Entry{
+				makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
+			},
 			setupMock: func(mock *mockGitOps) {
-				// Setup latest entry
-				entry := makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
-				data, _ := entry.ToJSON()
-				mock.notes["anchorsha12"] = data
-				mock.notedCommits = []string{"anchorsha12"}
 				mock.headSHA = "headsha1234"
 				mock.logCommits = []git.Commit{
 					{SHA: "commit1abc", Short: "commit1"},
@@ -493,12 +180,11 @@ func TestGetPendingCommits(t *testing.T) {
 			},
 			wantCommitCount: 2,
 			wantLatestNil:   false,
-			wantErr:         false,
 		},
 		{
-			name: "returns all commits when no entries exist",
+			name:    "returns all commits when no entries exist",
+			entries: nil,
 			setupMock: func(mock *mockGitOps) {
-				mock.notedCommits = []string{}
 				mock.headSHA = "headsha1234"
 				mock.reachableFrom = []git.Commit{
 					{SHA: "commit1abc", Short: "commit1"},
@@ -508,24 +194,22 @@ func TestGetPendingCommits(t *testing.T) {
 			},
 			wantCommitCount: 3,
 			wantLatestNil:   true,
-			wantErr:         false,
 		},
 		{
 			name: "returns empty when HEAD is the anchor",
+			entries: []*Entry{
+				makeTestEntry("headisanchr", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
+			},
 			setupMock: func(mock *mockGitOps) {
-				entry := makeTestEntry("headisanchr", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
-				data, _ := entry.ToJSON()
-				mock.notes["headisanchr"] = data
-				mock.notedCommits = []string{"headisanchr"}
 				mock.headSHA = "headisanchr"
 				mock.logCommits = []git.Commit{} // no commits in range
 			},
 			wantCommitCount: 0,
 			wantLatestNil:   false,
-			wantErr:         false,
 		},
 		{
-			name: "handles HEAD error",
+			name:    "handles HEAD error",
+			entries: nil,
 			setupMock: func(mock *mockGitOps) {
 				mock.headErr = output.NewSystemError("failed to get HEAD")
 			},
@@ -538,7 +222,7 @@ func TestGetPendingCommits(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := newMockGitOps()
 			tt.setupMock(mock)
-			store := NewStorage(mock)
+			store := newTestStorage(t, mock, tt.entries...)
 
 			commits, latest, err := store.GetPendingCommits()
 
@@ -573,140 +257,78 @@ func TestGetPendingCommits(t *testing.T) {
 	}
 }
 
-// --- ListEntriesWithStats Tests ---
+// --- GetLastNEntries Tests ---
 
-func TestListEntriesWithStats(t *testing.T) {
+func TestGetLastNEntries(t *testing.T) {
+	older := makeTestEntry("oldercommit", time.Date(2026, 1, 10, 10, 0, 0, 0, time.UTC))
+	newer := makeTestEntry("newercommit", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+
 	tests := []struct {
-		name        string
-		setupMock   func(*mockGitOps)
-		wantEntries int
-		wantStats   *ListStats
-		wantErr     bool
+		name      string
+		entries   []*Entry
+		count     int
+		wantCount int
 	}{
 		{
-			name: "all valid timbers entries",
-			setupMock: func(mock *mockGitOps) {
-				e1 := makeTestEntry("commit1aaa", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
-				e2 := makeTestEntry("commit2bbb", time.Date(2026, 1, 15, 11, 0, 0, 0, time.UTC))
-				d1, _ := e1.ToJSON()
-				d2, _ := e2.ToJSON()
-				mock.notes["commit1aaa"] = d1
-				mock.notes["commit2bbb"] = d2
-				mock.notedCommits = []string{"commit1aaa", "commit2bbb"}
-			},
-			wantEntries: 2,
-			wantStats:   &ListStats{Total: 2, Parsed: 2, Skipped: 0, NotTimbers: 0, ParseErrors: 0},
-			wantErr:     false,
+			name:      "returns last N entries",
+			entries:   []*Entry{older, newer},
+			count:     1,
+			wantCount: 1,
 		},
 		{
-			name: "mixed timbers and non-timbers notes",
-			setupMock: func(mock *mockGitOps) {
-				// Valid timbers entry
-				e1 := makeTestEntry("timberscommit", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
-				d1, _ := e1.ToJSON()
-				mock.notes["timberscommit"] = d1
-
-				// Non-timbers JSON note (different schema)
-				mock.notes["othertoolcommit"] = []byte(`{"schema": "othertool/v1", "type": "annotation"}`)
-
-				// Invalid JSON note
-				mock.notes["badjsoncommit"] = []byte(`not valid json`)
-
-				mock.notedCommits = []string{"timberscommit", "othertoolcommit", "badjsoncommit"}
-			},
-			wantEntries: 1,
-			wantStats:   &ListStats{Total: 3, Parsed: 1, Skipped: 2, NotTimbers: 1, ParseErrors: 1},
-			wantErr:     false,
+			name:      "returns all when count exceeds total",
+			entries:   []*Entry{older, newer},
+			count:     10,
+			wantCount: 2,
 		},
 		{
-			name: "only non-timbers notes",
-			setupMock: func(mock *mockGitOps) {
-				mock.notes["other1"] = []byte(`{"schema": "beads/v1", "id": "bd-123"}`)
-				mock.notes["other2"] = []byte(`{"type": "review-comment"}`)
-				mock.notedCommits = []string{"other1", "other2"}
-			},
-			wantEntries: 0,
-			wantStats:   &ListStats{Total: 2, Parsed: 0, Skipped: 2, NotTimbers: 2, ParseErrors: 0},
-			wantErr:     false,
-		},
-		{
-			name: "empty notes",
-			setupMock: func(mock *mockGitOps) {
-				mock.notedCommits = []string{}
-			},
-			wantEntries: 0,
-			wantStats:   &ListStats{Total: 0, Parsed: 0, Skipped: 0, NotTimbers: 0, ParseErrors: 0},
-			wantErr:     false,
-		},
-		{
-			name: "list error propagates",
-			setupMock: func(mock *mockGitOps) {
-				mock.listNotesErr = output.NewSystemError("git notes list failed")
-			},
-			wantEntries: 0,
-			wantStats:   nil,
-			wantErr:     true,
+			name:      "returns empty for no entries",
+			entries:   nil,
+			count:     5,
+			wantCount: 0,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mock := newMockGitOps()
-			tt.setupMock(mock)
-			store := NewStorage(mock)
+			store := newTestStorage(t, newMockGitOps(), tt.entries...)
 
-			entries, stats, err := store.ListEntriesWithStats()
-
-			if tt.wantErr {
-				if err == nil {
-					t.Error("expected error, got nil")
-				}
-				return
-			}
-
+			entries, err := store.GetLastNEntries(tt.count)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
-
-			if len(entries) != tt.wantEntries {
-				t.Errorf("got %d entries, want %d", len(entries), tt.wantEntries)
-			}
-
-			if stats.Total != tt.wantStats.Total {
-				t.Errorf("stats.Total = %d, want %d", stats.Total, tt.wantStats.Total)
-			}
-			if stats.Parsed != tt.wantStats.Parsed {
-				t.Errorf("stats.Parsed = %d, want %d", stats.Parsed, tt.wantStats.Parsed)
-			}
-			if stats.Skipped != tt.wantStats.Skipped {
-				t.Errorf("stats.Skipped = %d, want %d", stats.Skipped, tt.wantStats.Skipped)
-			}
-			if stats.NotTimbers != tt.wantStats.NotTimbers {
-				t.Errorf("stats.NotTimbers = %d, want %d", stats.NotTimbers, tt.wantStats.NotTimbers)
-			}
-			if stats.ParseErrors != tt.wantStats.ParseErrors {
-				t.Errorf("stats.ParseErrors = %d, want %d", stats.ParseErrors, tt.wantStats.ParseErrors)
+			if len(entries) != tt.wantCount {
+				t.Errorf("got %d entries, want %d", len(entries), tt.wantCount)
 			}
 		})
 	}
 }
 
-func TestReadEntry_NotTimbersNote(t *testing.T) {
-	mock := newMockGitOps()
-	// Add a note with a non-timbers schema
-	mock.notes["othercommit"] = []byte(`{"schema": "other.tool/v1", "type": "annotation"}`)
+// --- Nil FileStorage Tests ---
 
-	store := NewStorage(mock)
+func TestStorage_NilFiles(t *testing.T) {
+	store := NewStorage(newMockGitOps(), nil)
 
-	_, err := store.ReadEntry("othercommit")
-	if err == nil {
-		t.Error("expected error, got nil")
-		return
+	entries, err := store.ListEntries()
+	if err != nil {
+		t.Errorf("ListEntries with nil files: %v", err)
+	}
+	if entries != nil {
+		t.Errorf("expected nil entries, got %d", len(entries))
 	}
 
-	if !errors.Is(err, ErrNotTimbersNote) {
-		t.Errorf("expected ErrNotTimbersNote, got %v", err)
+	_, latestErr := store.GetLatestEntry()
+	if !errors.Is(latestErr, ErrNoEntries) {
+		t.Errorf("expected ErrNoEntries, got %v", latestErr)
+	}
+
+	last, lastErr := store.GetLastNEntries(5)
+	if lastErr != nil {
+		t.Errorf("GetLastNEntries with nil files: %v", lastErr)
+	}
+	if len(last) != 0 {
+		t.Errorf("expected 0 entries, got %d", len(last))
 	}
 }
 

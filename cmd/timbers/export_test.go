@@ -14,54 +14,45 @@ import (
 )
 
 // mockGitOpsForExport implements ledger.GitOps for testing export command.
-type mockGitOpsForExport struct {
-	notes   map[string][]byte
-	commits map[string]git.Commit // Map commit SHA to commit
-}
-
-func (m *mockGitOpsForExport) ReadNote(commit string) ([]byte, error) {
-	if data, ok := m.notes[commit]; ok {
-		return data, nil
-	}
-	return nil, nil
-}
-
-func (m *mockGitOpsForExport) WriteNote(string, string, bool) error {
-	return nil
-}
-
-func (m *mockGitOpsForExport) ListNotedCommits() ([]string, error) {
-	commits := make([]string, 0, len(m.notes))
-	for commit := range m.notes {
-		commits = append(commits, commit)
-	}
-	return commits, nil
-}
+type mockGitOpsForExport struct{}
 
 func (m *mockGitOpsForExport) HEAD() (string, error) {
 	return "head123", nil
 }
 
-func (m *mockGitOpsForExport) Log(fromRef, toRef string) ([]git.Commit, error) {
-	// Simple implementation: return commits in the range
-	// For test purposes, we'll match based on being in the commits map
-	result := make([]git.Commit, 0, len(m.commits))
-	for _, commit := range m.commits {
-		result = append(result, commit)
-	}
-	return result, nil
-}
-
-func (m *mockGitOpsForExport) CommitsReachableFrom(sha string) ([]git.Commit, error) {
+func (m *mockGitOpsForExport) Log(_, _ string) ([]git.Commit, error) {
 	return nil, nil
 }
 
-func (m *mockGitOpsForExport) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
+func (m *mockGitOpsForExport) CommitsReachableFrom(_ string) ([]git.Commit, error) {
+	return nil, nil
+}
+
+func (m *mockGitOpsForExport) GetDiffstat(_, _ string) (git.Diffstat, error) {
 	return git.Diffstat{}, nil
 }
 
-func (m *mockGitOpsForExport) PushNotes(remote string) error {
-	return nil
+// writeExportEntryFile writes an entry JSON file to the given directory.
+func writeExportEntryFile(t *testing.T, dir string, data []byte) {
+	t.Helper()
+	entry, err := ledger.FromJSON(data)
+	if err != nil {
+		t.Fatalf("failed to parse entry: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, entry.ID+".json"), data, 0o600); err != nil {
+		t.Fatalf("failed to write entry file: %v", err)
+	}
+}
+
+// newExportTestStorage creates a storage from notes data using file-backed entries.
+func newExportTestStorage(t *testing.T, notes map[string][]byte) *ledger.Storage {
+	t.Helper()
+	dir := t.TempDir()
+	for _, data := range notes {
+		writeExportEntryFile(t, dir, data)
+	}
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	return ledger.NewStorage(&mockGitOpsForExport{}, files)
 }
 
 // TestExportCommand tests the export command with various inputs.
@@ -76,7 +67,6 @@ func TestExportCommand(t *testing.T) {
 		outFlag      string
 		jsonOutput   bool
 		notes        map[string][]byte
-		commits      map[string]git.Commit
 		wantErr      bool
 		wantContains []string
 	}{
@@ -193,11 +183,8 @@ func TestExportCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create storage with mock
-			storage := ledger.NewStorage(&mockGitOpsForExport{
-				notes:   tt.notes,
-				commits: tt.commits,
-			})
+			// Create storage with file-backed entries
+			storage := newExportTestStorage(t, tt.notes)
 
 			// Create command
 			cmd := newExportCmdInternal(storage)
@@ -268,11 +255,7 @@ func TestExportToDirectory(t *testing.T) {
 		"anchor2": createExportTestEntry("anchor2", "second", now),
 	}
 
-	// Create storage with mock
-	storage := ledger.NewStorage(&mockGitOpsForExport{
-		notes:   notes,
-		commits: map[string]git.Commit{},
-	})
+	storage := newExportTestStorage(t, notes)
 
 	// Test JSON export to directory
 	cmd := newExportCmdInternal(storage)
@@ -340,11 +323,7 @@ func TestExportMarkdownToDirectory(t *testing.T) {
 		"anchor1": createExportTestEntry("anchor1", "first", now),
 	}
 
-	// Create storage with mock
-	storage := ledger.NewStorage(&mockGitOpsForExport{
-		notes:   notes,
-		commits: map[string]git.Commit{},
-	})
+	storage := newExportTestStorage(t, notes)
 
 	// Test markdown export to directory
 	cmd := newExportCmdInternal(storage)
@@ -470,10 +449,7 @@ func TestExportWithTagFiltering(t *testing.T) {
 				"anchor4": entry4,
 			}
 
-			storage := ledger.NewStorage(&mockGitOpsForExport{
-				notes:   notes,
-				commits: map[string]git.Commit{},
-			})
+			storage := newExportTestStorage(t, notes)
 
 			cmd := newExportCmdInternal(storage)
 			cmd.PersistentFlags().Bool("json", false, "")
@@ -535,10 +511,7 @@ func TestExportTagFilteringWithTimeRange(t *testing.T) {
 		"anchor3": entry3,
 	}
 
-	storage := ledger.NewStorage(&mockGitOpsForExport{
-		notes:   notes,
-		commits: map[string]git.Commit{},
-	})
+	storage := newExportTestStorage(t, notes)
 
 	cmd := newExportCmdInternal(storage)
 	cmd.PersistentFlags().Bool("json", false, "")

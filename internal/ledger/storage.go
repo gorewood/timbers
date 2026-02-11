@@ -3,6 +3,7 @@ package ledger
 
 import (
 	"errors"
+	"path/filepath"
 	"sort"
 
 	"github.com/gorewood/timbers/internal/git"
@@ -14,40 +15,25 @@ var ErrNoEntries = errors.New("no ledger entries found")
 
 // ListStats contains statistics about listing entries.
 type ListStats struct {
-	Total       int // Total notes found
+	Total       int // Total JSON files found
 	Parsed      int // Successfully parsed as timbers entries
-	Skipped     int // Skipped (not timbers notes or parse errors)
+	Skipped     int // Skipped (not timbers entries or parse errors)
 	NotTimbers  int // Specifically: valid JSON but wrong schema
 	ParseErrors int // JSON parse failures
 }
 
 // GitOps defines the git operations required by Storage.
-// This allows injection of mock implementations for testing.
+// Entry storage is handled by FileStorage; this interface covers
+// commit history and diff operations only.
 type GitOps interface {
-	ReadNote(commit string) ([]byte, error)
-	WriteNote(commit string, content string, force bool) error
-	ListNotedCommits() ([]string, error)
 	HEAD() (string, error)
 	Log(fromRef, toRef string) ([]git.Commit, error)
 	CommitsReachableFrom(sha string) ([]git.Commit, error)
 	GetDiffstat(fromRef, toRef string) (git.Diffstat, error)
-	PushNotes(remote string) error
 }
 
 // realGitOps implements GitOps using the actual git package functions.
 type realGitOps struct{}
-
-func (realGitOps) ReadNote(commit string) ([]byte, error) {
-	return git.ReadNote(commit)
-}
-
-func (realGitOps) WriteNote(commit string, content string, force bool) error {
-	return git.WriteNote(commit, content, force)
-}
-
-func (realGitOps) ListNotedCommits() ([]string, error) {
-	return git.ListNotedCommits()
-}
 
 func (realGitOps) HEAD() (string, error) {
 	return git.HEAD()
@@ -65,80 +51,68 @@ func (realGitOps) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
 	return git.GetDiffstat(fromRef, toRef)
 }
 
-func (realGitOps) PushNotes(remote string) error {
-	return git.PushNotes(remote)
-}
-
-// Storage provides read/write access to ledger entries stored in git notes.
+// Storage provides read/write access to ledger entries stored as files in .timbers/.
 type Storage struct {
-	git GitOps
+	git   GitOps
+	files *FileStorage
 }
 
-// NewStorage creates a Storage that uses real git operations.
-func NewStorage(ops GitOps) *Storage {
+// NewStorage creates a Storage with the given git operations and file storage.
+// If ops is nil, uses real git operations.
+// If files is nil, entry operations return empty results.
+func NewStorage(ops GitOps, files *FileStorage) *Storage {
 	if ops == nil {
 		ops = realGitOps{}
 	}
-	return &Storage{git: ops}
+	return &Storage{git: ops, files: files}
 }
 
-// ReadEntry reads the entry attached to the given anchor commit.
-// Returns a user error (exit code 1) if the entry is not found.
-// Returns ErrNotTimbersNote if the note is valid JSON but not a timbers entry.
-// Returns a user error if the note content cannot be parsed as an Entry.
-func (s *Storage) ReadEntry(anchor string) (*Entry, error) {
-	data, err := s.git.ReadNote(anchor)
+// NewDefaultStorage creates a Storage using real git operations
+// and the .timbers/ directory in the repository root.
+func NewDefaultStorage() (*Storage, error) {
+	root, err := git.RepoRoot()
 	if err != nil {
 		return nil, err
 	}
-
-	entry, err := FromJSON(data)
-	if err != nil {
-		// Preserve ErrNotTimbersNote for callers that need to distinguish
-		if errors.Is(err, ErrNotTimbersNote) {
-			return nil, err
-		}
-		return nil, output.NewUserError("failed to parse entry: " + err.Error())
-	}
-
-	return entry, nil
+	files := NewFileStorage(filepath.Join(root, ".timbers"), DefaultGitAdd)
+	return NewStorage(nil, files), nil
 }
+
+// --- Entry CRUD (delegated to FileStorage) ---
 
 // ListEntries returns all entries in the ledger.
-// Entries with parse errors are skipped (logged but not returned).
-// Returns an empty slice if no entries exist.
+// Entries with parse errors are skipped.
+// Returns an empty slice if no entries exist or file storage is not configured.
 func (s *Storage) ListEntries() ([]*Entry, error) {
-	entries, _, err := s.ListEntriesWithStats()
-	return entries, err
+	if s.files == nil {
+		return nil, nil
+	}
+	return s.files.ListEntries()
 }
 
-// ListEntriesWithStats returns all entries plus statistics about skipped notes.
-// This is useful for transparency when the notes namespace contains non-timbers data.
+// ListEntriesWithStats returns all entries plus statistics about skipped files.
 func (s *Storage) ListEntriesWithStats() ([]*Entry, *ListStats, error) {
-	commits, err := s.git.ListNotedCommits()
-	if err != nil {
-		return nil, nil, err
+	if s.files == nil {
+		return nil, &ListStats{}, nil
 	}
+	return s.files.ListEntriesWithStats()
+}
 
-	stats := &ListStats{Total: len(commits)}
-	var entries []*Entry
+// WriteEntry writes an entry to the .timbers/ directory and stages it.
+// Validates the entry before writing.
+// If force is false and the entry file already exists, returns a conflict error.
+// If force is true, overwrites any existing file.
+func (s *Storage) WriteEntry(entry *Entry, force bool) error {
+	return s.files.WriteEntry(entry, force)
+}
 
-	for _, commit := range commits {
-		entry, readErr := s.ReadEntry(commit)
-		if readErr != nil {
-			stats.Skipped++
-			if errors.Is(readErr, ErrNotTimbersNote) {
-				stats.NotTimbers++
-			} else {
-				stats.ParseErrors++
-			}
-			continue
-		}
-		entries = append(entries, entry)
-		stats.Parsed++
+// GetEntryByID returns the entry with the given ID.
+// Returns a user error (exit code 1) if the entry is not found.
+func (s *Storage) GetEntryByID(id string) (*Entry, error) {
+	if s.files == nil {
+		return nil, output.NewUserError("entry not found: " + id)
 	}
-
-	return entries, stats, nil
+	return s.files.ReadEntry(id)
 }
 
 // GetLatestEntry returns the entry with the most recent created_at timestamp.
@@ -163,44 +137,32 @@ func (s *Storage) GetLatestEntry() (*Entry, error) {
 	return latest, nil
 }
 
-// WriteEntry writes an entry to git notes on its anchor commit.
-// Validates the entry before writing.
-// If force is false and a note already exists, returns a conflict error (exit code 3).
-// If force is true, overwrites any existing note.
-func (s *Storage) WriteEntry(entry *Entry, force bool) error {
-	// Validate before writing
-	if err := entry.Validate(); err != nil {
-		return output.NewUserError(err.Error())
-	}
-
-	// Check for existing note if not forcing
-	if !force {
-		_, err := s.git.ReadNote(entry.Workset.AnchorCommit)
-		if err == nil {
-			// Note exists
-			return output.NewConflictError("entry already exists for commit " + entry.Workset.AnchorCommit)
-		}
-		// Only proceed if error is "not found"
-		var exitErr *output.ExitError
-		if errors.As(err, &exitErr) && exitErr.Code != output.ExitUserError {
-			// Some other error (not "not found")
-			return err
-		}
-	}
-
-	// Serialize entry
-	data, err := entry.ToJSON()
+// GetLastNEntries returns the last N entries sorted by created_at descending.
+// Returns entries up to N; if fewer than N exist, returns all entries.
+// Returns an empty slice if no entries exist.
+func (s *Storage) GetLastNEntries(count int) ([]*Entry, error) {
+	entries, err := s.ListEntries()
 	if err != nil {
-		return output.NewSystemError("failed to serialize entry: " + err.Error())
+		return nil, err
 	}
 
-	// Write to git notes
-	if err := s.git.WriteNote(entry.Workset.AnchorCommit, string(data), force); err != nil {
-		return err
+	if len(entries) == 0 {
+		return []*Entry{}, nil
 	}
 
-	return nil
+	// Sort entries by CreatedAt descending (most recent first)
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[j].CreatedAt.Before(entries[i].CreatedAt)
+	})
+
+	// Return last N entries
+	if count >= len(entries) {
+		return entries, nil
+	}
+	return entries[:count], nil
 }
+
+// --- Git operations ---
 
 // GetPendingCommits returns commits that have not been documented since the last entry.
 // Returns:
@@ -247,51 +209,4 @@ func (s *Storage) LogRange(fromRef, toRef string) ([]git.Commit, error) {
 // GetDiffstat returns the change statistics for the given commit range.
 func (s *Storage) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
 	return s.git.GetDiffstat(fromRef, toRef)
-}
-
-// PushNotes pushes the notes ref to the given remote.
-func (s *Storage) PushNotes(remote string) error {
-	return s.git.PushNotes(remote)
-}
-
-// GetEntryByID returns the entry with the given ID.
-// Returns a user error (exit code 1) if the entry is not found.
-func (s *Storage) GetEntryByID(id string) (*Entry, error) {
-	entries, err := s.ListEntries()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, entry := range entries {
-		if entry.ID == id {
-			return entry, nil
-		}
-	}
-
-	return nil, output.NewUserError("entry not found: " + id)
-}
-
-// GetLastNEntries returns the last N entries sorted by created_at descending.
-// Returns entries up to N; if fewer than N exist, returns all entries.
-// Returns an empty slice if no entries exist.
-func (s *Storage) GetLastNEntries(count int) ([]*Entry, error) {
-	entries, err := s.ListEntries()
-	if err != nil {
-		return nil, err
-	}
-
-	if len(entries) == 0 {
-		return []*Entry{}, nil
-	}
-
-	// Sort entries by CreatedAt descending (most recent first)
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[j].CreatedAt.Before(entries[i].CreatedAt)
-	})
-
-	// Return last N entries
-	if count >= len(entries) {
-		return entries, nil
-	}
-	return entries[:count], nil
 }

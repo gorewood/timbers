@@ -4,6 +4,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -15,28 +17,7 @@ import (
 )
 
 // mockGitOpsForShow implements ledger.GitOps for testing show command.
-type mockGitOpsForShow struct {
-	notes map[string][]byte
-}
-
-func (m *mockGitOpsForShow) ReadNote(commit string) ([]byte, error) {
-	if data, ok := m.notes[commit]; ok {
-		return data, nil
-	}
-	return nil, nil
-}
-
-func (m *mockGitOpsForShow) WriteNote(string, string, bool) error {
-	return nil
-}
-
-func (m *mockGitOpsForShow) ListNotedCommits() ([]string, error) {
-	commits := make([]string, 0, len(m.notes))
-	for commit := range m.notes {
-		commits = append(commits, commit)
-	}
-	return commits, nil
-}
+type mockGitOpsForShow struct{}
 
 func (m *mockGitOpsForShow) HEAD() (string, error) {
 	return "abc123def456", nil
@@ -54,18 +35,26 @@ func (m *mockGitOpsForShow) GetDiffstat(fromRef, toRef string) (git.Diffstat, er
 	return git.Diffstat{}, nil
 }
 
-func (m *mockGitOpsForShow) PushNotes(remote string) error {
-	return nil
+// writeShowEntryFile writes an entry JSON file to the given directory.
+func writeShowEntryFile(t *testing.T, dir string, entry *ledger.Entry) {
+	t.Helper()
+	data, err := entry.ToJSON()
+	if err != nil {
+		t.Fatalf("failed to serialize entry: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, entry.ID+".json"), data, 0o600); err != nil {
+		t.Fatalf("failed to write entry file: %v", err)
+	}
 }
 
 func TestShowCommand(t *testing.T) {
 	now := time.Date(2026, 1, 15, 15, 4, 5, 0, time.UTC)
-	testEntry := createShowTestEntry("anchor123456", now)
+	testEntry := createShowTestEntryStruct("anchor123456", now)
 	testEntryID := ledger.GenerateID("anchor123456", now)
 
 	tests := []struct {
 		name           string
-		mock           *mockGitOpsForShow
+		entries        []*ledger.Entry // entries to write to temp dir; nil means no entries
 		args           []string
 		lastFlag       bool
 		jsonOutput     bool
@@ -74,81 +63,55 @@ func TestShowCommand(t *testing.T) {
 		wantNotContain []string
 	}{
 		{
-			name: "show by ID - found",
-			mock: &mockGitOpsForShow{
-				notes: map[string][]byte{
-					"anchor123456": testEntry,
-				},
-			},
+			name:         "show by ID - found",
+			entries:      []*ledger.Entry{testEntry},
 			args:         []string{testEntryID},
 			wantContains: []string{testEntryID, "Test entry", "For testing", "Via test", "anchor1"},
 		},
 		{
-			name: "show by ID - not found",
-			mock: &mockGitOpsForShow{
-				notes: map[string][]byte{},
-			},
+			name:         "show by ID - not found",
+			entries:      nil,
 			args:         []string{"nonexistent-id"},
 			wantErr:      true,
 			wantContains: []string{"entry not found"},
 		},
 		{
-			name: "show --latest - found",
-			mock: &mockGitOpsForShow{
-				notes: map[string][]byte{
-					"anchor123456": testEntry,
-				},
-			},
+			name:         "show --latest - found",
+			entries:      []*ledger.Entry{testEntry},
 			lastFlag:     true,
 			wantContains: []string{testEntryID, "Test entry"},
 		},
 		{
-			name: "show --latest - no entries",
-			mock: &mockGitOpsForShow{
-				notes: map[string][]byte{},
-			},
+			name:         "show --latest - no entries",
+			entries:      nil,
 			lastFlag:     true,
 			wantErr:      true,
 			wantContains: []string{"no entries found"},
 		},
 		{
-			name: "no ID and no --latest flag",
-			mock: &mockGitOpsForShow{
-				notes: map[string][]byte{},
-			},
+			name:         "no ID and no --latest flag",
+			entries:      nil,
 			wantErr:      true,
 			wantContains: []string{"specify an entry ID or use --latest"},
 		},
 		{
-			name: "both ID and --latest flag",
-			mock: &mockGitOpsForShow{
-				notes: map[string][]byte{
-					"anchor123456": testEntry,
-				},
-			},
+			name:         "both ID and --latest flag",
+			entries:      []*ledger.Entry{testEntry},
 			args:         []string{testEntryID},
 			lastFlag:     true,
 			wantErr:      true,
 			wantContains: []string{"cannot use both ID argument and --latest flag"},
 		},
 		{
-			name: "show --json - structured output",
-			mock: &mockGitOpsForShow{
-				notes: map[string][]byte{
-					"anchor123456": testEntry,
-				},
-			},
+			name:         "show --json - structured output",
+			entries:      []*ledger.Entry{testEntry},
 			args:         []string{testEntryID},
 			jsonOutput:   true,
 			wantContains: []string{`"id"`, `"summary"`, `"what"`, `"why"`, `"how"`},
 		},
 		{
-			name: "show --latest --json",
-			mock: &mockGitOpsForShow{
-				notes: map[string][]byte{
-					"anchor123456": testEntry,
-				},
-			},
+			name:         "show --latest --json",
+			entries:      []*ledger.Entry{testEntry},
 			lastFlag:     true,
 			jsonOutput:   true,
 			wantContains: []string{`"id"`, `"schema"`, `"workset"`},
@@ -157,8 +120,16 @@ func TestShowCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create storage with mock
-			storage := ledger.NewStorage(tt.mock)
+			// Create storage with file-backed entries
+			var files *ledger.FileStorage
+			if tt.entries != nil {
+				dir := t.TempDir()
+				for _, entry := range tt.entries {
+					writeShowEntryFile(t, dir, entry)
+				}
+				files = ledger.NewFileStorage(dir, func(_ string) error { return nil })
+			}
+			storage := ledger.NewStorage(&mockGitOpsForShow{}, files)
 
 			// Create command
 			cmd := newShowCmdWithStorage(storage)
@@ -253,13 +224,11 @@ func TestShowWithTags(t *testing.T) {
 			{System: "github", ID: "456"},
 		},
 	}
-	data, _ := entry.ToJSON()
 
-	storage := ledger.NewStorage(&mockGitOpsForShow{
-		notes: map[string][]byte{
-			"anchor123456": data,
-		},
-	})
+	dir := t.TempDir()
+	writeShowEntryFile(t, dir, entry)
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	storage := ledger.NewStorage(&mockGitOpsForShow{}, files)
 
 	cmd := newShowCmdWithStorage(storage)
 	if err := cmd.Flags().Set("latest", "true"); err != nil {
@@ -298,9 +267,9 @@ func TestShowWithTags(t *testing.T) {
 	}
 }
 
-// createShowTestEntry creates a minimal valid entry for testing show command.
-func createShowTestEntry(anchor string, created time.Time) []byte {
-	entry := &ledger.Entry{
+// createShowTestEntryStruct creates a minimal valid entry struct for testing show command.
+func createShowTestEntryStruct(anchor string, created time.Time) *ledger.Entry {
+	return &ledger.Entry{
 		Schema:    ledger.SchemaVersion,
 		Kind:      ledger.KindEntry,
 		ID:        ledger.GenerateID(anchor, created),
@@ -316,8 +285,6 @@ func createShowTestEntry(anchor string, created time.Time) []byte {
 			How:  "Via test",
 		},
 	}
-	data, _ := entry.ToJSON()
-	return data
 }
 
 // newShowCmdWithStorage is a helper for tests that injects a storage.

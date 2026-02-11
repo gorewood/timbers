@@ -294,7 +294,11 @@ func getDraftEntries(
 		return nil, err
 	}
 
-	storage := ledger.NewStorage(nil)
+	storage, err := ledger.NewDefaultStorage()
+	if err != nil {
+		printer.Error(err)
+		return nil, err
+	}
 	sinceCutoff, untilCutoff, err := parseTimeCutoffs(printer, sinceFlag, untilFlag)
 	if err != nil {
 		return nil, err
@@ -307,43 +311,4 @@ func getDraftEntries(
 		return getEntriesByTimeRange(printer, storage, sinceCutoff, untilCutoff, lastFlag, nil)
 	}
 	return getEntriesByLast(printer, storage, lastFlag, nil)
-}
-
-// parseTimeCutoffs parses --since and --until flags into time cutoffs.
-func parseTimeCutoffs(printer *output.Printer, sinceFlag, untilFlag string) (time.Time, time.Time, error) {
-	var sinceCutoff, untilCutoff time.Time
-	var err error
-	if sinceFlag != "" {
-		if sinceCutoff, err = parseSinceValue(sinceFlag); err != nil {
-			userErr := output.NewUserError(err.Error())
-			printer.Error(userErr)
-			return time.Time{}, time.Time{}, userErr
-		}
-	}
-	if untilFlag != "" {
-		if untilCutoff, err = parseUntilValue(untilFlag); err != nil {
-			userErr := output.NewUserError(err.Error())
-			printer.Error(userErr)
-			return time.Time{}, time.Time{}, userErr
-		}
-	}
-	return sinceCutoff, untilCutoff, nil
-}
-
-// getEntriesByRangeWithFilters retrieves entries by commit range with time filters.
-func getEntriesByRangeWithFilters(
-	printer *output.Printer, storage *ledger.Storage,
-	rangeFlag string, sinceCutoff, untilCutoff time.Time,
-) ([]*ledger.Entry, error) {
-	entries, err := getEntriesByRange(printer, storage, rangeFlag)
-	if err != nil {
-		return nil, err
-	}
-	if !sinceCutoff.IsZero() {
-		entries = filterEntriesSince(entries, sinceCutoff)
-	}
-	if !untilCutoff.IsZero() {
-		entries = filterEntriesUntil(entries, untilCutoff)
-	}
-	return entries, nil
 }
