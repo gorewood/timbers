@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+```markdown
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.3.0] - 2026-02-10
+
+### Added
+
+- Added `git.InitNotesRef()` to create an empty notes namespace during `init`, so `prime` works immediately without requiring a manual commit first
+- Added `NotesRefExists` guard to `prime` to exit silently when notes ref is missing, preventing no-op runs in uninitiated repos
+- Added TTY-aware lipgloss style sets to `doctor` and `init` output, following the existing `uninstall` pattern
+- Added tests for the `prime` silent-exit guard path
+- Added tests for the `doctor --fix` auto-install path
+
+### Changed
+
+- Switched Claude hooks from global to project-level by default; global install is now available via the `--global` flag
+- Changed git hooks from default-on (`--no-hooks` to skip) to opt-in (`--hooks` to enable), avoiding conflicts with tools like beads that rely on `pre-commit`
+- Renamed `warn` style to `skip` in `init` output styles for consistency
+- Renamed `gpt-5` alias to `gpt`
+- Updated `agent-dx-guide` documentation to reflect opt-in hooks and project-level defaults
+```
+
+
 ## [0.1.0] - 2026-02-10
 
 Initial public release.
