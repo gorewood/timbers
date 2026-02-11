@@ -144,10 +144,10 @@ release version:
 
     # Generate versioned changelog section
     if [ -n "$PREV_TAG" ]; then
-        SECTION=$(timbers draft changelog --range "$PREV_TAG"..HEAD \
+        SECTION=$(go run ./cmd/timbers draft changelog --range "$PREV_TAG"..HEAD \
             --append "This is release v${ver}" --model opus)
     else
-        SECTION=$(timbers draft changelog --last 50 \
+        SECTION=$(go run ./cmd/timbers draft changelog --last 50 \
             --append "This is release v${ver}" --model opus)
     fi
 
@@ -210,7 +210,7 @@ blog:
         echo "date = '${DATE}'"
         echo "+++"
         echo ""
-        timbers draft devblog --since 7d | claude -p --model opus
+        go run ./cmd/timbers draft devblog --since 7d | claude -p --model opus
     } > "$FILE"
     echo "Created: $FILE"
 
@@ -230,9 +230,9 @@ changelog version="":
         APPEND="--append 'This is release v{{version}}'"
     fi
     if [ -n "$PREV_TAG" ]; then
-        eval timbers draft changelog --range "$PREV_TAG"..HEAD $APPEND --model opus
+        eval go run ./cmd/timbers draft changelog --range "$PREV_TAG"..HEAD $APPEND --model opus
     else
-        eval timbers draft changelog --last 50 $APPEND --model opus
+        eval go run ./cmd/timbers draft changelog --last 50 $APPEND --model opus
     fi
 
 # =============================================================================
