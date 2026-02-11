@@ -64,6 +64,10 @@ internal/
     export/
         json.go       # JSON export formatting
         markdown.go   # Markdown export formatting
+    draft/
+        template.go   # Template loading and resolution
+        render.go     # Template rendering with entry data
+        builtin.go    # Embedded built-in templates
     output/
         human.go      # Human-readable output formatting
         json.go       # JSON output formatting

@@ -577,6 +577,32 @@ mytool setup --list           # Show available integrations
 
 For Claude Code, this means adding a `SessionStart` hook entry in the JSON settings file that runs `mytool prime` and injects the output into the session context. The agent starts every session with workflow state already loaded. The hook is a structured JSON entry, so install/remove operations are safe and don't disturb other tools' hook entries.
 
+**Concrete format** (Claude Code `settings.local.json`):
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mytool prime"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The `setup` command should merge this into existing settings without disturbing other hook entries or permissions.
+
+**Anti-pattern: shell script hooks.** An earlier approach wrote shell scripts to `.claude/hooks/user_prompt_submit.sh`. This is wrong — Claude Code reads hooks from JSON settings files, not shell scripts in a hooks directory. The shell scripts were silently ignored, producing 0% adoption despite appearing installed. Always use the editor's native hook format.
+
+**Development-time PATH requirement.** The hook references the binary by name (`mytool prime`), which requires the binary to be on PATH. During development, install early with `go install ./cmd/mytool` (or equivalent) so the hook works while you iterate. Without this, the hook silently fails and you don't get context injection — the exact integration you're trying to test.
+
 **Future integrations** might include: Cursor, Windsurf, Aider, Gemini CLI, Copilot.
 
 ### 7.6 Documentation Snippets: `onboard`
@@ -902,6 +928,9 @@ Installing git hooks by default during `init`. Git hooks are a shared resource �
 
 ### One Command Per Output Type
 Building a separate command for each document type (changelog, release-notes, etc.) instead of using a template system. This creates maintenance burden, inconsistent flags across commands, and limits user extensibility. Use `draft <template>` with a resolution chain (project > global > built-in) instead.
+
+### Wrong Hook Format
+Writing shell scripts to editor hook directories (e.g., `.claude/hooks/*.sh`) when the editor actually reads hooks from JSON settings files. The scripts are silently ignored. Always use the editor's native configuration format — for Claude Code, that's structured JSON entries in `settings.json` or `settings.local.json`, not shell scripts.
 
 ### Stdout Pollution When Piped
 Mixing diagnostic output (warnings, progress, hints) with data on stdout. When agents pipe output to LLMs or other tools, diagnostic noise breaks parsing. Route all non-data output to stderr.

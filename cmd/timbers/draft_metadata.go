@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorewood/timbers/internal/draft"
 	"github.com/gorewood/timbers/internal/ledger"
-	"github.com/gorewood/timbers/internal/prompt"
 )
 
 // draftFlags holds all draft command flags.
@@ -43,7 +43,7 @@ type generationMetadata struct {
 
 // buildGenerationMetadata creates metadata about the generation.
 func buildGenerationMetadata(
-	templateName string, tmpl *prompt.Template,
+	templateName string, tmpl *draft.Template,
 	entries []*ledger.Entry, model string,
 	selFlags draftSelectionFlags,
 ) generationMetadata {

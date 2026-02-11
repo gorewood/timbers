@@ -6,13 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorewood/timbers/internal/draft"
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
-	"github.com/gorewood/timbers/internal/prompt"
 )
 
 // buildRenderContext creates a RenderContext from entries and flags.
-func buildRenderContext(entries []*ledger.Entry, appendFlag string) *prompt.RenderContext {
+func buildRenderContext(entries []*ledger.Entry, appendFlag string) *draft.RenderContext {
 	repoName := ""
 	if root, rootErr := git.RepoRoot(); rootErr == nil {
 		repoName = filepath.Base(root)
@@ -26,7 +26,7 @@ func buildRenderContext(entries []*ledger.Entry, appendFlag string) *prompt.Rend
 	// Get project description from CLAUDE.md or default
 	projectDesc := getProjectDescription()
 
-	return &prompt.RenderContext{
+	return &draft.RenderContext{
 		Entries:            entries,
 		RepoName:           repoName,
 		Branch:             branch,

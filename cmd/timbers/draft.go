@@ -7,11 +7,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gorewood/timbers/internal/draft"
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
 	"github.com/gorewood/timbers/internal/llm"
 	"github.com/gorewood/timbers/internal/output"
-	"github.com/gorewood/timbers/internal/prompt"
 )
 
 // newDraftCmd creates the draft command.
@@ -86,7 +86,7 @@ func runDraft(cmd *cobra.Command, args []string, flags draftFlags) error {
 	templateName := args[0]
 
 	// Load template
-	tmpl, err := prompt.LoadTemplate(templateName)
+	tmpl, err := draft.LoadTemplate(templateName)
 	if err != nil {
 		userErr := output.NewUserError(fmt.Sprintf("template %q not found", templateName))
 		printer.Error(userErr)
@@ -104,7 +104,7 @@ func runDraft(cmd *cobra.Command, args []string, flags draftFlags) error {
 // runDraftRender renders the template with entries and outputs the result.
 func runDraftRender(
 	_ *cobra.Command, printer *output.Printer,
-	tmpl *prompt.Template, templateName string, flags draftFlags,
+	tmpl *draft.Template, templateName string, flags draftFlags,
 ) error {
 	// Validate entry selection flags
 	if flags.last == "" && flags.since == "" && flags.until == "" && flags.rng == "" {
@@ -123,7 +123,7 @@ func runDraftRender(
 	renderCtx := buildRenderContext(entries, flags.appendText)
 
 	// Render template
-	rendered, err := prompt.Render(tmpl, renderCtx)
+	rendered, err := draft.Render(tmpl, renderCtx)
 	if err != nil {
 		sysErr := output.NewSystemError(fmt.Sprintf("failed to render: %v", err))
 		printer.Error(sysErr)
@@ -164,7 +164,7 @@ func runDraftRender(
 // runDraftWithLLM sends the rendered prompt to an LLM and outputs the response.
 func runDraftWithLLM(
 	printer *output.Printer, rendered, templateName string,
-	tmpl *prompt.Template, entries []*ledger.Entry,
+	tmpl *draft.Template, entries []*ledger.Entry,
 	modelFlag, providerFlag string,
 	withFrontmatter bool, selFlags draftSelectionFlags,
 ) error {
@@ -220,7 +220,7 @@ func runDraftWithLLM(
 
 // runDraftList lists available templates.
 func runDraftList(printer *output.Printer) error {
-	templates, err := prompt.ListTemplates()
+	templates, err := draft.ListTemplates()
 	if err != nil {
 		sysErr := output.NewSystemError(fmt.Sprintf("failed to list templates: %v", err))
 		printer.Error(sysErr)
@@ -234,7 +234,7 @@ func runDraftList(printer *output.Printer) error {
 	}
 
 	// Group by source for human output
-	bySource := make(map[string][]prompt.TemplateInfo)
+	bySource := make(map[string][]draft.TemplateInfo)
 	for _, t := range templates {
 		bySource[t.Source] = append(bySource[t.Source], t)
 	}
@@ -267,7 +267,7 @@ func runDraftList(printer *output.Printer) error {
 }
 
 // runDraftShow shows template content without rendering.
-func runDraftShow(printer *output.Printer, tmpl *prompt.Template) error {
+func runDraftShow(printer *output.Printer, tmpl *draft.Template) error {
 	if printer.IsJSON() {
 		return printer.Success(map[string]any{
 			"name":        tmpl.Name,
