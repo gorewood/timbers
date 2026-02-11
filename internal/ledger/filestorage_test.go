@@ -29,7 +29,14 @@ func writeTestEntryFile(t *testing.T, dir string, entry *Entry) {
 	if err != nil {
 		t.Fatalf("failed to serialize test entry: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, entry.ID+".json"), data, 0o600); err != nil {
+	entryDir := dir
+	if sub := EntryDateDir(entry.ID); sub != "" {
+		entryDir = filepath.Join(dir, sub)
+	}
+	if err := os.MkdirAll(entryDir, 0o755); err != nil {
+		t.Fatalf("failed to create entry directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(entryDir, entry.ID+".json"), data, 0o600); err != nil {
 		t.Fatalf("failed to write test entry file: %v", err)
 	}
 }
@@ -38,6 +45,21 @@ func writeRawFile(t *testing.T, dir, name string, content []byte) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), content, 0o600); err != nil {
 		t.Fatalf("failed to write test file %s: %v", name, err)
+	}
+}
+
+// writeRawEntryFile writes raw content for an entry-like ID in the correct date subdirectory.
+func writeRawEntryFile(t *testing.T, dir, id string, content []byte) {
+	t.Helper()
+	entryDir := dir
+	if sub := EntryDateDir(id); sub != "" {
+		entryDir = filepath.Join(dir, sub)
+	}
+	if err := os.MkdirAll(entryDir, 0o755); err != nil {
+		t.Fatalf("failed to create entry directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(entryDir, id+".json"), content, 0o600); err != nil {
+		t.Fatalf("failed to write test file %s: %v", id, err)
 	}
 }
 
@@ -71,7 +93,7 @@ func TestFileStorage_ReadEntry(t *testing.T) {
 		{
 			name: "returns error for invalid JSON",
 			setupDir: func(t *testing.T, dir string) {
-				writeRawFile(t, dir, "tb_2026-01-15T10:00:00Z_baddat.json", []byte("not json"))
+				writeRawEntryFile(t, dir, "tb_2026-01-15T10:00:00Z_baddat", []byte("not json"))
 			},
 			entryID:     "tb_2026-01-15T10:00:00Z_baddat",
 			wantErr:     true,
@@ -80,7 +102,7 @@ func TestFileStorage_ReadEntry(t *testing.T) {
 		{
 			name: "returns ErrNotTimbersNote for non-timbers JSON",
 			setupDir: func(t *testing.T, dir string) {
-				writeRawFile(t, dir, "tb_2026-01-15T10:00:00Z_othert.json",
+				writeRawEntryFile(t, dir, "tb_2026-01-15T10:00:00Z_othert",
 					[]byte(`{"schema": "other.tool/v1", "type": "annotation"}`))
 			},
 			entryID:     "tb_2026-01-15T10:00:00Z_othert",
@@ -178,7 +200,7 @@ func TestFileStorage_ListEntries(t *testing.T) {
 			wantCount: 1,
 		},
 		{
-			name: "ignores subdirectories",
+			name: "walks into subdirectories",
 			setupDir: func(t *testing.T, dir string) {
 				writeTestEntryFile(t, dir, makeTestEntry("goodcommit", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)))
 				if err := os.MkdirAll(filepath.Join(dir, "subdir"), 0o755); err != nil {
@@ -396,7 +418,8 @@ func TestFileStorage_WriteEntry(t *testing.T) {
 			}
 
 			// Verify file exists with correct content
-			path := filepath.Join(dir, tt.entry.ID+".json")
+			sub := EntryDateDir(tt.entry.ID)
+			path := filepath.Join(dir, sub, tt.entry.ID+".json")
 			data, readErr := os.ReadFile(path)
 			if readErr != nil {
 				t.Fatalf("entry file not found: %v", readErr)
@@ -439,7 +462,8 @@ func TestFileStorage_WriteEntry_GitAddError(t *testing.T) {
 	}
 
 	// File should still exist (rename succeeded before git add failed)
-	path := filepath.Join(dir, entry.ID+".json")
+	sub := EntryDateDir(entry.ID)
+	path := filepath.Join(dir, sub, entry.ID+".json")
 	if _, statErr := os.Stat(path); statErr != nil {
 		t.Errorf("entry file should still exist after git add failure: %v", statErr)
 	}
@@ -523,14 +547,19 @@ func TestFileStorage_WriteEntry_NoTempFilesLeftBehind(t *testing.T) {
 		t.Fatalf("WriteEntry failed: %v", err)
 	}
 
-	// Check that no temp files remain
-	dirEntries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("failed to read dir: %v", err)
-	}
-	for _, dirEntry := range dirEntries {
-		if name := dirEntry.Name(); len(name) > 0 && name[0] == '.' {
-			t.Errorf("temp file left behind: %s", name)
+	// Check that no temp files remain (walk entire tree)
+	walkErr := filepath.WalkDir(dir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
+		if !d.IsDir() {
+			if name := d.Name(); len(name) > 0 && name[0] == '.' {
+				t.Errorf("temp file left behind: %s", path)
+			}
+		}
+		return nil
+	})
+	if walkErr != nil {
+		t.Fatalf("failed to walk dir: %v", walkErr)
 	}
 }

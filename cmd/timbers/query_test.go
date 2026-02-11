@@ -31,14 +31,21 @@ func (m *mockGitOpsForQuery) GetDiffstat(fromRef, toRef string) (git.Diffstat, e
 	return git.Diffstat{}, nil
 }
 
-// writeQueryEntryFile writes an entry JSON file to the given directory.
+// writeQueryEntryFile writes an entry JSON file to the correct date subdirectory.
 func writeQueryEntryFile(t *testing.T, dir string, entry *ledger.Entry) {
 	t.Helper()
 	data, err := entry.ToJSON()
 	if err != nil {
 		t.Fatalf("failed to serialize entry: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, entry.ID+".json"), data, 0o600); err != nil {
+	entryDir := dir
+	if sub := ledger.EntryDateDir(entry.ID); sub != "" {
+		entryDir = filepath.Join(dir, sub)
+	}
+	if err := os.MkdirAll(entryDir, 0o755); err != nil {
+		t.Fatalf("failed to create entry dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(entryDir, entry.ID+".json"), data, 0o600); err != nil {
 		t.Fatalf("failed to write entry file: %v", err)
 	}
 }

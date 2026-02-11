@@ -4,7 +4,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -275,15 +274,8 @@ func TestBatchLog_MultipleEntries(t *testing.T) {
 	}
 
 	// Verify entries were written to directory
-	dirEntries, _ := os.ReadDir(dir)
-	jsonFiles := 0
-	for _, de := range dirEntries {
-		if strings.HasSuffix(de.Name(), ".json") {
-			jsonFiles++
-		}
-	}
-	if jsonFiles != 2 {
-		t.Errorf("expected 2 entry files written, got %d", jsonFiles)
+	if n := countJSONFilesInDir(dir); n != 2 {
+		t.Errorf("expected 2 entry files written, got %d", n)
 	}
 }
 
@@ -360,15 +352,8 @@ func TestBatchLog_DryRun(t *testing.T) {
 	}
 
 	// Should NOT have written any entry files
-	dirEntries, _ := os.ReadDir(dir)
-	jsonFiles := 0
-	for _, de := range dirEntries {
-		if strings.HasSuffix(de.Name(), ".json") {
-			jsonFiles++
-		}
-	}
-	if jsonFiles != 0 {
-		t.Errorf("expected no entry files in dry-run mode, got %d", jsonFiles)
+	if n := countJSONFilesInDir(dir); n != 0 {
+		t.Errorf("expected no entry files in dry-run mode, got %d", n)
 	}
 }
 

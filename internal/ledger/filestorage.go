@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,8 +20,8 @@ func DefaultGitAdd(path string) error {
 	return err
 }
 
-// FileStorage provides file-based storage for ledger entries in a flat directory.
-// Each entry is stored as a JSON file named <entry-id>.json.
+// FileStorage provides file-based storage for ledger entries in YYYY/MM/DD subdirectories.
+// Each entry is stored as a JSON file at YYYY/MM/DD/<entry-id>.json.
 type FileStorage struct {
 	dir    string
 	gitAdd GitAddFunc
@@ -46,9 +47,32 @@ func (fs *FileStorage) DirExists() bool {
 	return err == nil && info.IsDir()
 }
 
+// EntryDateDir extracts the YYYY/MM/DD relative path from an entry ID.
+// Entry IDs have the format: tb_YYYY-MM-DDT...
+// Returns empty string if the ID format is unexpected.
+func EntryDateDir(id string) string {
+	if len(id) >= 13 && id[:3] == "tb_" {
+		datePart := id[3:13] // "2026-01-19"
+		parts := strings.SplitN(datePart, "-", 3)
+		if len(parts) == 3 {
+			return filepath.Join(parts[0], parts[1], parts[2])
+		}
+	}
+	return ""
+}
+
+// entryDir returns the directory for an entry ID (root/YYYY/MM/DD).
+// Falls back to the root storage directory if the ID format is unexpected.
+func (fs *FileStorage) entryDir(id string) string {
+	if sub := EntryDateDir(id); sub != "" {
+		return filepath.Join(fs.dir, sub)
+	}
+	return fs.dir
+}
+
 // entryPath returns the file path for an entry ID.
 func (fs *FileStorage) entryPath(id string) string {
-	return filepath.Join(fs.dir, id+".json")
+	return filepath.Join(fs.entryDir(id), id+".json")
 }
 
 // ReadEntry reads the entry with the given ID from the storage directory.
@@ -87,24 +111,19 @@ func (fs *FileStorage) ListEntries() ([]*Entry, error) {
 // Only .json files are considered; directories and other files are ignored.
 // Returns empty results if the directory does not exist.
 func (fs *FileStorage) ListEntriesWithStats() ([]*Entry, *ListStats, error) {
-	dirEntries, err := os.ReadDir(fs.dir)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, &ListStats{}, nil
-		}
-		return nil, nil, output.NewSystemErrorWithCause("failed to read storage directory", err)
-	}
-
 	stats := &ListStats{}
 	var entries []*Entry
 
-	for _, dirEntry := range dirEntries {
-		if dirEntry.IsDir() || !strings.HasSuffix(dirEntry.Name(), ".json") {
-			continue
+	err := filepath.WalkDir(fs.dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".json") {
+			return nil
 		}
 
 		stats.Total++
-		id := strings.TrimSuffix(dirEntry.Name(), ".json")
+		id := strings.TrimSuffix(d.Name(), ".json")
 		entry, readErr := fs.ReadEntry(id)
 		if readErr != nil {
 			stats.Skipped++
@@ -113,10 +132,17 @@ func (fs *FileStorage) ListEntriesWithStats() ([]*Entry, *ListStats, error) {
 			} else {
 				stats.ParseErrors++
 			}
-			continue
+			return nil
 		}
 		entries = append(entries, entry)
 		stats.Parsed++
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, &ListStats{}, nil
+		}
+		return nil, nil, output.NewSystemErrorWithCause("failed to walk storage directory", err)
 	}
 
 	return entries, stats, nil
@@ -145,33 +171,43 @@ func (fs *FileStorage) WriteEntry(entry *Entry, force bool) error {
 		return output.NewSystemError("failed to serialize entry: " + err.Error())
 	}
 
-	// Write to temp file in same directory for atomic rename
-	tmpFile, err := os.CreateTemp(fs.dir, ".tmp-*.json")
+	// Ensure the date directory exists
+	if err = os.MkdirAll(fs.entryDir(entry.ID), 0o755); err != nil {
+		return output.NewSystemErrorWithCause("failed to create entry directory", err)
+	}
+
+	if err = atomicWrite(path, data); err != nil {
+		return output.NewSystemErrorWithCause("failed to write entry", err)
+	}
+
+	if err = fs.gitAdd(path); err != nil {
+		return output.NewSystemErrorWithCause("failed to stage entry file", err)
+	}
+
+	return nil
+}
+
+// atomicWrite writes data to path using write-to-temp-then-rename.
+// The temp file is created in the same directory as path.
+func atomicWrite(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	tmpFile, err := os.CreateTemp(dir, ".tmp-*.json")
 	if err != nil {
-		return output.NewSystemErrorWithCause("failed to create temp file", err)
+		return fmt.Errorf("create temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
-
-	// Clean up temp file on any error (no-op after successful rename)
 	defer func() { _ = os.Remove(tmpPath) }()
 
 	if _, err := tmpFile.Write(data); err != nil {
 		_ = tmpFile.Close()
-		return output.NewSystemErrorWithCause("failed to write entry data", err)
+		return fmt.Errorf("write data: %w", err)
 	}
-
 	if err := tmpFile.Close(); err != nil {
-		return output.NewSystemErrorWithCause("failed to close temp file", err)
+		return fmt.Errorf("close temp file: %w", err)
 	}
-
 	if err := os.Rename(tmpPath, path); err != nil {
-		return output.NewSystemErrorWithCause("failed to rename temp file", err)
+		return fmt.Errorf("rename temp file: %w", err)
 	}
-
-	if err := fs.gitAdd(path); err != nil {
-		return output.NewSystemErrorWithCause("failed to stage entry file", err)
-	}
-
 	return nil
 }
 

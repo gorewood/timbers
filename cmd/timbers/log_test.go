@@ -16,6 +16,29 @@ import (
 	"github.com/gorewood/timbers/internal/output"
 )
 
+// countJSONFilesInDir walks dir recursively and counts .json files.
+func countJSONFilesInDir(dir string) int {
+	count := 0
+	_ = filepath.WalkDir(dir, func(_ string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && strings.HasSuffix(d.Name(), ".json") {
+			count++
+		}
+		return nil
+	})
+	return count
+}
+
+// walkJSONFiles calls callback for each .json file found recursively under dir.
+func walkJSONFiles(dir string, callback func(path string, data []byte)) {
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && strings.HasSuffix(d.Name(), ".json") {
+			data, _ := os.ReadFile(path)
+			callback(path, data)
+		}
+		return nil
+	})
+}
+
 // mockGitOpsForLog implements ledger.GitOps for testing log command.
 type mockGitOpsForLog struct {
 	head            string
@@ -83,15 +106,8 @@ func TestLogCommand(t *testing.T) {
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
 			checkDir: func(t *testing.T, dir string) {
-				entries, _ := os.ReadDir(dir)
-				jsonFiles := 0
-				for _, e := range entries {
-					if strings.HasSuffix(e.Name(), ".json") {
-						jsonFiles++
-					}
-				}
-				if jsonFiles != 1 {
-					t.Errorf("expected 1 entry file written, got %d", jsonFiles)
+				if n := countJSONFilesInDir(dir); n != 1 {
+					t.Errorf("expected 1 entry file written, got %d", n)
 				}
 			},
 		},
@@ -113,17 +129,12 @@ func TestLogCommand(t *testing.T) {
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
 			checkDir: func(t *testing.T, dir string) {
-				entries, _ := os.ReadDir(dir)
-				for _, e := range entries {
-					if !strings.HasSuffix(e.Name(), ".json") {
-						continue
-					}
-					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+				walkJSONFiles(dir, func(_ string, data []byte) {
 					content := string(data)
 					if !strings.Contains(content, "security") || !strings.Contains(content, "auth") {
 						t.Error("expected tags to be in written entry")
 					}
-				}
+				})
 			},
 		},
 		{
@@ -144,17 +155,12 @@ func TestLogCommand(t *testing.T) {
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
 			checkDir: func(t *testing.T, dir string) {
-				entries, _ := os.ReadDir(dir)
-				for _, e := range entries {
-					if !strings.HasSuffix(e.Name(), ".json") {
-						continue
-					}
-					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+				walkJSONFiles(dir, func(_ string, data []byte) {
 					content := string(data)
 					if !strings.Contains(content, "beads") || !strings.Contains(content, "bd-abc123") {
 						t.Error("expected work items to be in written entry")
 					}
-				}
+				})
 			},
 		},
 		{
@@ -172,17 +178,12 @@ func TestLogCommand(t *testing.T) {
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
 			checkDir: func(t *testing.T, dir string) {
-				entries, _ := os.ReadDir(dir)
-				for _, e := range entries {
-					if !strings.HasSuffix(e.Name(), ".json") {
-						continue
-					}
-					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+				walkJSONFiles(dir, func(_ string, data []byte) {
 					content := string(data)
 					if !strings.Contains(content, "Minor change") {
 						t.Error("expected 'Minor change' to be in written entry for --minor mode")
 					}
-				}
+				})
 			},
 		},
 		{
@@ -200,15 +201,8 @@ func TestLogCommand(t *testing.T) {
 			wantErr:      false,
 			wantContains: []string{"Dry Run Preview", "Test feature", "Testing", "Test code"},
 			checkDir: func(t *testing.T, dir string) {
-				entries, _ := os.ReadDir(dir)
-				jsonFiles := 0
-				for _, e := range entries {
-					if strings.HasSuffix(e.Name(), ".json") {
-						jsonFiles++
-					}
-				}
-				if jsonFiles != 0 {
-					t.Errorf("expected no entries written in dry-run mode, got %d", jsonFiles)
+				if n := countJSONFilesInDir(dir); n != 0 {
+					t.Errorf("expected no entries written in dry-run mode, got %d", n)
 				}
 			},
 		},
@@ -357,17 +351,12 @@ func TestLogCommand(t *testing.T) {
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
 			checkDir: func(t *testing.T, dir string) {
-				entries, _ := os.ReadDir(dir)
-				for _, e := range entries {
-					if !strings.HasSuffix(e.Name(), ".json") {
-						continue
-					}
-					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+				walkJSONFiles(dir, func(_ string, data []byte) {
 					content := string(data)
 					if !strings.Contains(content, "custom123456") {
 						t.Error("expected entry written with custom anchor commit")
 					}
-				}
+				})
 			},
 		},
 	}
@@ -702,12 +691,7 @@ func TestLogCommandAutoMode(t *testing.T) {
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
 			checkDir: func(t *testing.T, dir string) {
-				entries, _ := os.ReadDir(dir)
-				for _, e := range entries {
-					if !strings.HasSuffix(e.Name(), ".json") {
-						continue
-					}
-					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+				walkJSONFiles(dir, func(_ string, data []byte) {
 					content := string(data)
 					if !strings.Contains(content, "Add feature X; Fix tests") {
 						t.Errorf("expected combined subjects in entry, got: %s", content)
@@ -715,7 +699,7 @@ func TestLogCommandAutoMode(t *testing.T) {
 					if !strings.Contains(content, "Auto-documented") {
 						t.Errorf("expected Auto-documented default in entry, got: %s", content)
 					}
-				}
+				})
 			},
 		},
 		{
@@ -738,12 +722,7 @@ func TestLogCommandAutoMode(t *testing.T) {
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
 			checkDir: func(t *testing.T, dir string) {
-				entries, _ := os.ReadDir(dir)
-				for _, e := range entries {
-					if !strings.HasSuffix(e.Name(), ".json") {
-						continue
-					}
-					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+				walkJSONFiles(dir, func(_ string, data []byte) {
 					content := string(data)
 					if !strings.Contains(content, "Fix auth bug") {
 						t.Errorf("expected subject as what, got: %s", content)
@@ -754,7 +733,7 @@ func TestLogCommandAutoMode(t *testing.T) {
 					if !strings.Contains(content, "Added null check to auth handler.") {
 						t.Errorf("expected second paragraph as how, got: %s", content)
 					}
-				}
+				})
 			},
 		},
 		{
@@ -772,12 +751,7 @@ func TestLogCommandAutoMode(t *testing.T) {
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
 			checkDir: func(t *testing.T, dir string) {
-				entries, _ := os.ReadDir(dir)
-				for _, e := range entries {
-					if !strings.HasSuffix(e.Name(), ".json") {
-						continue
-					}
-					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+				walkJSONFiles(dir, func(_ string, data []byte) {
 					content := string(data)
 					if !strings.Contains(content, "Custom what") {
 						t.Errorf("expected custom what in entry, got: %s", content)
@@ -785,7 +759,7 @@ func TestLogCommandAutoMode(t *testing.T) {
 					if strings.Contains(content, "Original subject") {
 						t.Errorf("should not contain original subject when overridden, got: %s", content)
 					}
-				}
+				})
 			},
 		},
 		{
@@ -808,12 +782,7 @@ func TestLogCommandAutoMode(t *testing.T) {
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
 			checkDir: func(t *testing.T, dir string) {
-				entries, _ := os.ReadDir(dir)
-				for _, e := range entries {
-					if !strings.HasSuffix(e.Name(), ".json") {
-						continue
-					}
-					data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+				walkJSONFiles(dir, func(_ string, data []byte) {
 					content := string(data)
 					if !strings.Contains(content, "Custom why") {
 						t.Errorf("expected custom why in entry, got: %s", content)
@@ -821,7 +790,7 @@ func TestLogCommandAutoMode(t *testing.T) {
 					if !strings.Contains(content, "Custom how") {
 						t.Errorf("expected custom how in entry, got: %s", content)
 					}
-				}
+				})
 			},
 		},
 		{
@@ -839,15 +808,8 @@ func TestLogCommandAutoMode(t *testing.T) {
 			wantErr:      false,
 			wantContains: []string{"Created entry"},
 			checkDir: func(t *testing.T, dir string) {
-				entries, _ := os.ReadDir(dir)
-				jsonFiles := 0
-				for _, e := range entries {
-					if strings.HasSuffix(e.Name(), ".json") {
-						jsonFiles++
-					}
-				}
-				if jsonFiles != 1 {
-					t.Errorf("expected 1 entry file written, got %d", jsonFiles)
+				if n := countJSONFilesInDir(dir); n != 1 {
+					t.Errorf("expected 1 entry file written, got %d", n)
 				}
 			},
 		},
@@ -866,15 +828,8 @@ func TestLogCommandAutoMode(t *testing.T) {
 			wantErr:      false,
 			wantContains: []string{"Dry Run Preview", "Preview this", "Auto-documented"},
 			checkDir: func(t *testing.T, dir string) {
-				entries, _ := os.ReadDir(dir)
-				jsonFiles := 0
-				for _, e := range entries {
-					if strings.HasSuffix(e.Name(), ".json") {
-						jsonFiles++
-					}
-				}
-				if jsonFiles != 0 {
-					t.Errorf("expected no entries in dry-run mode, got %d", jsonFiles)
+				if n := countJSONFilesInDir(dir); n != 0 {
+					t.Errorf("expected no entries in dry-run mode, got %d", n)
 				}
 			},
 		},

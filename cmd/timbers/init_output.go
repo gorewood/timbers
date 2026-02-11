@@ -97,8 +97,7 @@ func postRewriteTimbersSection() string {
 while IFS=' ' read -r old_sha new_sha _extra; do
   old_short="${old_sha%"${old_sha#???????}"}"
   new_short="${new_sha%"${new_sha#???????}"}"
-  for f in .timbers/*.json; do
-    [ -f "$f" ] || continue
+  find .timbers -name '*.json' -print0 | while IFS= read -r -d '' f; do
     if grep -q "$old_sha\|$old_short" "$f"; then
       sed -i.bak \
         -e "s/$old_sha/$new_sha/g" \

@@ -48,7 +48,14 @@ func setupAmendTestStorage(t *testing.T, mock *mockGitOpsForAmend, entry *ledger
 		if err != nil {
 			t.Fatalf("failed to serialize setup entry: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, entry.ID+".json"), data, 0o600); err != nil {
+		entryDir := dir
+		if sub := ledger.EntryDateDir(entry.ID); sub != "" {
+			entryDir = filepath.Join(dir, sub)
+		}
+		if err := os.MkdirAll(entryDir, 0o755); err != nil {
+			t.Fatalf("failed to create entry dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(entryDir, entry.ID+".json"), data, 0o600); err != nil {
 			t.Fatalf("failed to write setup entry file: %v", err)
 		}
 	}
@@ -59,7 +66,11 @@ func setupAmendTestStorage(t *testing.T, mock *mockGitOpsForAmend, entry *ledger
 // readEntryFromDir reads and parses the entry file for the given ID from the dir.
 func readEntryFromDir(t *testing.T, dir, id string) *ledger.Entry {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(dir, id+".json"))
+	entryDir := dir
+	if sub := ledger.EntryDateDir(id); sub != "" {
+		entryDir = filepath.Join(dir, sub)
+	}
+	data, err := os.ReadFile(filepath.Join(entryDir, id+".json"))
 	if err != nil {
 		t.Fatalf("failed to read entry file: %v", err)
 	}
@@ -372,7 +383,14 @@ func TestAmendCommand(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to serialize setup entry: %v", err)
 					}
-					if err := os.WriteFile(filepath.Join(dir, tt.setupEntry.ID+".json"), data, 0o600); err != nil {
+					entryDir := dir
+					if sub := ledger.EntryDateDir(tt.setupEntry.ID); sub != "" {
+						entryDir = filepath.Join(dir, sub)
+					}
+					if err := os.MkdirAll(entryDir, 0o755); err != nil {
+						t.Fatalf("failed to create entry dir: %v", err)
+					}
+					if err := os.WriteFile(filepath.Join(entryDir, tt.setupEntry.ID+".json"), data, 0o600); err != nil {
 						t.Fatalf("failed to write setup entry file: %v", err)
 					}
 				}

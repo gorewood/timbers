@@ -32,14 +32,21 @@ func (m *mockGitOpsForExport) GetDiffstat(_, _ string) (git.Diffstat, error) {
 	return git.Diffstat{}, nil
 }
 
-// writeExportEntryFile writes an entry JSON file to the given directory.
+// writeExportEntryFile writes an entry JSON file to the correct date subdirectory.
 func writeExportEntryFile(t *testing.T, dir string, data []byte) {
 	t.Helper()
 	entry, err := ledger.FromJSON(data)
 	if err != nil {
 		t.Fatalf("failed to parse entry: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, entry.ID+".json"), data, 0o600); err != nil {
+	entryDir := dir
+	if sub := ledger.EntryDateDir(entry.ID); sub != "" {
+		entryDir = filepath.Join(dir, sub)
+	}
+	if err := os.MkdirAll(entryDir, 0o755); err != nil {
+		t.Fatalf("failed to create entry dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(entryDir, entry.ID+".json"), data, 0o600); err != nil {
 		t.Fatalf("failed to write entry file: %v", err)
 	}
 }

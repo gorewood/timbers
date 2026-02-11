@@ -54,7 +54,14 @@ func TestPrimeCommand(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to serialize entry: %v", err)
 			}
-			if err := os.WriteFile(filepath.Join(dir, entry.ID+".json"), data, 0o600); err != nil {
+			entryDir := dir
+			if sub := ledger.EntryDateDir(entry.ID); sub != "" {
+				entryDir = filepath.Join(dir, sub)
+			}
+			if err := os.MkdirAll(entryDir, 0o755); err != nil {
+				t.Fatalf("failed to create entry dir: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(entryDir, entry.ID+".json"), data, 0o600); err != nil {
 				t.Fatalf("failed to write entry file: %v", err)
 			}
 		}
@@ -382,7 +389,14 @@ func TestPrimeVerboseFlag(t *testing.T) {
 	entry := makePrimeTestEntry("anchor1234", now, "Fixed auth bug")
 	dir := t.TempDir()
 	data, _ := entry.ToJSON()
-	if err := os.WriteFile(filepath.Join(dir, entry.ID+".json"), data, 0o600); err != nil {
+	entryDir := dir
+	if sub := ledger.EntryDateDir(entry.ID); sub != "" {
+		entryDir = filepath.Join(dir, sub)
+	}
+	if err := os.MkdirAll(entryDir, 0o755); err != nil {
+		t.Fatalf("failed to create entry dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(entryDir, entry.ID+".json"), data, 0o600); err != nil {
 		t.Fatalf("failed to write entry file: %v", err)
 	}
 	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
@@ -468,7 +482,14 @@ func TestPrimeVerboseJSON(t *testing.T) {
 	entry := makePrimeTestEntry("anchor1234", now, "Fixed auth bug")
 	dir := t.TempDir()
 	data, _ := entry.ToJSON()
-	if err := os.WriteFile(filepath.Join(dir, entry.ID+".json"), data, 0o600); err != nil {
+	entryDir := dir
+	if sub := ledger.EntryDateDir(entry.ID); sub != "" {
+		entryDir = filepath.Join(dir, sub)
+	}
+	if err := os.MkdirAll(entryDir, 0o755); err != nil {
+		t.Fatalf("failed to create entry dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(entryDir, entry.ID+".json"), data, 0o600); err != nil {
 		t.Fatalf("failed to write entry file: %v", err)
 	}
 	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })

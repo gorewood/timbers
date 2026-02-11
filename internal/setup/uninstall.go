@@ -57,15 +57,12 @@ func GatherRepoInfo(info *UninstallInfo) {
 	}
 	info.TimbersDirExists = true
 
-	entries, readErr := os.ReadDir(timbersDir)
-	if readErr != nil {
-		return
-	}
-	for _, e := range entries {
-		if !e.IsDir() && filepath.Ext(e.Name()) == ".json" {
+	_ = filepath.WalkDir(timbersDir, func(_ string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && filepath.Ext(d.Name()) == ".json" {
 			info.EntryCount++
 		}
-	}
+		return nil
+	})
 }
 
 // GatherHookInfo collects pre-commit hook state.
@@ -116,18 +113,35 @@ func RemoveGitHook(hookPath string, hasBackup bool, backupPath string) (removed,
 	return true, true, nil
 }
 
-// RemoveTimbersDirContents removes all JSON entry files from .timbers/.
+// RemoveTimbersDirContents removes all JSON entry files from .timbers/ recursively,
+// then removes any empty subdirectories.
 func RemoveTimbersDirContents(dirPath string) error {
-	entries, err := os.ReadDir(dirPath)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", dirPath, err)
-	}
-	for _, e := range entries {
-		if !e.IsDir() && filepath.Ext(e.Name()) == ".json" {
-			if err := os.Remove(filepath.Join(dirPath, e.Name())); err != nil {
-				return fmt.Errorf("removing %s: %w", e.Name(), err)
+	// Remove all JSON files recursively
+	err := filepath.WalkDir(dirPath, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if !d.IsDir() && filepath.Ext(d.Name()) == ".json" {
+			if err := os.Remove(path); err != nil {
+				return fmt.Errorf("removing %s: %w", path, err)
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("walking %s: %w", dirPath, err)
+	}
+
+	// Collect subdirectories and remove empty ones bottom-up
+	var dirs []string
+	_ = filepath.WalkDir(dirPath, func(path string, d os.DirEntry, err error) error {
+		if err == nil && d.IsDir() && path != dirPath {
+			dirs = append(dirs, path)
+		}
+		return nil
+	})
+	for i := len(dirs) - 1; i >= 0; i-- {
+		_ = os.Remove(dirs[i]) // succeeds only if empty
 	}
 	return nil
 }

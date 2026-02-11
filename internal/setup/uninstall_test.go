@@ -97,6 +97,42 @@ func TestRemoveBinary(t *testing.T) {
 	})
 }
 
+func TestRemoveTimbersDirContents_Recursive(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create nested date directory structure
+	subdir := filepath.Join(dir, "2026", "01", "15")
+	if err := os.MkdirAll(subdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(subdir, "entry1.json"), "{}")
+	writeTestFile(t, filepath.Join(subdir, "entry2.json"), "{}")
+
+	// Also a file at root level
+	writeTestFile(t, filepath.Join(dir, "root.json"), "{}")
+
+	if err := RemoveTimbersDirContents(dir); err != nil {
+		t.Fatalf("RemoveTimbersDirContents() error: %v", err)
+	}
+
+	// All JSON files should be removed
+	var jsonFiles []string
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && filepath.Ext(d.Name()) == ".json" {
+			jsonFiles = append(jsonFiles, path)
+		}
+		return nil
+	})
+	if len(jsonFiles) > 0 {
+		t.Errorf("expected all JSON files removed, found: %v", jsonFiles)
+	}
+
+	// Empty date directories should be cleaned up
+	if _, err := os.Stat(subdir); !os.IsNotExist(err) {
+		t.Error("expected empty subdirectories to be removed")
+	}
+}
+
 func TestGatherBinaryPath(t *testing.T) {
 	path, err := GatherBinaryPath()
 	if err != nil {
