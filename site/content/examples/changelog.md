@@ -1,6 +1,6 @@
 +++
 title = 'Changelog'
-date = '2026-02-10'
+date = '2026-02-11'
 tags = ['example', 'changelog']
 +++
 
@@ -14,6 +14,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.5.0] - 2026-02-11
+
+### Added
+- Multi-event Claude Code hooks covering the full session lifecycle: `SessionStart`, `PreCompact`, `Stop`, and `PostToolUse`
+- Upgrade path that preserves existing hooks when adding new reinforcement points
+
+### Changed
+- Expanded hook configuration from single `SessionStart` hook to four reinforcement points, addressing 0% compliance for undocumented commits with single-hook approach
+- Generalized hook management via `timbersHookConfig` slice with `addTimbersHooks`/`removeTimbersHooks` functions
+
 
 ## [0.4.0] - 2026-02-10
 
@@ -117,3 +128,4 @@ Initial public release.
 [0.3.0]: https://github.com/gorewood/timbers/releases/tag/v0.3.0
 [0.2.0]: https://github.com/gorewood/timbers/releases/tag/v0.2.0
 [0.1.0]: https://github.com/gorewood/timbers/releases/tag/v0.1.0
+[0.5.0]: https://github.com/gorewood/timbers/releases/tag/v0.5.0
