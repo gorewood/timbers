@@ -142,13 +142,14 @@ release version:
     PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
     echo "Generating changelog for $tag (since ${PREV_TAG:-beginning})..."
 
-    # Generate versioned changelog section
+    # Generate versioned changelog section (pipe to claude -p: uses subscription, not API tokens)
+    APPEND="This is release v${ver}. Output ONLY the version section starting from ## [${ver}], no top-level header or preamble."
     if [ -n "$PREV_TAG" ]; then
         RAW=$(go run ./cmd/timbers draft changelog --range "$PREV_TAG"..HEAD \
-            --append "This is release v${ver}. Output ONLY the version section starting from ## [${ver}], no top-level header or preamble." --model opus)
+            --append "$APPEND" | claude -p --model opus)
     else
         RAW=$(go run ./cmd/timbers draft changelog --last 50 \
-            --append "This is release v${ver}. Output ONLY the version section starting from ## [${ver}], no top-level header or preamble." --model opus)
+            --append "$APPEND" | claude -p --model opus)
     fi
     # Strip code fences and duplicate headers that LLMs sometimes add
     SECTION=$(echo "$RAW" | sed '/^```/d' | sed '/^# Changelog/,/^$/d')
@@ -232,9 +233,9 @@ changelog version="":
         APPEND="--append 'This is release v{{version}}'"
     fi
     if [ -n "$PREV_TAG" ]; then
-        eval go run ./cmd/timbers draft changelog --range "$PREV_TAG"..HEAD $APPEND --model opus
+        eval go run ./cmd/timbers draft changelog --range "$PREV_TAG"..HEAD $APPEND | claude -p --model opus
     else
-        eval go run ./cmd/timbers draft changelog --last 50 $APPEND --model opus
+        eval go run ./cmd/timbers draft changelog --last 50 $APPEND | claude -p --model opus
     fi
 
 # =============================================================================
