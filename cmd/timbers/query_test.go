@@ -31,6 +31,8 @@ func (m *mockGitOpsForQuery) GetDiffstat(fromRef, toRef string) (git.Diffstat, e
 	return git.Diffstat{}, nil
 }
 
+func (m *mockGitOpsForQuery) CommitFiles(sha string) ([]string, error) { return nil, nil }
+
 // writeQueryEntryFile writes an entry JSON file to the correct date subdirectory.
 func writeQueryEntryFile(t *testing.T, dir string, entry *ledger.Entry) {
 	t.Helper()

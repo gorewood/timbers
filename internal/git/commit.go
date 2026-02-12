@@ -198,6 +198,25 @@ func parseMatchInt(matches []string, idx int) int {
 	return val
 }
 
+// CommitFiles returns the list of files changed by the given commit.
+func CommitFiles(sha string) ([]string, error) {
+	out, err := Run("diff-tree", "--no-commit-id", "--name-only", "-r", sha)
+	if err != nil {
+		return nil, output.NewSystemErrorWithCause("failed to get files for commit "+sha, err)
+	}
+	if out == "" {
+		return nil, nil
+	}
+	var files []string
+	for line := range strings.SplitSeq(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			files = append(files, line)
+		}
+	}
+	return files, nil
+}
+
 // extractDiffstatFromSummary parses the diffstat summary line using regex.
 func extractDiffstatFromSummary(summaryLine string) Diffstat {
 	matches := diffstatLineRegex.FindStringSubmatch(summaryLine)

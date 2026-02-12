@@ -43,6 +43,8 @@ func (m *mockGitOpsForPending) GetDiffstat(fromRef, toRef string) (git.Diffstat,
 	return git.Diffstat{}, nil
 }
 
+func (m *mockGitOpsForPending) CommitFiles(sha string) ([]string, error) { return nil, nil }
+
 func TestPendingCommand(t *testing.T) {
 	// Helper to create a test entry struct.
 	makeEntry := func(anchor string, created time.Time) *ledger.Entry {

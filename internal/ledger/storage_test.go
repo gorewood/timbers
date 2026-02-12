@@ -19,6 +19,7 @@ type mockGitOps struct {
 	logErr        error
 	reachableFrom []git.Commit
 	reachableErr  error
+	commitFiles   map[string][]string // SHA -> files; nil map = unknown (no filtering)
 }
 
 func newMockGitOps() *mockGitOps {
@@ -48,6 +49,17 @@ func (m *mockGitOps) CommitsReachableFrom(sha string) ([]git.Commit, error) {
 
 func (m *mockGitOps) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
 	return git.Diffstat{}, nil
+}
+
+func (m *mockGitOps) CommitFiles(sha string) ([]string, error) {
+	if m.commitFiles == nil {
+		return nil, nil
+	}
+	files, ok := m.commitFiles[sha]
+	if !ok {
+		return nil, nil
+	}
+	return files, nil
 }
 
 // makeTestEntry creates a valid entry for testing.
@@ -364,6 +376,156 @@ func TestStorage_NilFiles(t *testing.T) {
 	}
 	if len(last) != 0 {
 		t.Errorf("expected 0 entries, got %d", len(last))
+	}
+}
+
+// --- isLedgerOnlyCommit Tests ---
+
+func TestIsLedgerOnlyCommit(t *testing.T) {
+	tests := []struct {
+		name  string
+		files []string
+		want  bool
+	}{
+		{
+			name:  "empty list is not ledger-only",
+			files: nil,
+			want:  false,
+		},
+		{
+			name:  "all .timbers/ files is ledger-only",
+			files: []string{".timbers/2026/01/15/tb_entry.json"},
+			want:  true,
+		},
+		{
+			name:  "multiple .timbers/ files is ledger-only",
+			files: []string{".timbers/2026/01/15/tb_a.json", ".timbers/2026/01/15/tb_b.json"},
+			want:  true,
+		},
+		{
+			name:  "mixed files is not ledger-only",
+			files: []string{".timbers/2026/01/15/tb_a.json", "cmd/main.go"},
+			want:  false,
+		},
+		{
+			name:  "only real files is not ledger-only",
+			files: []string{"cmd/main.go", "internal/ledger/storage.go"},
+			want:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isLedgerOnlyCommit(tt.files)
+			if got != tt.want {
+				t.Errorf("isLedgerOnlyCommit(%v) = %v, want %v", tt.files, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- Ledger-only commit filtering in GetPendingCommits ---
+
+func TestGetPendingCommits_FiltersLedgerOnlyCommits(t *testing.T) {
+	tests := []struct {
+		name            string
+		entries         []*Entry
+		setupMock       func(*mockGitOps)
+		wantCommitCount int
+		wantSHAs        []string
+	}{
+		{
+			name: "filters out ledger-only commit",
+			entries: []*Entry{
+				makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "headsha1234"
+				mock.logCommits = []git.Commit{
+					{SHA: "realcommit1", Short: "real1"},
+					{SHA: "ledgercommit", Short: "ledger"},
+				}
+				mock.commitFiles = map[string][]string{
+					"realcommit1":  {"cmd/main.go", "internal/ledger/storage.go"},
+					"ledgercommit": {".timbers/2026/01/15/tb_entry.json"},
+				}
+			},
+			wantCommitCount: 1,
+			wantSHAs:        []string{"realcommit1"},
+		},
+		{
+			name: "keeps mixed commit",
+			entries: []*Entry{
+				makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "headsha1234"
+				mock.logCommits = []git.Commit{
+					{SHA: "mixedcommit", Short: "mixed"},
+				}
+				mock.commitFiles = map[string][]string{
+					"mixedcommit": {".timbers/2026/01/15/tb_entry.json", "README.md"},
+				}
+			},
+			wantCommitCount: 1,
+			wantSHAs:        []string{"mixedcommit"},
+		},
+		{
+			name: "keeps commit when CommitFiles returns nil (unknown)",
+			entries: []*Entry{
+				makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "headsha1234"
+				mock.logCommits = []git.Commit{
+					{SHA: "unknownsha1", Short: "unkn"},
+				}
+				// commitFiles is nil map — unknown = no filtering
+			},
+			wantCommitCount: 1,
+			wantSHAs:        []string{"unknownsha1"},
+		},
+		{
+			name: "filters all ledger-only commits to zero pending",
+			entries: []*Entry{
+				makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "headsha1234"
+				mock.logCommits = []git.Commit{
+					{SHA: "ledger1", Short: "l1"},
+					{SHA: "ledger2", Short: "l2"},
+				}
+				mock.commitFiles = map[string][]string{
+					"ledger1": {".timbers/2026/01/15/tb_a.json"},
+					"ledger2": {".timbers/2026/01/15/tb_b.json"},
+				}
+			},
+			wantCommitCount: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := newMockGitOps()
+			tt.setupMock(mock)
+			store := newTestStorage(t, mock, tt.entries...)
+
+			commits, _, err := store.GetPendingCommits()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(commits) != tt.wantCommitCount {
+				t.Errorf("got %d commits, want %d", len(commits), tt.wantCommitCount)
+			}
+
+			for i, wantSHA := range tt.wantSHAs {
+				if i < len(commits) && commits[i].SHA != wantSHA {
+					t.Errorf("commits[%d].SHA = %q, want %q", i, commits[i].SHA, wantSHA)
+				}
+			}
+		})
 	}
 }
 

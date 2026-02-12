@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/output"
@@ -36,6 +37,7 @@ type GitOps interface {
 	Log(fromRef, toRef string) ([]git.Commit, error)
 	CommitsReachableFrom(sha string) ([]git.Commit, error)
 	GetDiffstat(fromRef, toRef string) (git.Diffstat, error)
+	CommitFiles(sha string) ([]string, error)
 }
 
 // realGitOps implements GitOps using the actual git package functions.
@@ -55,6 +57,10 @@ func (realGitOps) CommitsReachableFrom(sha string) ([]git.Commit, error) {
 
 func (realGitOps) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
 	return git.GetDiffstat(fromRef, toRef)
+}
+
+func (realGitOps) CommitFiles(sha string) ([]string, error) {
+	return git.CommitFiles(sha)
 }
 
 // Storage provides read/write access to ledger entries stored as files in .timbers/.
@@ -194,7 +200,7 @@ func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 		if reachErr != nil {
 			return nil, nil, reachErr
 		}
-		return commits, nil, nil
+		return s.filterLedgerOnlyCommits(commits), nil, nil
 	}
 
 	// Get commits from anchor (exclusive) to HEAD (inclusive).
@@ -207,10 +213,37 @@ func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 		if reachErr != nil {
 			return nil, nil, reachErr
 		}
-		return fallback, latest, fmt.Errorf("%w: %s", ErrStaleAnchor, latest.Workset.AnchorCommit)
+		return s.filterLedgerOnlyCommits(fallback), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, latest.Workset.AnchorCommit)
 	}
 
-	return commits, latest, nil
+	return s.filterLedgerOnlyCommits(commits), latest, nil
+}
+
+// isLedgerOnlyCommit returns true if every file in the list is under .timbers/.
+// Returns false for empty lists (unknown = don't filter).
+func isLedgerOnlyCommit(files []string) bool {
+	if len(files) == 0 {
+		return false
+	}
+	for _, f := range files {
+		if !strings.HasPrefix(f, ".timbers/") {
+			return false
+		}
+	}
+	return true
+}
+
+// filterLedgerOnlyCommits removes commits that only touch .timbers/ files.
+// On CommitFiles error, the commit is kept (safe default).
+func (s *Storage) filterLedgerOnlyCommits(commits []git.Commit) []git.Commit {
+	filtered := make([]git.Commit, 0, len(commits))
+	for _, c := range commits {
+		files, err := s.git.CommitFiles(c.SHA)
+		if err != nil || !isLedgerOnlyCommit(files) {
+			filtered = append(filtered, c)
+		}
+	}
+	return filtered
 }
 
 // LogRange returns commits in the given range (fromRef..toRef).

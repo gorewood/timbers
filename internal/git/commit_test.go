@@ -238,6 +238,44 @@ func TestResolveRefOrEmptyTree(t *testing.T) {
 	}
 }
 
+func TestCommitFiles(t *testing.T) {
+	t.Run("in git repo", func(t *testing.T) {
+		chdirToRepoRoot(t)
+
+		files, err := CommitFiles("HEAD")
+		if err != nil {
+			t.Errorf("CommitFiles(HEAD) error = %v, expected nil", err)
+			return
+		}
+		if len(files) == 0 {
+			t.Error("CommitFiles(HEAD) returned 0 files, expected at least one")
+		}
+		for idx, f := range files {
+			if f == "" {
+				t.Errorf("files[%d] is empty", idx)
+			}
+		}
+	})
+
+	t.Run("not in git repo", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, getWdErr := os.Getwd()
+		if getWdErr != nil {
+			t.Fatalf("failed to get current dir: %v", getWdErr)
+		}
+		defer func() { _ = os.Chdir(origDir) }()
+
+		if chdirErr := os.Chdir(tmpDir); chdirErr != nil {
+			t.Fatalf("failed to change to temp dir: %v", chdirErr)
+		}
+
+		_, err := CommitFiles("HEAD")
+		if err == nil {
+			t.Error("CommitFiles() expected error outside git repo")
+		}
+	})
+}
+
 func TestGetDiffstatRootCommit(t *testing.T) {
 	chdirToRepoRoot(t)
 
