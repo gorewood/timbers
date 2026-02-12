@@ -2,8 +2,6 @@
 package main
 
 import (
-	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -14,57 +12,28 @@ import (
 
 // filterEntriesSince filters entries to those created at or after the cutoff.
 func filterEntriesSince(entries []*ledger.Entry, cutoff time.Time) []*ledger.Entry {
-	var result []*ledger.Entry
-	for _, entry := range entries {
-		if entry.CreatedAt.After(cutoff) || entry.CreatedAt.Equal(cutoff) {
-			result = append(result, entry)
-		}
-	}
-	return result
+	return ledger.FilterEntriesSince(entries, cutoff)
 }
 
 // filterEntriesUntil filters entries to those created before or at the cutoff.
 func filterEntriesUntil(entries []*ledger.Entry, cutoff time.Time) []*ledger.Entry {
-	var result []*ledger.Entry
-	for _, entry := range entries {
-		if entry.CreatedAt.Before(cutoff) || entry.CreatedAt.Equal(cutoff) {
-			result = append(result, entry)
-		}
-	}
-	return result
+	return ledger.FilterEntriesUntil(entries, cutoff)
 }
 
 // filterEntriesByTags filters entries to those that have at least one matching tag.
 // Uses OR logic: entries matching ANY of the specified tags are included.
 func filterEntriesByTags(entries []*ledger.Entry, tags []string) []*ledger.Entry {
-	if len(tags) == 0 {
-		return entries
-	}
-
-	var result []*ledger.Entry
-	for _, entry := range entries {
-		if entryHasAnyTag(entry, tags) {
-			result = append(result, entry)
-		}
-	}
-	return result
+	return ledger.FilterEntriesByTags(entries, tags)
 }
 
 // entryHasAnyTag checks if the entry has any of the specified tags.
 func entryHasAnyTag(entry *ledger.Entry, tags []string) bool {
-	for _, entryTag := range entry.Tags {
-		if slices.Contains(tags, entryTag) {
-			return true
-		}
-	}
-	return false
+	return ledger.EntryHasAnyTag(entry, tags)
 }
 
 // sortEntriesByCreatedAt sorts entries by created_at descending (most recent first).
 func sortEntriesByCreatedAt(entries []*ledger.Entry) {
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].CreatedAt.After(entries[j].CreatedAt)
-	})
+	ledger.SortEntriesByCreatedAt(entries)
 }
 
 // getEntriesByTimeRange retrieves entries within the time range, with optional limit and tag filtering.
@@ -81,16 +50,16 @@ func getEntriesByTimeRange(
 	}
 
 	if !sinceCutoff.IsZero() {
-		entries = filterEntriesSince(entries, sinceCutoff)
+		entries = ledger.FilterEntriesSince(entries, sinceCutoff)
 	}
 	if !untilCutoff.IsZero() {
-		entries = filterEntriesUntil(entries, untilCutoff)
+		entries = ledger.FilterEntriesUntil(entries, untilCutoff)
 	}
 	if len(tagFlags) > 0 {
-		entries = filterEntriesByTags(entries, tagFlags)
+		entries = ledger.FilterEntriesByTags(entries, tagFlags)
 	}
 
-	sortEntriesByCreatedAt(entries)
+	ledger.SortEntriesByCreatedAt(entries)
 
 	if lastFlag != "" {
 		count, parseErr := strconv.Atoi(lastFlag)
@@ -118,8 +87,8 @@ func getEntriesByLast(printer *output.Printer, storage *ledger.Storage, lastFlag
 			printer.Error(err)
 			return nil, err
 		}
-		entries = filterEntriesByTags(entries, tagFlags)
-		sortEntriesByCreatedAt(entries)
+		entries = ledger.FilterEntriesByTags(entries, tagFlags)
+		ledger.SortEntriesByCreatedAt(entries)
 		if len(entries) > count {
 			entries = entries[:count]
 		}
