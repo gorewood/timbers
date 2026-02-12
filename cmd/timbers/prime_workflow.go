@@ -19,18 +19,22 @@ After EVERY git commit, you MUST run:
 Do not batch commits. Document each commit immediately.
 
 # Writing Good Why Fields
-The --why flag captures *design decisions*, not feature descriptions.
+The --why flag captures the *verdict* — the design decision in one sentence.
+Put the reasoning journey in --notes (optional). Keep --why tight.
 
 BAD (feature description):
   --why "Users needed tag filtering for queries"
   --why "Added amend command for modifying entries"
 
-GOOD (design decision):
+BAD (journey belongs in --notes):
+  --why "Debated AND vs OR semantics, talked to users, decided OR because..."
+
+GOOD (verdict):
   --why "OR semantics chosen over AND because users filter by any-of, not all-of"
   --why "Partial updates via amend avoid re-entering unchanged fields"
   --why "Chose warning over hard error for dirty-tree check to avoid blocking CI"
 
-Ask yourself: why THIS approach over alternatives? What trade-off did you make?
+Ask yourself: what's the one-sentence trade-off? (If you want to explain HOW you got there, use --notes.)
 
 # Writing Good Notes (optional)
 The --notes flag captures the *journey* to a decision, not just the verdict.
@@ -63,7 +67,7 @@ What would help someone revisiting this decision in 6 months understand HOW you 
 
 # Essential Commands
 ### Recording Work
-- ` + "`timbers log \"what\" --why \"why\" --how \"how\"`" + ` - Run after EVERY commit
+- ` + "`timbers log \"what\" --why \"why\" --how \"how\" [--notes \"deliberation\"]`" + ` - Run after EVERY commit
 - ` + "`timbers pending`" + ` - MUST be zero before session end
 
 ### Querying
