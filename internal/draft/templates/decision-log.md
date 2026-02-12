@@ -7,6 +7,8 @@ Extract architectural decisions from these development log entries and format th
 
 **What to extract**: Only entries whose "why" field contains genuine design trade-offs — choices between alternatives with reasoning. Skip entries where "why" is a feature description, a restatement of "what", or empty/thin.
 
+**Notes field**: Some entries include a `notes` field with detailed deliberation context — alternatives considered, surprises, reasoning chains. When present, use notes as the primary source for Context and Consequences sections. The "why" field has the verdict; "notes" has the journey.
+
 **Format each decision as**:
 
 ```markdown

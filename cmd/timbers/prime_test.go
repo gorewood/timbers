@@ -541,3 +541,26 @@ func TestPrimeVerboseJSON(t *testing.T) {
 		t.Errorf("expected no why/how in non-verbose JSON, got: %s", out2)
 	}
 }
+
+func TestTruncateNotes(t *testing.T) {
+	tests := []struct {
+		name   string
+		notes  string
+		maxLen int
+		want   string
+	}{
+		{"empty", "", 200, ""},
+		{"under limit", "short note", 200, "short note"},
+		{"exactly at limit", "abc", 3, "abc"},
+		{"over limit", "abcdef", 3, "abc..."},
+		{"long notes truncated", strings.Repeat("x", 300), 200, strings.Repeat("x", 200) + "..."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := truncateNotes(tt.notes, tt.maxLen)
+			if got != tt.want {
+				t.Errorf("truncateNotes(%q, %d) = %q, want %q", tt.notes, tt.maxLen, got, tt.want)
+			}
+		})
+	}
+}

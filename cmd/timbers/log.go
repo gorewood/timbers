@@ -24,6 +24,7 @@ func newLogCmd() *cobra.Command {
 type logFlags struct {
 	why       string
 	how       string
+	notes     string
 	tags      []string
 	workItems []string
 	rangeStr  string
@@ -67,6 +68,7 @@ Examples:
   timbers log "Updated deps" --minor
   timbers log "New feature" --why "User request" --how "New component" --tag feature
   timbers log "Bug fix" --why "Issue #123" --how "Patched" --work-item jira:PROJ-456
+  timbers log "New API" --why "Agents need access" --how "MCP server" --notes "Debated HTTP vs exec wrapping"
   timbers log --auto              # Extract what/why/how from commit messages
   timbers log --auto --yes        # Auto mode without confirmation
   timbers log --batch             # Create entries for each work-item group or day`
@@ -306,6 +308,7 @@ func buildEntry(ctx *logContext) *ledger.Entry {
 			Why:  why,
 			How:  how,
 		},
+		Notes:     ctx.flags.notes,
 		Tags:      ctx.flags.tags,
 		WorkItems: ctx.workItems,
 	}

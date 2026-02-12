@@ -33,6 +33,7 @@ type Entry struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 	Workset   Workset    `json:"workset"`
 	Summary   Summary    `json:"summary"`
+	Notes     string     `json:"notes,omitempty"`
 	Tags      []string   `json:"tags,omitempty"`
 	WorkItems []WorkItem `json:"work_items,omitempty"`
 }

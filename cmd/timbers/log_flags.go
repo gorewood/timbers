@@ -7,6 +7,7 @@ import "github.com/spf13/cobra"
 type logFlagVars struct {
 	why       *string
 	how       *string
+	notes     *string
 	tags      *[]string
 	workItems *[]string
 	rangeStr  *string
@@ -24,6 +25,7 @@ func (vars *logFlagVars) toLogFlags() logFlags {
 	return logFlags{
 		why:       *vars.why,
 		how:       *vars.how,
+		notes:     *vars.notes,
 		tags:      *vars.tags,
 		workItems: *vars.workItems,
 		rangeStr:  *vars.rangeStr,
@@ -42,6 +44,7 @@ func newLogFlagVars() *logFlagVars {
 	return &logFlagVars{
 		why:       new(string),
 		how:       new(string),
+		notes:     new(string),
 		tags:      new([]string),
 		workItems: new([]string),
 		rangeStr:  new(string),
@@ -68,5 +71,6 @@ func registerLogFlags(cmd *cobra.Command, flagVars *logFlagVars) {
 	cmd.Flags().BoolVar(flagVars.push, "push", false, "Push to remote after writing")
 	cmd.Flags().BoolVar(flagVars.auto, "auto", false, "Extract what/why/how from commit messages")
 	cmd.Flags().BoolVar(flagVars.yes, "yes", false, "Skip confirmation in auto mode")
+	cmd.Flags().StringVar(flagVars.notes, "notes", "", "Deliberation notes capturing the journey to a decision")
 	cmd.Flags().BoolVar(flagVars.batch, "batch", false, "Create entries grouped by work-item trailer or day")
 }

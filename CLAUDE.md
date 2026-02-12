@@ -190,6 +190,7 @@ func TestLogPendingCycle(t *testing.T) {
     "why": "User input wasn't being sanitized before JWT validation",
     "how": "Added input validation middleware before auth handler"
   },
+  "notes": "Considered rate limiting vs input validation. Validation catches root cause.",
   "tags": ["security", "auth"],
   "work_items": [{"system": "beads", "id": "bd-a1b2c3"}]
 }

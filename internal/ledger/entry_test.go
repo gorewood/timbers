@@ -275,6 +275,7 @@ func TestEntry_FromJSON(t *testing.T) {
 			"why": "Input not sanitized",
 			"how": "Added validation middleware"
 		},
+		"notes": "Considered rate limiting vs input validation. Rate limiting was a band-aid.",
 		"tags": ["security", "auth"],
 		"work_items": [{"system": "beads", "id": "bd-a1b2c3"}]
 	}`)
@@ -313,11 +314,37 @@ func TestEntry_FromJSON(t *testing.T) {
 	} else if entry.Workset.Diffstat.Files != 3 {
 		t.Errorf("Diffstat.Files = %d, want 3", entry.Workset.Diffstat.Files)
 	}
+	wantNotes := "Considered rate limiting vs input validation. Rate limiting was a band-aid."
+	if entry.Notes != wantNotes {
+		t.Errorf("Notes = %q, want %q", entry.Notes, wantNotes)
+	}
 	if len(entry.Tags) != 2 {
 		t.Errorf("Tags length = %d, want 2", len(entry.Tags))
 	}
 	if len(entry.WorkItems) != 1 {
 		t.Errorf("WorkItems length = %d, want 1", len(entry.WorkItems))
+	}
+}
+
+func TestEntry_FromJSON_NotesOmitted(t *testing.T) {
+	jsonData := []byte(`{
+		"schema": "timbers.devlog/v1",
+		"kind": "entry",
+		"id": "tb_2026-01-15T15:04:05Z_8f2c1a",
+		"created_at": "2026-01-15T15:04:05Z",
+		"updated_at": "2026-01-15T15:04:05Z",
+		"workset": {
+			"anchor_commit": "8f2c1a9d",
+			"commits": ["8f2c1a9d"]
+		},
+		"summary": {"what": "test", "why": "test", "how": "test"}
+	}`)
+	entry, err := FromJSON(jsonData)
+	if err != nil {
+		t.Fatalf("FromJSON() error = %v", err)
+	}
+	if entry.Notes != "" {
+		t.Errorf("Notes = %q, want empty for omitted field", entry.Notes)
 	}
 }
 
@@ -343,7 +370,8 @@ func TestEntry_RoundTrip(t *testing.T) {
 			Why:  "Input not sanitized",
 			How:  "Added validation middleware",
 		},
-		Tags: []string{"security", "auth"},
+		Notes: "Debated rate limiting vs validation. Validation catches the root cause.",
+		Tags:  []string{"security", "auth"},
 		WorkItems: []WorkItem{
 			{System: "beads", ID: "bd-a1b2c3"},
 		},
@@ -407,6 +435,9 @@ func TestEntry_RoundTrip(t *testing.T) {
 	}
 	if restored.Summary.How != original.Summary.How {
 		t.Errorf("How: got %q, want %q", restored.Summary.How, original.Summary.How)
+	}
+	if restored.Notes != original.Notes {
+		t.Errorf("Notes: got %q, want %q", restored.Notes, original.Notes)
 	}
 	if len(restored.Tags) != len(original.Tags) {
 		t.Errorf("Tags length: got %d, want %d", len(restored.Tags), len(original.Tags))

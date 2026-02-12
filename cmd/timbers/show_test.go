@@ -276,6 +276,81 @@ func TestShowWithTags(t *testing.T) {
 	}
 }
 
+func TestShowWithNotes(t *testing.T) {
+	now := time.Now().UTC()
+	entry := &ledger.Entry{
+		Schema:    ledger.SchemaVersion,
+		Kind:      ledger.KindEntry,
+		ID:        ledger.GenerateID("anchor123456", now),
+		CreatedAt: now,
+		UpdatedAt: now,
+		Workset: ledger.Workset{
+			AnchorCommit: "anchor123456",
+			Commits:      []string{"anchor123456"},
+		},
+		Summary: ledger.Summary{
+			What: "Test with notes",
+			Why:  "Testing notes display",
+			How:  "Added notes field",
+		},
+		Notes: "Debated putting notes in summary vs top-level. Top-level keeps summary focused.",
+	}
+
+	dir := t.TempDir()
+	writeShowEntryFile(t, dir, entry)
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	storage := ledger.NewStorage(&mockGitOpsForShow{}, files)
+
+	cmd := newShowCmdWithStorage(storage)
+	if err := cmd.Flags().Set("latest", "true"); err != nil {
+		t.Fatalf("failed to set last flag: %v", err)
+	}
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "Notes") {
+		t.Errorf("output missing Notes section header\noutput: %s", output)
+	}
+	if !strings.Contains(output, "Debated putting notes") {
+		t.Errorf("output missing notes content\noutput: %s", output)
+	}
+}
+
+func TestShowWithoutNotes(t *testing.T) {
+	now := time.Now().UTC()
+	entry := createShowTestEntryStruct("anchor123456", now)
+
+	dir := t.TempDir()
+	writeShowEntryFile(t, dir, entry)
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	storage := ledger.NewStorage(&mockGitOpsForShow{}, files)
+
+	cmd := newShowCmdWithStorage(storage)
+	if err := cmd.Flags().Set("latest", "true"); err != nil {
+		t.Fatalf("failed to set last flag: %v", err)
+	}
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	output := buf.String()
+	if strings.Contains(output, "Notes") {
+		t.Errorf("output should not contain Notes section when notes is empty\noutput: %s", output)
+	}
+}
+
 func TestAnchorDisplay(t *testing.T) {
 	origSHAExists := shaExistsFunc
 	t.Cleanup(func() { shaExistsFunc = origSHAExists })

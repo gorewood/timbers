@@ -43,6 +43,8 @@ Write a short developer blog post from these development log entries.
 - If entries don't support a rich narrative, write *less*—not filler.
 - Let the interesting parts breathe. The weird bug, the unexpected win, the "wait that actually worked?" moment gets more space.
 
+**Notes field**: Some entries include a `notes` field with deliberation context — the journey to a decision, alternatives explored, surprises encountered. When present, mine these for the most interesting narrative material. The notes often contain the "wait, that actually worked?" moments that make good blog posts.
+
 **Critical constraints**:
 - ONLY write about what's actually in the entries. Do not speculate about future work, roadmaps, or plans.
 - Do not invent metrics, performance numbers, or details not present.

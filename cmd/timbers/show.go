@@ -122,6 +122,7 @@ func outputShowJSON(printer *output.Printer, entry *ledger.Entry) error {
 func outputShowHuman(printer *output.Printer, entry *ledger.Entry) {
 	outputShowHeader(printer, entry)
 	outputShowSummary(printer, entry)
+	outputShowNotes(printer, entry)
 	outputShowWorkset(printer, entry)
 	outputShowTags(printer, entry)
 	outputShowWorkItems(printer, entry)
@@ -153,6 +154,15 @@ func anchorDisplay(sha string) string {
 		display += " (not in current history)"
 	}
 	return display
+}
+
+// outputShowNotes prints the notes if present.
+func outputShowNotes(printer *output.Printer, entry *ledger.Entry) {
+	if entry.Notes == "" {
+		return
+	}
+	printer.Section("Notes")
+	printer.Println(entry.Notes)
 }
 
 // outputShowWorkset prints the workset information.

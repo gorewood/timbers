@@ -347,6 +347,57 @@ func TestHandleLog_WithWorkItem(t *testing.T) {
 	}
 }
 
+func TestHandleLog_WithNotes(t *testing.T) {
+	gitOps := &mockGitOps{
+		headSHA: "abc123",
+		reachableFrom: []git.Commit{
+			{SHA: "abc123", Short: "abc123", Subject: "test commit"},
+		},
+	}
+	tmpDir := t.TempDir()
+	fileStore := ledger.NewFileStorage(tmpDir, noopGitAdd)
+	storage := ledger.NewStorage(gitOps, fileStore)
+	handler := handleLog(storage)
+
+	_, out, err := handler(context.Background(), &mcp.CallToolRequest{}, LogInput{
+		What:  "implemented MCP server",
+		Why:   "agents need structured access",
+		How:   "thin shell over library layer",
+		Notes: "Debated exec wrapping vs HTTP API. Exec meant double-parsing.",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Entry.Notes != "Debated exec wrapping vs HTTP API. Exec meant double-parsing." {
+		t.Errorf("Notes = %q, want deliberation notes", out.Entry.Notes)
+	}
+}
+
+func TestHandleLog_NotesOmitted(t *testing.T) {
+	gitOps := &mockGitOps{
+		headSHA: "abc123",
+		reachableFrom: []git.Commit{
+			{SHA: "abc123", Short: "abc123", Subject: "test commit"},
+		},
+	}
+	tmpDir := t.TempDir()
+	fileStore := ledger.NewFileStorage(tmpDir, noopGitAdd)
+	storage := ledger.NewStorage(gitOps, fileStore)
+	handler := handleLog(storage)
+
+	_, out, err := handler(context.Background(), &mcp.CallToolRequest{}, LogInput{
+		What: "routine fix",
+		Why:  "bug report",
+		How:  "patched",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Entry.Notes != "" {
+		t.Errorf("Notes = %q, want empty when not provided", out.Entry.Notes)
+	}
+}
+
 // --- Helper function tests ---
 
 func TestParseDurationOrDate(t *testing.T) {

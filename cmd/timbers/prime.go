@@ -16,61 +16,6 @@ import (
 // errNotInitialized indicates timbers is not set up in this repo.
 var errNotInitialized = errors.New("timbers not initialized")
 
-// defaultWorkflowContent is the default workflow instructions for agent onboarding.
-// This can be overridden by placing a .timbers/PRIME.md file in the repo root.
-const defaultWorkflowContent = `# CRITICAL: Session Protocol
-- [ ] git add && git commit (commit code FIRST)
-- [ ] timbers log "what" --why "why" --how "how" (document committed work)
-- [ ] timbers pending (MUST be zero before session end)
-- [ ] git push (entries are committed files, push to sync)
-
-IMPORTANT: Always commit code before running timbers log. Entries must
-describe committed work, not work-in-progress. Timbers will warn if
-the working tree is dirty.
-
-# Post-Commit Rule (MANDATORY)
-After EVERY git commit, you MUST run:
-  timbers log "what you did" --why "design decision" --how "approach"
-Do not batch commits. Document each commit immediately.
-
-# Writing Good Why Fields
-The --why flag captures *design decisions*, not feature descriptions.
-
-BAD (feature description):
-  --why "Users needed tag filtering for queries"
-  --why "Added amend command for modifying entries"
-
-GOOD (design decision):
-  --why "OR semantics chosen over AND because users filter by any-of, not all-of"
-  --why "Partial updates via amend avoid re-entering unchanged fields"
-  --why "Chose warning over hard error for dirty-tree check to avoid blocking CI"
-
-Ask yourself: why THIS approach over alternatives? What trade-off did you make?
-
-# Core Rules (MANDATORY)
-- You MUST commit code first, then document with timbers log
-- You MUST capture design decisions in --why, not feature summaries
-- You MUST run ` + "`timbers pending`" + ` before session end (MUST be zero)
-- You MUST run ` + "`git push`" + ` to sync ledger to remote (entries are committed files)
-
-# Essential Commands
-### Recording Work
-- ` + "`timbers log \"what\" --why \"why\" --how \"how\"`" + ` - Run after EVERY commit
-- ` + "`timbers pending`" + ` - MUST be zero before session end
-
-### Querying
-- ` + "`timbers query --last 5`" + ` - Recent entries
-- ` + "`timbers show <id>`" + ` - Single entry details
-
-### Generating Documents
-- ` + "`timbers draft --list`" + ` - List available templates
-- ` + "`timbers draft release-notes --last 10`" + ` - Render for piping to LLM
-- ` + "`timbers draft devblog --since 7d --model opus`" + ` - Generate directly
-
-### Sync
-- Entries are committed files in .timbers/ — use standard git push/pull
-`
-
 // primeResult holds the data for prime output.
 type primeResult struct {
 	Repo          string       `json:"repo"`
@@ -95,6 +40,7 @@ type primeEntry struct {
 	What      string `json:"what"`
 	Why       string `json:"why,omitempty"`
 	How       string `json:"how,omitempty"`
+	Notes     string `json:"notes,omitempty"`
 	CreatedAt string `json:"created_at"`
 }
 
@@ -288,11 +234,20 @@ func buildPrimeEntries(entries []*ledger.Entry, verbose bool) []primeEntry {
 		if verbose {
 			prime.Why = entry.Summary.Why
 			prime.How = entry.Summary.How
+			prime.Notes = truncateNotes(entry.Notes, 200)
 		}
 		result = append(result, prime)
 	}
 
 	return result
+}
+
+// truncateNotes truncates notes to maxLen characters, appending "..." if truncated.
+func truncateNotes(notes string, maxLen int) string {
+	if len(notes) <= maxLen {
+		return notes
+	}
+	return notes[:maxLen] + "..."
 }
 
 // outputPrimeHuman outputs the result in human-readable format.
@@ -321,13 +276,18 @@ func outputPrimeHuman(printer *output.Printer, result *primeResult) {
 	}
 	printer.Println()
 
-	// Recent work
+	outputPrimeRecentWork(printer, result.RecentEntries)
+	printer.Println(result.Workflow)
+}
+
+// outputPrimeRecentWork prints the recent entries section.
+func outputPrimeRecentWork(printer *output.Printer, entries []primeEntry) {
 	printer.Println("Recent Work")
 	printer.Println("-----------")
-	if len(result.RecentEntries) == 0 {
+	if len(entries) == 0 {
 		printer.Println("  (no entries)")
 	} else {
-		for _, entry := range result.RecentEntries {
+		for _, entry := range entries {
 			printer.Print("  %s  %s\n", entry.ID, entry.What)
 			if entry.Why != "" {
 				printer.Print("    Why: %s\n", entry.Why)
@@ -335,10 +295,10 @@ func outputPrimeHuman(printer *output.Printer, result *primeResult) {
 			if entry.How != "" {
 				printer.Print("    How: %s\n", entry.How)
 			}
+			if entry.Notes != "" {
+				printer.Print("    Notes: %s\n", entry.Notes)
+			}
 		}
 	}
 	printer.Println()
-
-	// Workflow instructions
-	printer.Println(result.Workflow)
 }

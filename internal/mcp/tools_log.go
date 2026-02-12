@@ -17,6 +17,7 @@ type LogInput struct {
 	What     string   `json:"what"               jsonschema:"what was done (required)"`
 	Why      string   `json:"why"                jsonschema:"why - design decision, not feature description (required)"`
 	How      string   `json:"how"                jsonschema:"how - approach and implementation (required)"`
+	Notes    string   `json:"notes,omitempty"     jsonschema:"deliberation notes capturing the journey to a decision"`
 	Tags     []string `json:"tags,omitempty"      jsonschema:"tags for categorization"`
 	WorkItem string   `json:"work_item,omitempty" jsonschema:"work item reference in system:id format"`
 }
@@ -119,6 +120,7 @@ func buildLogEntry(
 			Why:  input.Why,
 			How:  input.How,
 		},
+		Notes:     input.Notes,
 		Tags:      input.Tags,
 		WorkItems: workItems,
 	}, nil
