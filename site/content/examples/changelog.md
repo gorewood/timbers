@@ -1,6 +1,6 @@
 +++
 title = 'Changelog'
-date = '2026-02-11'
+date = '2026-02-12'
 tags = ['example', 'changelog']
 +++
 
@@ -14,6 +14,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.7.0] - 2026-02-12
+
+### Added
+- Added MCP server with 6 tools (`pending`, `prime`, `query`, `show`, `status`, `log`) over stdio transport via `timbers serve` subcommand, enabling integration with Claude Code, Cursor, Windsurf, Gemini CLI, and other MCP-compatible editors
+- Added `idempotentHint` annotation to MCP read tools, allowing clients to optimize with caching and retry logic
+
+### Changed
+- Updated `timbers onboard` snippet with `command -v` guard and install URL for graceful degradation when timbers is not installed
+- Replaced all git notes references across documentation with `.timbers/` file-based storage
+
+### Fixed
+- Filtered ledger-only commits from `GetPendingCommits` to resolve chicken-and-egg problem where `.timbers/` entry commits were always reported as undocumented
+
+### Technical
+- Moved filter functions to `internal/ledger/` for sharing between CLI and MCP server
+- Added `git.CommitFiles()` using `diff-tree` and expanded `GitOps` interface with `isLedgerOnlyCommit` helper
+- Added `validateLogInput` to catch empty strings that the MCP SDK's required-field check does not
+
 
 ## [0.6.0] - 2026-02-11
 
@@ -148,3 +167,4 @@ Initial public release.
 [0.1.0]: https://github.com/gorewood/timbers/releases/tag/v0.1.0
 [0.5.0]: https://github.com/gorewood/timbers/releases/tag/v0.5.0
 [0.6.0]: https://github.com/gorewood/timbers/releases/tag/v0.6.0
+[0.7.0]: https://github.com/gorewood/timbers/releases/tag/v0.7.0
