@@ -53,7 +53,8 @@ func handleLog(storage *ledger.Storage) mcp.ToolHandlerFor[LogInput, LogOutput] 
 	}
 }
 
-// validateLogInput checks that required fields are present.
+// validateLogInput checks that required fields are non-empty.
+// The SDK schema enforces field presence (required), but this catches empty strings.
 func validateLogInput(input LogInput) error {
 	if input.What == "" {
 		return errors.New("what is required")

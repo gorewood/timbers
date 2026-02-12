@@ -26,8 +26,9 @@ func boolPtr(b bool) *bool {
 // readOnlyAnnotations returns annotations for read-only tools.
 func readOnlyAnnotations() *mcp.ToolAnnotations {
 	return &mcp.ToolAnnotations{
-		ReadOnlyHint:  true,
-		OpenWorldHint: boolPtr(false),
+		ReadOnlyHint:   true,
+		IdempotentHint: true,
+		OpenWorldHint:  boolPtr(false),
 	}
 }
 
