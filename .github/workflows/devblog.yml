@@ -16,9 +16,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fetch git notes
-        run: git fetch origin refs/notes/timbers:refs/notes/timbers
-
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
