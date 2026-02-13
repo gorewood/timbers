@@ -16,10 +16,10 @@ import (
 
 // initFlags holds the command-line flags for the init command.
 type initFlags struct {
-	yes      bool
-	hooks    bool
-	noClaude bool
-	dryRun   bool
+	yes     bool
+	hooks   bool
+	noAgent bool
+	dryRun  bool
 }
 
 // initStepResult tracks the result of a single initialization step.
@@ -35,7 +35,7 @@ type initState struct {
 	gitattributesHasEntry bool
 	hooksInstalled        bool
 	postRewriteInstalled  bool
-	claudeInstalled       bool
+	agentEnvInstalled     bool // true if any agent env integration is present
 }
 
 // initStyleSet holds lipgloss styles for init output.
@@ -77,7 +77,7 @@ This command sets up everything needed to use timbers:
   - Adds .gitattributes entry to collapse timbers files in diffs
   - Configures .gitattributes for diff collapsing
   - Installs Git hooks (optional, includes post-rewrite for rebase safety)
-  - Sets up Claude Code integration (optional)
+  - Sets up agent environment integration (optional, e.g. Claude Code)
 
 The command is idempotent - safe to run multiple times.
 
@@ -85,7 +85,7 @@ Examples:
   timbers init              # Interactive setup
   timbers init --yes        # Accept all defaults, no prompts
   timbers init --hooks      # Also install git hooks
-  timbers init --no-claude  # Skip Claude integration
+  timbers init --no-agent   # Skip agent environment integration
   timbers init --dry-run    # Show what would be done`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runInit(cmd, flags)
@@ -94,14 +94,23 @@ Examples:
 
 	cmd.Flags().BoolVarP(&flags.yes, "yes", "y", false, "Accept all defaults, no prompts")
 	cmd.Flags().BoolVar(&flags.hooks, "hooks", false, "Install git hooks (pre-commit)")
-	cmd.Flags().BoolVar(&flags.noClaude, "no-claude", false, "Skip Claude integration prompt")
+	cmd.Flags().BoolVar(&flags.noAgent, "no-agent", false, "Skip agent environment integration")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Show what would be done without doing it")
+
+	// Deprecated alias for backward compatibility.
+	cmd.Flags().Bool("no-claude", false, "Alias for --no-agent (deprecated)")
+	_ = cmd.Flags().MarkHidden("no-claude")
 
 	return cmd
 }
 
 // runInit executes the init command.
 func runInit(cmd *cobra.Command, flags *initFlags) error {
+	// Support deprecated --no-claude as alias for --no-agent.
+	if nc, _ := cmd.Flags().GetBool("no-claude"); nc {
+		flags.noAgent = true
+	}
+
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 	styles := initStyles(printer.IsTTY())
 
@@ -143,9 +152,7 @@ func gatherInitState() *initState {
 		state.postRewriteInstalled = checkPostRewriteHook(postRewritePath)
 	}
 
-	globalHookPath, _, _ := setup.ResolveClaudeSettingsPath(false)
-	projectHookPath, _, _ := setup.ResolveClaudeSettingsPath(true)
-	state.claudeInstalled = setup.IsTimbersSectionInstalled(globalHookPath) || setup.IsTimbersSectionInstalled(projectHookPath)
+	state.agentEnvInstalled = len(setup.DetectedAgentEnvs()) > 0
 
 	return state
 }
@@ -220,7 +227,7 @@ func isAlreadyInitialized(state *initState, flags *initFlags) bool {
 	return state.timbersDirExists &&
 		state.gitattributesHasEntry &&
 		(!flags.hooks || (state.hooksInstalled && state.postRewriteInstalled)) &&
-		(flags.noClaude || state.claudeInstalled)
+		(flags.noAgent || state.agentEnvInstalled)
 }
 
 // outputAlreadyInitialized handles the already-initialized case.
@@ -242,7 +249,7 @@ func outputAlreadyInitialized(printer *output.Printer, styles initStyleSet, repo
 // outputInitResult outputs the final initialization result.
 func outputInitResult(printer *output.Printer, styles initStyleSet, repoName string, _ *initState, steps []initStepResult) error {
 	hooksInstalled := stepSucceeded(steps, "hooks")
-	claudeInstalled := stepSucceeded(steps, "claude")
+	agentInstalled := stepSucceeded(steps, "agent_env")
 	timbersDirCreated := stepSucceeded(steps, "timbers_dir")
 
 	if printer.IsJSON() {
@@ -251,7 +258,7 @@ func outputInitResult(printer *output.Printer, styles initStyleSet, repoName str
 			"repo_name":           repoName,
 			"timbers_dir_created": timbersDirCreated,
 			"hooks_installed":     hooksInstalled,
-			"claude_installed":    claudeInstalled,
+			"claude_installed":    agentInstalled, // backward compat key
 			"already_initialized": false,
 			"steps":               steps,
 		})

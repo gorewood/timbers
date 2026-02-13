@@ -78,8 +78,8 @@ func formatStepName(name string) string {
 		return "Git hooks"
 	case "post_rewrite":
 		return "Post-rewrite hook"
-	case "claude":
-		return "Claude integration"
+	case "agent_env":
+		return "Agent integration"
 	default:
 		return name
 	}

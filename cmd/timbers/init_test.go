@@ -727,13 +727,13 @@ func TestInitDryRunJSONSteps(t *testing.T) {
 			t.Fatalf("steps is not an array: %T", result["steps"])
 		}
 
-		// Should have 5 steps: timbers_dir, gitattributes, hooks, post_rewrite, claude
+		// Should have 5 steps: timbers_dir, gitattributes, hooks, post_rewrite, agent_env
 		if len(steps) != 5 {
 			t.Errorf("got %d steps, want 5", len(steps))
 		}
 
 		// Check step names
-		expectedSteps := []string{"timbers_dir", "gitattributes", "hooks", "post_rewrite", "claude"}
+		expectedSteps := []string{"timbers_dir", "gitattributes", "hooks", "post_rewrite", "agent_env"}
 		for i, step := range steps {
 			if i >= len(expectedSteps) {
 				break

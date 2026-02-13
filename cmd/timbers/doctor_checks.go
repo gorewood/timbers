@@ -200,7 +200,7 @@ func checkGitattributes() checkResult {
 func runIntegrationChecks(flags *doctorFlags) []checkResult {
 	checks := make([]checkResult, 0, 2)
 	checks = append(checks, checkGitHooks())
-	checks = append(checks, checkClaudeIntegration(flags))
+	checks = append(checks, checkAgentIntegrations(flags)...)
 	return checks
 }
 
@@ -240,40 +240,43 @@ func checkGitHooks() checkResult {
 	}
 }
 
-// checkClaudeIntegration checks if Claude Code hooks are configured.
-func checkClaudeIntegration(flags *doctorFlags) checkResult {
-	// Check project-scope Claude hook first, then global.
-	for _, projectScope := range []bool{true, false} {
-		hookPath, _, err := setup.ResolveClaudeSettingsPath(projectScope)
-		if err != nil {
-			continue
-		}
-		if setup.IsTimbersSectionInstalled(hookPath) {
-			return checkResult{
-				Name:    "Claude Integration",
-				Status:  checkPass,
-				Message: "timbers configured in Claude hooks",
-			}
+// checkAgentIntegrations checks all registered agent environments.
+func checkAgentIntegrations(flags *doctorFlags) []checkResult {
+	envs := setup.AllAgentEnvs()
+	results := make([]checkResult, 0, len(envs))
+	for _, env := range envs {
+		results = append(results, checkAgentEnv(env, flags))
+	}
+	return results
+}
+
+// checkAgentEnv checks a single agent environment's integration status.
+func checkAgentEnv(env setup.AgentEnv, flags *doctorFlags) checkResult {
+	name := env.DisplayName() + " Integration"
+
+	_, _, installed := env.Detect()
+	if installed {
+		return checkResult{
+			Name:    name,
+			Status:  checkPass,
+			Message: "timbers configured in " + env.DisplayName() + " hooks",
 		}
 	}
 
 	if flags.fix {
-		hookPath, _, err := setup.ResolveClaudeSettingsPath(true) // project-level
-		if err == nil {
-			if err := setup.InstallTimbersSection(hookPath); err == nil {
-				return checkResult{
-					Name:    "Claude Integration",
-					Status:  checkPass,
-					Message: "timbers configured in Claude hooks (auto-fixed)",
-				}
+		if _, err := env.Install(true); err == nil {
+			return checkResult{
+				Name:    name,
+				Status:  checkPass,
+				Message: "timbers configured in " + env.DisplayName() + " hooks (auto-fixed)",
 			}
 		}
 	}
 
 	return checkResult{
-		Name:    "Claude Integration",
+		Name:    name,
 		Status:  checkWarn,
-		Message: "Claude hooks not configured for timbers",
-		Hint:    "Run 'timbers setup claude' or 'timbers doctor --fix'",
+		Message: env.DisplayName() + " hooks not configured for timbers",
+		Hint:    "Run 'timbers setup " + env.Name() + "' or 'timbers doctor --fix'",
 	}
 }

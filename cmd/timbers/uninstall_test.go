@@ -246,7 +246,7 @@ func TestUninstallHelpText(t *testing.T) {
 	output := buf.String()
 	checks := []string{
 		"uninstall", "--dry-run", "--force", "--json",
-		"--binary", "--keep-data", "hooks", "Claude",
+		"--binary", "--keep-data", "hooks", "agent",
 	}
 	for _, check := range checks {
 		if !strings.Contains(output, check) {

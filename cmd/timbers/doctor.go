@@ -62,7 +62,7 @@ Runs a series of health checks across four categories:
   CORE        - Storage directory, binary, and version update check
   CONFIG      - Config directory, env files, API keys, templates
   WORKFLOW    - Pending commits and recent entries
-  INTEGRATION - Git hooks and Claude Code integration
+  INTEGRATION - Git hooks and agent environment integrations
 
 Each check reports:
   Pass    - Check passed successfully

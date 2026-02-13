@@ -9,12 +9,19 @@ import (
 	"github.com/gorewood/timbers/internal/output"
 )
 
+// AgentEnvState captures the installation state of a single agent environment.
+type AgentEnvState struct {
+	Name    string // agent env name (e.g. "claude")
+	Display string // display name (e.g. "Claude Code")
+	Path    string // settings file path
+	Scope   string // "project" or "global"
+	Removed bool   // set after successful removal
+}
+
 // UninstallInfo holds the state gathered before an uninstall operation.
 // Each field captures whether a component is present and its location.
 type UninstallInfo struct {
 	BinaryPath          string
-	ClaudeScope         string
-	ClaudeHookPath      string
 	RepoName            string
 	PreCommitHookPath   string
 	PreCommitBackupPath string
@@ -25,11 +32,12 @@ type UninstallInfo struct {
 	BinaryRemoved       bool
 	HooksRemoved        bool
 	HooksRestored       bool
-	ClaudeRemoved       bool
 	InRepo              bool
 	HooksInstalled      bool
-	ClaudeInstalled     bool
 	HooksHasBackup      bool
+
+	// Agent environment integrations detected during gather.
+	AgentEnvs []AgentEnvState
 }
 
 // GatherBinaryPath resolves the current executable path.
@@ -78,24 +86,44 @@ func GatherHookInfo(info *UninstallInfo) {
 	info.PreCommitBackupPath = p + ".backup"
 }
 
-// GatherClaudeInfo detects Claude integration in project or global scope.
-func GatherClaudeInfo(info *UninstallInfo) {
-	globalPath, _, _ := ResolveClaudeSettingsPath(false)
-	projectPath, _, _ := ResolveClaudeSettingsPath(true)
-	if IsTimbersSectionInstalled(projectPath) {
-		info.ClaudeInstalled = true
-		info.ClaudeScope = "project"
-		info.ClaudeHookPath = projectPath
-	} else if IsTimbersSectionInstalled(globalPath) {
-		info.ClaudeInstalled = true
-		info.ClaudeScope = "global"
-		info.ClaudeHookPath = globalPath
+// GatherAgentEnvInfo detects all registered agent environment integrations.
+func GatherAgentEnvInfo(info *UninstallInfo) {
+	for _, env := range AllAgentEnvs() {
+		path, scope, installed := env.Detect()
+		if installed {
+			info.AgentEnvs = append(info.AgentEnvs, AgentEnvState{
+				Name:    env.Name(),
+				Display: env.DisplayName(),
+				Path:    path,
+				Scope:   scope,
+			})
+		}
 	}
 }
 
-// RemoveClaudeIntegration removes the timbers section from a Claude hook file.
-func RemoveClaudeIntegration(hookPath string) error {
-	return RemoveTimbersSectionFromHook(hookPath)
+// HasAgentEnvs returns true if any agent environment integrations were detected.
+func (info *UninstallInfo) HasAgentEnvs() bool {
+	return len(info.AgentEnvs) > 0
+}
+
+// RemoveAgentEnvs removes timbers from all detected agent environments.
+func RemoveAgentEnvs(info *UninstallInfo) []string {
+	var errs []string
+	for i := range info.AgentEnvs {
+		env := GetAgentEnv(info.AgentEnvs[i].Name)
+		if env == nil {
+			errs = append(errs, info.AgentEnvs[i].Name+": unknown agent environment")
+			continue
+		}
+		// Detect which scope is installed and remove from that scope.
+		project := info.AgentEnvs[i].Scope == "project"
+		if err := env.Remove(project); err != nil {
+			errs = append(errs, info.AgentEnvs[i].Name+": "+err.Error())
+			continue
+		}
+		info.AgentEnvs[i].Removed = true
+	}
+	return errs
 }
 
 // RemoveGitHook removes the pre-commit hook and optionally restores a backup.

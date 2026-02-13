@@ -22,8 +22,8 @@ func newSetupCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "setup",
-		Short: "Configure editor and tool integrations",
-		Long: `Configure timbers integrations with editors and development tools.
+		Short: "Configure agent environment integrations",
+		Long: `Configure timbers integrations with agent coding environments.
 
 Subcommands:
   claude    Install Claude Code integration
@@ -121,32 +121,19 @@ func runSetupClaude(cmd *cobra.Command, project, check, remove, dryRun bool) err
 func runSetupList(cmd *cobra.Command) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 
-	globalHookPath, _, _ := setup.ResolveClaudeSettingsPath(false)
-	projectHookPath, _, _ := setup.ResolveClaudeSettingsPath(true)
-
-	globalInstalled := setup.IsTimbersSectionInstalled(globalHookPath)
-	projectInstalled := setup.IsTimbersSectionInstalled(projectHookPath)
-
-	var claudeScope, claudeLocation string
-	var claudeInstalled bool
-	if projectInstalled {
-		claudeInstalled = true
-		claudeScope = "project"
-		claudeLocation = projectHookPath
-	} else if globalInstalled {
-		claudeInstalled = true
-		claudeScope = "global"
-		claudeLocation = globalHookPath
-	}
-
-	integrations := []integrationInfo{
-		{
-			Name:        "claude",
-			Description: "Claude Code session context injection",
-			Installed:   claudeInstalled,
-			Scope:       claudeScope,
-			Location:    claudeLocation,
-		},
+	envs := setup.AllAgentEnvs()
+	integrations := make([]integrationInfo, 0, len(envs))
+	for _, env := range envs {
+		info := integrationInfo{
+			Name:        env.Name(),
+			Description: env.DisplayName() + " session context injection",
+		}
+		if path, scope, installed := env.Detect(); installed {
+			info.Installed = true
+			info.Scope = scope
+			info.Location = path
+		}
+		integrations = append(integrations, info)
 	}
 
 	if printer.IsJSON() {
