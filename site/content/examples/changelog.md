@@ -15,6 +15,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-02-13
+
+### Changed
+- Rewrote agent coaching text with motivated rules — each instruction now explains *why* it exists, enabling models to generalize correctly instead of overtriggering on imperative language
+- Replaced 11 instances of MUST/CRITICAL/MANDATORY with calm, motivated framing — when everything is critical, nothing is
+- Replaced vague `--notes` guidance ("use when you made a real choice") with concrete 5-point trigger criteria: 2+ approaches evaluated, obvious approach rejected, surprise encountered, future lock-in, non-obvious to teammates
+- Structured coaching with XML section tags (`<protocol>`, `<why-coaching>`, `<notes-coaching>`, `<commands>`) for cleaner model parsing
+- Deleted redundant "Core Rules (MANDATORY)" block that restated instructions already covered above
+- Updated tutorial: added `decision-log` to template list, recommended install script over `go install`, updated model recommendations to recommend `opus` for quality content
+
+### Fixed
+- Fixed Hugo site `baseURL` from `rbergman.github.io` to `gorewood.github.io` after org migration
+- Fixed devblog CI workflow failing on stale `git fetch refs/notes/timbers` — timbers uses `.timbers/` directory storage, not git notes
+- Fixed devblog posts not triggering site rebuild — `GITHUB_TOKEN` pushes don't fire `on:push` workflows, added explicit `workflow_dispatch` chain from devblog to pages workflow
+
+### Technical
+- Switched devblog CI from weekly to daily schedule (9am UTC, `--since 1d`)
+- Regenerated all site example artifacts from 55 real ledger entries with notes, replacing old 30-entry backfilled set
+
 ## [0.8.0] - 2026-02-13
 
 ### Added
