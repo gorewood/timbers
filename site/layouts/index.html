@@ -543,12 +543,12 @@ for undocumented commits, then:
                 <div class="flex-shrink-0 w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-sm font-mono">3</div>
                 <div class="flex-1">
                     <p class="text-white font-semibold mb-1">Your agent documents the work</p>
-                    <p class="text-zinc-500 text-sm mb-3">Once configured, your agent runs this automatically after every commit. You harvest the insights.</p>
+                    <p class="text-zinc-500 text-sm mb-3">Once configured, your agent captures decisions as it works. You harvest the insights.</p>
                     <div class="terminal">
-                        <div class="terminal-body py-3"><span class="cmt"># Your agent runs this after each commit:</span>
-<span class="prompt">$</span> <span class="cmd">timbers</span> <span class="sub">log</span> <span class="str">"Implemented rate limiting"</span> <span class="cont">\</span>
-    <span class="flag">--why</span> <span class="str">"Token bucket over sliding window for simplicity"</span> <span class="cont">\</span>
-    <span class="flag">--how</span> <span class="str">"Token bucket with Redis backend"</span></div>
+                        <div class="terminal-body py-3"><span class="cmt"># Your agent captures decisions as it works:</span>
+<span class="prompt">$</span> <span class="cmd">timbers</span> <span class="sub">log</span> <span class="str">"Pivoted storage from git notes to file-per-entry"</span> <span class="cont">\</span>
+    <span class="flag">--why</span> <span class="str">"Files enable atomic writes and eliminate merge conflicts in concurrent worktrees"</span> <span class="cont">\</span>
+    <span class="flag">--how</span> <span class="str">"JSON files in .timbers/ with temp+rename atomicity"</span></div>
                     </div>
                 </div>
             </div>
