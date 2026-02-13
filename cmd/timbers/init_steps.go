@@ -21,7 +21,7 @@ func buildDryRunSteps(state *initState, flags *initFlags) []initStepResult {
 	steps = append(steps, buildGitattributesStep(state))
 	steps = append(steps, buildHooksStep(state, flags))
 	steps = append(steps, buildPostRewriteStep(state, flags))
-	steps = append(steps, buildClaudeStep(state, flags))
+	steps = append(steps, buildAgentEnvStep(state, flags))
 	return steps
 }
 
@@ -65,17 +65,17 @@ func buildPostRewriteStep(state *initState, flags *initFlags) initStepResult {
 	}
 }
 
-// buildClaudeStep creates the dry-run step for Claude integration.
-func buildClaudeStep(state *initState, flags *initFlags) initStepResult {
+// buildAgentEnvStep creates the dry-run step for agent environment integration.
+func buildAgentEnvStep(state *initState, flags *initFlags) initStepResult {
 	switch {
-	case flags.noClaude:
-		return initStepResult{Name: "claude", Status: "skipped", Message: "disabled via --no-claude"}
-	case state.claudeInstalled:
-		return initStepResult{Name: "claude", Status: "skipped", Message: "already installed"}
+	case flags.noAgent:
+		return initStepResult{Name: "agent_env", Status: "skipped", Message: "disabled via --no-agent"}
+	case state.agentEnvInstalled:
+		return initStepResult{Name: "agent_env", Status: "skipped", Message: "already installed"}
 	case flags.yes:
-		return initStepResult{Name: "claude", Status: "dry_run", Message: "would install Claude integration"}
+		return initStepResult{Name: "agent_env", Status: "dry_run", Message: "would install agent integration"}
 	default:
-		return initStepResult{Name: "claude", Status: "dry_run", Message: "would prompt Claude integration"}
+		return initStepResult{Name: "agent_env", Status: "dry_run", Message: "would prompt agent integration"}
 	}
 }
 
@@ -91,7 +91,7 @@ func executeInitSteps(
 		func() initStepResult { return performGitattributesInit(state) },
 		func() initStepResult { return executeHooksStep(state, flags) },
 		func() initStepResult { return executePostRewriteStep(state, flags) },
-		func() initStepResult { return executeClaudeStep(cmd, printer, styles, state, flags) },
+		func() initStepResult { return executeAgentEnvStep(cmd, printer, styles, state, flags) },
 	} {
 		step := stepFn()
 		steps = append(steps, step)
@@ -160,15 +160,15 @@ func performPostRewriteInstall(state *initState) initStepResult {
 	return initStepResult{Name: "post_rewrite", Status: "ok", Message: "installed"}
 }
 
-// executeClaudeStep runs the Claude integration step.
-func executeClaudeStep(
+// executeAgentEnvStep runs the agent environment integration step.
+func executeAgentEnvStep(
 	cmd *cobra.Command, printer *output.Printer, styles initStyleSet,
 	state *initState, flags *initFlags,
 ) initStepResult {
-	if flags.noClaude {
-		return initStepResult{Name: "claude", Status: "skipped", Message: "disabled via --no-claude"}
+	if flags.noAgent {
+		return initStepResult{Name: "agent_env", Status: "skipped", Message: "disabled via --no-agent"}
 	}
-	return performClaudeSetup(cmd, printer, styles, state, flags)
+	return performAgentEnvSetup(cmd, printer, styles, state, flags)
 }
 
 // performTimbersDirInit creates the .timbers/ directory if it doesn't exist.
@@ -259,56 +259,61 @@ func performHooksInstall(state *initState) initStepResult {
 	return initStepResult{Name: "hooks", Status: "ok", Message: msg}
 }
 
-// performClaudeSetup handles Claude integration setup.
-func performClaudeSetup(
+// performAgentEnvSetup handles agent environment integration setup.
+// Currently installs Claude Code integration (the only registered agent env).
+func performAgentEnvSetup(
 	cmd *cobra.Command, printer *output.Printer, styles initStyleSet,
 	state *initState, flags *initFlags,
 ) initStepResult {
-	if state.claudeInstalled {
-		return initStepResult{Name: "claude", Status: "skipped", Message: "already installed"}
+	if state.agentEnvInstalled {
+		return initStepResult{Name: "agent_env", Status: "skipped", Message: "already installed"}
+	}
+
+	// Default to Claude Code (first registered agent env).
+	env := setup.GetAgentEnv("claude")
+	if env == nil {
+		return initStepResult{Name: "agent_env", Status: "skipped", Message: "no agent environments available"}
 	}
 
 	if flags.yes {
-		return installClaudeIntegration()
+		return installAgentEnv(env)
 	}
 
 	if !printer.IsJSON() && output.IsTTY(cmd.OutOrStdout()) {
-		return promptClaudeInstall(printer, styles)
+		return promptAgentEnvInstall(printer, styles, env)
 	}
 
-	return initStepResult{Name: "claude", Status: "skipped", Message: "non-interactive mode"}
+	return initStepResult{Name: "agent_env", Status: "skipped", Message: "non-interactive mode"}
 }
 
-// promptClaudeInstall prompts the user for Claude integration.
-func promptClaudeInstall(printer *output.Printer, styles initStyleSet) initStepResult {
+// promptAgentEnvInstall prompts the user for agent env integration.
+func promptAgentEnvInstall(printer *output.Printer, styles initStyleSet, env setup.AgentEnv) initStepResult {
 	printer.Println()
 	printer.Print("%s\n", styles.dim.Render("Optional integrations:"))
-	printer.Print("  Install %s? [Y/n] ", styles.accent.Render("Claude Code integration"))
+	printer.Print("  Install %s? [Y/n] ", styles.accent.Render(env.DisplayName()+" integration"))
 
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
 	if err != nil {
-		return initStepResult{Name: "claude", Status: "skipped", Message: "could not read input"}
+		return initStepResult{Name: "agent_env", Status: "skipped", Message: "could not read input"}
 	}
 
 	response = strings.TrimSpace(strings.ToLower(response))
 	if response == "" || response == "y" || response == "yes" {
-		return installClaudeIntegration()
+		return installAgentEnv(env)
 	}
 
-	return initStepResult{Name: "claude", Status: "skipped", Message: "user declined"}
+	return initStepResult{Name: "agent_env", Status: "skipped", Message: "user declined"}
 }
 
-// installClaudeIntegration installs the Claude hook at project level.
-func installClaudeIntegration() initStepResult {
-	hookPath, _, err := setup.ResolveClaudeSettingsPath(true)
+// installAgentEnv installs an agent environment integration at project level.
+func installAgentEnv(env setup.AgentEnv) initStepResult {
+	path, err := env.Install(true) // project scope
 	if err != nil {
-		return initStepResult{Name: "claude", Status: "failed", Message: err.Error()}
+		return initStepResult{Name: "agent_env", Status: "failed", Message: err.Error()}
 	}
 
-	if err := setup.InstallTimbersSection(hookPath); err != nil {
-		return initStepResult{Name: "claude", Status: "failed", Message: err.Error()}
-	}
-
-	return initStepResult{Name: "claude", Status: "ok", Message: "installed in .claude/settings.local.json"}
+	location := filepath.Base(filepath.Dir(path)) + "/" + filepath.Base(path)
+	msg := "installed " + env.DisplayName() + " at " + location
+	return initStepResult{Name: "agent_env", Status: "ok", Message: msg}
 }

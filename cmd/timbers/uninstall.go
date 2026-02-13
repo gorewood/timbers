@@ -17,7 +17,7 @@ func newUninstallCmd() *cobra.Command {
 	var dryRun, force, removeBinary, keepData bool
 	cmd := &cobra.Command{
 		Use: "uninstall", Short: "Remove timbers from the current repository",
-		Long: `Remove timbers components: .timbers/ directory, hooks, Claude integration.
+		Long: `Remove timbers components: .timbers/ directory, hooks, agent integrations.
 Use --keep-data to preserve ledger data. Use --binary to remove the binary.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runUninstall(cmd, dryRun, force, removeBinary, keepData)
@@ -68,7 +68,7 @@ func gatherUninstallInfo(includeBinary bool) (*setup.UninstallInfo, error) {
 		setup.GatherRepoInfo(info)
 		setup.GatherHookInfo(info)
 	}
-	setup.GatherClaudeInfo(info)
+	setup.GatherAgentEnvInfo(info)
 	return info, nil
 }
 
@@ -83,10 +83,21 @@ func outputDryRunJSON(printer *output.Printer, info *setup.UninstallInfo, binary
 	data := map[string]any{
 		"status": "dry_run", "in_repo": info.InRepo, "keep_data": keep,
 		"timbers_dir_exists": info.TimbersDirExists, "entry_count": info.EntryCount,
-		"hooks_installed": info.HooksInstalled, "claude_installed": info.ClaudeInstalled,
+		"hooks_installed":    info.HooksInstalled,
+		"agent_integrations": len(info.AgentEnvs),
 	}
-	if info.ClaudeInstalled {
-		data["claude_scope"] = info.ClaudeScope
+	// Backward compatibility: keep claude_installed for JSON consumers.
+	claudeInstalled := false
+	for _, ae := range info.AgentEnvs {
+		if ae.Name == "claude" {
+			claudeInstalled = true
+			data["claude_installed"] = true
+			data["claude_scope"] = ae.Scope
+			break
+		}
+	}
+	if !claudeInstalled {
+		data["claude_installed"] = false
 	}
 	if binary {
 		data["binary_path"] = info.BinaryPath
@@ -117,7 +128,7 @@ func outputDryRunHuman(printer *output.Printer, info *setup.UninstallInfo, binar
 }
 
 func hasAnyComponents(info *setup.UninstallInfo, binary bool) bool {
-	return info.TimbersDirExists || info.HooksInstalled || info.ClaudeInstalled || binary
+	return info.TimbersDirExists || info.HooksInstalled || info.HasAgentEnvs() || binary
 }
 
 func formatEntryCount(count int) string {
@@ -139,8 +150,8 @@ func printComponents(printer *output.Printer, styles uninstallStyleSet, info *se
 	if info.HooksInstalled {
 		printer.Println(styles.bullet.Render(indent+"• ") + "Git hooks: pre-commit")
 	}
-	if info.ClaudeInstalled {
-		printer.Println(styles.bullet.Render(indent+"• ") + "Claude integration: " + info.ClaudeScope)
+	for _, ae := range info.AgentEnvs {
+		printer.Println(styles.bullet.Render(indent+"• ") + ae.Display + " integration: " + ae.Scope)
 	}
 	if binary {
 		printer.Println(styles.bullet.Render(indent+"• ") + "Binary: " + info.BinaryPath)
@@ -175,23 +186,13 @@ func confirmUninstall(cmd *cobra.Command, info *setup.UninstallInfo, binary, kee
 
 func doUninstall(info *setup.UninstallInfo, binary, keep bool) []string {
 	var errs []string
-	errs = uninstallClaude(info, errs)
+	agentErrs := setup.RemoveAgentEnvs(info)
+	errs = append(errs, agentErrs...)
 	errs = uninstallHooks(info, errs)
 	if !keep {
 		errs = uninstallTimbersDir(info, errs)
 	}
 	errs = uninstallBinary(info, binary, errs)
-	return errs
-}
-
-func uninstallClaude(info *setup.UninstallInfo, errs []string) []string {
-	if !info.ClaudeInstalled {
-		return errs
-	}
-	if err := setup.RemoveClaudeIntegration(info.ClaudeHookPath); err != nil {
-		return append(errs, "claude: "+err.Error())
-	}
-	info.ClaudeRemoved = true
 	return errs
 }
 
@@ -242,13 +243,24 @@ func reportUninstallJSON(printer *output.Printer, info *setup.UninstallInfo, bin
 	if len(errs) > 0 {
 		status = "partial"
 	}
+
+	// Compute backward-compatible claude_removed.
+	claudeRemoved := false
+	claudeScope := ""
+	for _, ae := range info.AgentEnvs {
+		if ae.Name == "claude" && ae.Removed {
+			claudeRemoved = true
+			claudeScope = ae.Scope
+		}
+	}
+
 	data := map[string]any{
-		"status": status, "claude_removed": info.ClaudeRemoved, "hooks_removed": info.HooksRemoved,
+		"status": status, "claude_removed": claudeRemoved, "hooks_removed": info.HooksRemoved,
 		"hooks_restored": info.HooksRestored, "timbers_dir_removed": info.TimbersDirRemoved && !keep,
 		"keep_data": keep,
 	}
-	if info.ClaudeRemoved && info.ClaudeScope != "" {
-		data["claude_scope"] = info.ClaudeScope
+	if claudeRemoved && claudeScope != "" {
+		data["claude_scope"] = claudeScope
 	}
 	if len(errs) > 0 {
 		data["errors"], data["recovery_hint"] = errs, "Check permissions and try again."
@@ -277,8 +289,10 @@ func reportUninstallHuman(printer *output.Printer, info *setup.UninstallInfo, bi
 }
 
 func printRemovalSummary(printer *output.Printer, styles uninstallStyleSet, info *setup.UninstallInfo, binary, keep bool) {
-	if info.ClaudeRemoved {
-		printer.Println(styles.success.Render("  ok ") + "Claude integration removed")
+	for _, ae := range info.AgentEnvs {
+		if ae.Removed {
+			printer.Println(styles.success.Render("  ok ") + ae.Display + " integration removed")
+		}
 	}
 	if info.HooksRemoved {
 		msg := "Git hooks removed"

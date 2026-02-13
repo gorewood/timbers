@@ -311,14 +311,14 @@ func TestDoctorFixClaudeIntegration(t *testing.T) {
 		var claudeCheck map[string]any
 		for _, item := range integration {
 			check, checkOK := item.(map[string]any)
-			if checkOK && check["name"] == "Claude Integration" {
+			if checkOK && check["name"] == "Claude Code Integration" {
 				claudeCheck = check
 				break
 			}
 		}
 
 		if claudeCheck == nil {
-			t.Fatal("did not find Claude Integration check")
+			t.Fatal("did not find Claude Code Integration check")
 		}
 
 		if claudeCheck["status"] != "pass" {
