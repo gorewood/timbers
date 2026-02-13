@@ -125,9 +125,8 @@ func TestRepoRoot(t *testing.T) {
 		if root == "" {
 			t.Error("RepoRoot() returned empty string")
 		}
-		// Should end with "timbers"
-		if filepath.Base(root) != "timbers" {
-			t.Errorf("RepoRoot() = %q, expected to end with 'timbers'", root)
+		if !filepath.IsAbs(root) {
+			t.Errorf("RepoRoot() = %q, expected absolute path", root)
 		}
 	})
 
