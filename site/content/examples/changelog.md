@@ -1,6 +1,6 @@
 +++
 title = 'Changelog'
-date = '2026-02-12'
+date = '2026-02-13'
 tags = ['example', 'changelog']
 +++
 
@@ -14,6 +14,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.8.0] - 2026-02-13
+
+### Added
+- Added `--notes` flag to `timbers log` for capturing deliberation context — the journey to a decision, distinct from `--why` which captures the verdict
+- Added notes coaching to `prime` output with BAD/GOOD examples teaching "thinking out loud" style over mechanical summaries
+- Added `AgentEnv` interface with registry pattern for agent-environment-neutral integrations, enabling single-file additions for new agent environments (Gemini, Cursor, Windsurf, Codex)
+- Added `ClaudeEnv` as reference implementation of `AgentEnv`, wrapping existing Claude Code setup/teardown functions
+
+### Changed
+- Refactored `init`, `doctor`, `setup`, and `uninstall` commands to iterate `AllAgentEnvs()` instead of hardcoding Claude-specific logic
+- Replaced `--no-claude` flag with generic `--no-agent` (deprecated alias preserved for backward compatibility)
+- Tightened `--why` coaching to explicitly differentiate from `--notes`: why is the verdict, notes is the journey
+- Preserved backward-compatible JSON keys (`claude_installed`, `claude_removed`) while generalizing step names and flags
+
+### Fixed
+- Fixed `TestCommitFiles` to use an isolated temp repo instead of live HEAD, which fails on merge commits where `diff-tree` returns empty
+- Fixed `TestRepoRoot` to be worktree-compatible by replacing hardcoded directory name assertion with absolute path check
+
+### Technical
+- Extracted `defaultWorkflowContent` to `prime_workflow.go` to stay under 350-line file-length lint limit
+- Extracted `outputPrimeRecentWork` from `outputPrimeHuman` to stay under cognitive complexity limit of 15
+- Added `AgentEnvState` slice pattern for `uninstall` to gather and remove all detected environments
 
 ## [0.7.0] - 2026-02-12
 
@@ -161,6 +184,7 @@ Initial public release.
 - GitHub Actions workflows for releases, dev blog generation, and CI (test + lint)
 - Comprehensive documentation: tutorial, agent reference, LLM commands guide, publishing artifacts guide, agent DX guide, and spec
 
+[0.8.0]: https://github.com/gorewood/timbers/releases/tag/v0.8.0
 [0.4.0]: https://github.com/gorewood/timbers/releases/tag/v0.4.0
 [0.3.0]: https://github.com/gorewood/timbers/releases/tag/v0.3.0
 [0.2.0]: https://github.com/gorewood/timbers/releases/tag/v0.2.0
