@@ -1,15 +1,15 @@
 +++
 title = 'Executive Summary'
-date = '2026-02-10'
+date = '2026-02-13'
 tags = ['example', 'exec-summary']
 +++
 
-Generated with `timbers draft exec-summary --last 30 --model opus`
+Generated with `timbers draft exec-summary --last 15 | claude -p --model opus`
 
 ---
 
-- **Completed v0.2.0 release cycle** including pre-release review, post-release fixes, and five resolved review findings — most critically ensuring `init` creates the notes ref so `prime` works immediately for new users
-- **Switched Claude hooks from global to project-level** and made git hooks opt-in, eliminating conflicts with tools like `beads` that rely on `pre-commit` for critical operations
-- **Renamed `prompt` command to `draft`**, added an ADR `decision-log` template, and built a new `changelog` command that generates markdown grouped by tag
-- **Added `amend` command and `--tag` filtering** across `query` and `export` for consistent entry retrieval and post-hoc editing of ledger entries
-- **Shipped foundational infrastructure**: cross-platform config paths, `.env.local` API key loading, `goreleaser` pipeline, `lipgloss` styling, multi-provider LLM client, stderr routing when piped, and `doctor` enhancements with config/version checks
+- **Released v0.6.0, v0.7.0, and v0.8.0** in rapid succession — pivoting storage to merge-safe flat files, adding an MCP server for universal editor integration, and introducing a `--notes` field for capturing deliberation context alongside design decisions
+- **Built an MCP server** (`timbers serve`) with 6 tools over stdio transport, enabling integration with Claude Code, Cursor, Windsurf, Gemini CLI, and other MCP-compatible editors through a single implementation
+- **Made timbers agent-environment neutral** via an `AgentEnv` registry interface — adding support for new AI coding environments (Gemini, Cursor, Windsurf, Codex) is now a single-file task instead of touching multiple commands
+- **Added `--notes` flag** to capture the journey to decisions (alternatives explored, trade-offs weighed), distinct from `--why` which captures the verdict — with coaching in `prime` output to ensure quality
+- **Resolved the pending chicken-and-egg problem** where file-based entry storage caused entry commits to always appear as undocumented work, by filtering ledger-only commits inside `GetPendingCommits`

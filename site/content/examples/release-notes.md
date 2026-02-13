@@ -1,10 +1,10 @@
 +++
 title = 'Release Notes'
-date = '2026-02-10'
+date = '2026-02-13'
 tags = ['example', 'release-notes']
 +++
 
-Generated with `timbers draft release-notes --last 30 --model opus`
+Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ---
 
@@ -12,28 +12,20 @@ Generated with `timbers draft release-notes --last 30 --model opus`
 
 ## New Features
 
-- You can now use `timbers draft` to generate documents like changelogs, release notes, and decision logs directly from your ledger entries — with built-in LLM support via `--model` and `--provider` flags so you don't need to pipe to external tools.
-- You can now generate ADR-style decision logs with the new `decision-log` template, which extracts the "why" behind your work into a structured architectural decision record. Use `timbers draft decision-log` to try it.
-- You can now modify existing ledger entries with `timbers amend` — fix typos, add missing context, or update summary fields using `--what`, `--why`, `--how`, and `--tag` flags. Use `--dry-run` to preview changes before saving.
-- You can now filter entries by tag in both `timbers query` and `timbers export` using the `--tag` flag. Multiple tags use OR logic, so `--tag feature --tag bugfix` returns entries matching either tag.
-- You can now control catchup batch size and grouping with `--limit` and `--group-by` flags on the `catchup` command.
-- You can now store API keys in a `.env.local` file in your config directory instead of setting environment variables — helpful if your environment conflicts with other tools.
-- `timbers doctor` now checks your configuration directory, environment files, API keys, templates, and whether you're running the latest version.
-- You can now cleanly remove timbers from a repository with the `uninstall` command.
+- You can now capture your reasoning process with the `--notes` flag on `timbers log` — record what alternatives you considered and why you chose one approach over another. The `--why` flag captures the verdict; `--notes` captures the journey.
+- Timbers now includes an MCP server (`timbers serve`) that works with any MCP-compatible editor — Claude Code, Cursor, Windsurf, Gemini CLI, and more — providing 6 tools (`pending`, `prime`, `query`, `show`, `status`, `log`) over stdio transport.
+- Timbers is now agent-environment neutral. The `init`, `doctor`, `setup`, and `uninstall` commands work across multiple AI coding environments. Adding support for a new environment requires a single file implementing the `AgentEnv` interface.
+- Entry storage now uses a `YYYY/MM/DD` directory layout under `.timbers/`, providing better filesystem performance at scale while keeping entries merge-safe across concurrent worktrees.
 
 ## Improvements
 
-- `timbers init` now works seamlessly — you no longer need an extra step before `timbers prime` is ready to use.
-- Configuration now works correctly on Windows, macOS, and Linux, respecting `TIMBERS_CONFIG_HOME`, `XDG_CONFIG_HOME`, and platform-appropriate defaults.
-- Git hooks are now opt-in (use `--hooks` to enable them), so timbers no longer conflicts with other tools that use pre-commit hooks.
-- Claude integration now defaults to project-level setup instead of global, which is a better fit since timbers is configured per-repository.
-- When piping output to other commands, errors and warnings now go to stderr so they don't corrupt your piped data.
-- CLI output is more readable with improved styling, tables, and formatting that adapts to your terminal.
-- Timbers now gracefully handles repositories that have git notes from other tools, skipping entries it doesn't recognize instead of erroring out.
-- Comprehensive tutorial and documentation now available covering setup, daily workflow, agent integration, querying, and troubleshooting.
+- `timbers pending` no longer reports entry commits as undocumented work — the chicken-and-egg problem from file-based storage has been resolved.
+- MCP read tools advertise `idempotentHint`, allowing editors to optimize with caching and retry logic.
+- The `--no-claude` flag has been replaced with the more generic `--no-agent` (the old flag still works as a deprecated alias).
+- Documentation across README, tutorial, agent reference, and spec now covers the `--notes` flag with clear guidance on when to use it.
+- The `onboard` snippet includes a `command -v` check for graceful degradation when timbers isn't installed — team members see an install URL instead of an error.
 
 ## Breaking Changes
 
-- The `timbers prompt` command has been renamed to `timbers draft` — update any scripts or workflows that reference the old name.
-- Git hooks are now opt-in rather than installed by default. If you rely on automatic hooks, re-run setup with the `--hooks` flag.
-- Claude hook setup now targets the current project by default. Use `--global` if you need the previous global behavior.
+- Storage has pivoted from git notes to `.timbers/` flat files. If you have existing entries in git notes, run the migration script or use `timbers catchup` to recreate them. The `timbers notes push/fetch` commands have been removed.
+- The `--no-claude` flag on `timbers init` is deprecated in favor of `--no-agent`. The old flag continues to work but will be removed in a future release.

@@ -1,70 +1,51 @@
 +++
 title = 'Sprint Report'
-date = '2026-02-10'
+date = '2026-02-13'
 tags = ['example', 'sprint-report']
 +++
 
-Generated with `timbers draft sprint-report --last 30 --model opus`
+Generated with `timbers draft sprint-report --since 7d | claude -p --model opus`
 
 ---
 
-# Sprint Report: 2026-01-19 → 2026-02-10
+# Sprint Report: 2026-02-09 → 2026-02-13
 
 ## Summary
 
-This sprint took timbers from project foundation through two tagged releases (v0.1.0, v0.2.0). The core recording workflow, query/export pipeline, and LLM-powered document generation all shipped, alongside substantial agent integration work (prime, hooks, onboarding) and release infrastructure. The latter half of the sprint focused heavily on polish, review fixes, and developer experience hardening.
+This sprint shipped three releases (v0.6.0, v0.7.0, v0.8.0) in five days, pivoting the storage layer, adding MCP server support, and making timbers agent-environment neutral. The sprint also introduced the `--notes` field for deliberation capture — the first structural addition to the entry schema since v0.1.0.
 
 ## By Category
 
-### Core & Foundation
-- Project scaffold: spec, Cobra CLI with Charmbracelet styling, agent DX guide
-- Internal packages: git exec wrapper with notes layer, ledger entry schema with validation
-- Core commands: `status`, `pending`, `log`, `show` for the recording workflow
-- Robustness for non-timbers git notes — graceful skip via `ErrNotTimbersNote` and schema validation
+### Storage Pivot (v0.6.0)
+- Pivoted from git notes to flat directory files (`.timbers/<id>.json`) with atomic writes via temp+rename
+- Adopted `YYYY/MM/DD` directory layout for filesystem scalability at high commit volumes
+- Migrated all 37 existing entries from git notes to the new format
+- Removed all git notes code, simplifying the `GitOps` interface from 8 to 4 methods
+- Built 14 integration tests proving file-per-entry storage is inherently merge-safe across branches
+- Resolved the pending chicken-and-egg problem: entry commits no longer appear as undocumented work
 
-### Features
-- `query` command with `--tag` filtering (OR semantics), time/range filters, JSON/Markdown output
-- `export` command with `--tag` filtering extracted to shared `entry_filter.go`
-- `amend` command for modifying existing entries (`--what`/`--why`/`--how`/`--tag`, `--dry-run`)
-- `changelog` command generating grouped markdown from ledger entries
-- `prompt` → `draft` rename with built-in LLM execution (`--model`, `--provider`), 8 built-in templates, and template resolution chain
-- `catchup` command with `--limit` and `--group-by` flags for batch processing
-- ADR `decision-log` template for extracting why-field data into architectural decision records
-- Multi-provider LLM client with `HTTPDoer` interface for testability
+### MCP Server (v0.7.0)
+- Added `timbers serve` subcommand with 6 tools over stdio transport using go-sdk v1.3.0
+- Moved filter functions to `internal/ledger/` for sharing between CLI and MCP handlers
+- Added `idempotentHint` to read tools for client-side caching optimization
+- Added `validateLogInput` to catch empty strings the MCP SDK's required-field check misses
+- Updated onboard snippet and all documentation for the storage pivot
 
-### Agent DX
-- `prime` command for session context injection with workflow instructions and override support
-- `skill` command for agent self-documentation
-- Claude hooks switched from global to project-level scope; git hooks made opt-in (`--hooks`)
-- `init` now creates empty notes ref so `prime` works immediately after setup
-- Prime output updated to surface `draft` command for document generation
+### Agent-Environment Neutral (v0.8.0)
+- Introduced `AgentEnv` interface with registry pattern — each environment self-registers via `init()`
+- Built `ClaudeEnv` as reference implementation wrapping existing setup functions
+- Refactored `init`, `doctor`, `setup`, and `uninstall` to iterate `AllAgentEnvs()`
+- Replaced `--no-claude` with generic `--no-agent` (deprecated alias preserved)
+- Added `--notes` flag for capturing deliberation context alongside design decisions
+- Tightened why coaching to differentiate from notes: why is the verdict, notes is the journey
+- Updated all documentation (README, tutorial, agent reference, spec) for `--notes`
 
-### CLI & Output
-- `lipgloss` styling helpers (`Table`, `Box`, `Section`, `KeyValue`) applied across commands with TTY-aware rendering
-- Errors/warnings routed to stderr when piped; draft status hint emitted to stderr
-- `doctor` enhanced with CONFIG section (config dir, env files, API keys, templates) and GitHub releases version check
-
-### Configuration & Environment
-- Centralized config dir with cross-platform support (`TIMBERS_CONFIG_HOME`, `XDG_CONFIG_HOME`, Windows AppData fallback) in `internal/config`
-- `.env.local` / `.env` file loading for API keys (avoids Claude Code OAuth conflicts)
-
-### Release & CI
-- goreleaser setup with GitHub Actions workflow, `install.sh` with checksum verification
-- v0.1.0 release readiness: MIT LICENSE, README rewrite, `prompt`→`draft` rename propagation, CHANGELOG, CONTRIBUTING
-- v0.2.0 pre-release review: 3-agent review team, 5 parallel fix subagents for naming, output patterns, and global state issues
-- CI workflow for test + lint
-
-### Docs
-- Comprehensive 8-part tutorial (install → catchup → daily workflow → agent integration → troubleshooting)
-- Human oversight documentation with publishing-artifacts guide and CI/CD strategies
-- README rewritten multiple times: OSS audience with badges, problem/solution framing, configuration section
-- Agent DX guide updated for v0.2 learnings, opt-in hooks, and project-level defaults
-
-## Scope
-
-30 entries spanning the full lifecycle — from spec-first design through two releases. The early sprint was broad foundational work (core packages, CLI scaffold, query/export/LLM pipeline). The latter half narrowed to review-driven polish: cross-platform config, pipe ergonomics, hook scoping, and closing gaps surfaced by three independent reviewers. Touches ranged across the entire codebase including internals (`git`, `config`, `envfile`), all major commands, templates, docs, and CI.
+### Testing & Fixes
+- Fixed `TestCommitFiles` — used isolated temp repo instead of live HEAD (merge commits return empty from `diff-tree`)
+- Fixed `TestRepoRoot` — replaced hardcoded directory name with absolute path check for worktree compatibility
+- Dogfood round 3 validated notes coaching with Opus subagents: selective usage (1/3 commits), genuine thinking-out-loud quality
 
 ## Highlights
 
-- **`prompt` → `draft` rename with built-in LLM execution** — a significant UX pivot: the command now reads as the action it performs and can execute against LLM providers directly, eliminating the pipe-to-external-tool workflow.
-- **Post-v0.2.0 review cycle** — three independent reviewers converged on the prime-after-init gap as highest priority; the fix (`git.InitNotesRef()` creating an empty notes namespace via git plumbing) unblocked the entire new-user onboarding path.
+- **Storage pivot was the highest-risk change in timbers' history** — touching all 26 source files, migrating 37 entries, and removing the entire git notes subsystem. The decision to use individual files was validated by 14 merge integration tests proving conflict-free concurrent worktree operation.
+- **The `AgentEnv` registry pattern** transforms multi-environment support from "change N files per environment" to "add one file." The deliberation notes on this entry — debating registry vs switch, analyzing the goal of single-file additions — are exactly the kind of content `--notes` was designed to capture.
