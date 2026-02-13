@@ -2,9 +2,8 @@ name: Generate Dev Blog Post
 
 on:
   workflow_dispatch:
-  # Enable schedule after GitHub Pages is configured:
-  # schedule:
-  #   - cron: '0 9 * * 1'  # Monday 9am UTC
+  schedule:
+    - cron: '0 9 * * *'  # Daily 9am UTC
 
 permissions:
   contents: write
@@ -32,16 +31,15 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           DATE=$(date +%Y-%m-%d)
-          WEEK=$(date +%Y)-week-$(date +%V)
-          FILE="site/content/posts/${DATE}-${WEEK}.md"
+          FILE="site/content/posts/${DATE}-devlog.md"
           mkdir -p site/content/posts
           {
             echo "+++"
-            echo "title = 'Weekly Update: Week $(date +%V), $(date +%Y)'"
+            echo "title = 'Dev Log: ${DATE}'"
             echo "date = '${DATE}'"
             echo "+++"
             echo ""
-            timbers draft devblog --since 7d --model opus
+            timbers draft devblog --since 1d --model opus
           } > "$FILE"
 
       - name: Commit and push
@@ -49,5 +47,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add site/content/posts/
-          git commit -m "blog: weekly update $(date +%Y)-week-$(date +%V)" || exit 0
+          git commit -m "blog: dev log $(date +%Y-%m-%d)" || exit 0
           git push
