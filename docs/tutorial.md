@@ -9,6 +9,10 @@ A step-by-step guide to setting up Timbers for your project, catching up existin
 ### Install Timbers
 
 ```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/gorewood/timbers/main/install.sh | bash
+
+# Or from source (note: go install puts a versionless binary in GOBIN)
 go install github.com/gorewood/timbers/cmd/timbers@latest
 ```
 
@@ -299,6 +303,7 @@ timbers draft --list
 
 Built-in templates:
 - `changelog` — Conventional changelog format
+- `decision-log` — ADR-style architectural decisions extracted from the *why* and *notes* fields
 - `devblog` — Developer blog post (Carmack .plan style)
 - `exec-summary` — Executive summary for stakeholders
 - `pr-description` — Pull request description
@@ -390,15 +395,15 @@ Template resolution order:
 
 ### Model Recommendations
 
-**Local or cheap models are adequate for most tasks.** Timbers prompts are straightforward—summarization, extraction, formatting—and don't need frontier reasoning.
-
 | Use Case | Recommended Model |
 |----------|-------------------|
+| Quality content (changelogs, blog posts, decision logs) | `opus` (best reasoning and writing quality) |
 | Daily use | `local` (free, private, fast) |
-| Batch backfill | `haiku`, `flash`, `nano` (cheap cloud) |
-| High-quality output | `sonnet`, `pro` (when local isn't good enough) |
+| Batch backfill (100+ entries) | `haiku`, `flash`, `nano` (cheap cloud) |
 
-**Cost perspective:** Processing 100 entries with haiku costs ~$0.01-0.05. Local is free.
+**Quality matters for published artifacts.** Decision logs, blog posts, and changelogs benefit from frontier-model reasoning — the difference between shallow summaries and genuine insight is significant. Use `opus` for anything you'd share externally.
+
+**Cost perspective:** Processing 100 entries with haiku costs ~$0.01-0.05. Local is free. When piping through `claude -p --model opus`, you use your subscription rather than API tokens.
 
 ---
 
