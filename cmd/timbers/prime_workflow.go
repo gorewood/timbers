@@ -3,24 +3,26 @@ package main
 
 // defaultWorkflowContent is the default workflow instructions for agent onboarding.
 // This can be overridden by placing a .timbers/PRIME.md file in the repo root.
-const defaultWorkflowContent = `# CRITICAL: Session Protocol
-- [ ] git add && git commit (commit code FIRST)
+const defaultWorkflowContent = `<protocol>
+# Session Protocol
+
+After each git commit, run timbers log to document what you committed.
+Entries reference commit SHAs, so the commit must exist before the entry.
+Document each commit individually — batching loses commit-level granularity.
+
+Session checklist:
+- [ ] git add && git commit (commit code first)
 - [ ] timbers log "what" --why "why" --how "how" (document committed work)
-- [ ] timbers pending (MUST be zero before session end)
+- [ ] timbers pending (should be zero before session end)
 - [ ] git push (entries are committed files, push to sync)
+</protocol>
 
-IMPORTANT: Always commit code before running timbers log. Entries must
-describe committed work, not work-in-progress. Timbers will warn if
-the working tree is dirty.
-
-# Post-Commit Rule (MANDATORY)
-After EVERY git commit, you MUST run:
-  timbers log "what you did" --why "design decision" --how "approach"
-Do not batch commits. Document each commit immediately.
-
+<why-coaching>
 # Writing Good Why Fields
+
 The --why flag captures the *verdict* — the design decision in one sentence.
-Put the reasoning journey in --notes (optional). Keep --why tight.
+This matters because draft templates extract architectural decisions from why
+fields. Feature descriptions produce shallow ADRs; verdicts produce useful ones.
 
 BAD (feature description):
   --why "Users needed tag filtering for queries"
@@ -34,11 +36,24 @@ GOOD (verdict):
   --why "Partial updates via amend avoid re-entering unchanged fields"
   --why "Chose warning over hard error for dirty-tree check to avoid blocking CI"
 
-Ask yourself: what's the one-sentence trade-off? (If you want to explain HOW you got there, use --notes.)
+Ask yourself: what's the one-sentence trade-off?
+</why-coaching>
 
-# Writing Good Notes (optional)
-The --notes flag captures the *journey* to a decision, not just the verdict.
-Skip it for routine work. Use it when you explored alternatives or made a real choice.
+<notes-coaching>
+# Writing Good Notes
+
+The --notes flag captures the *journey* to a decision. The why field has the
+verdict; notes have the path you took to get there.
+
+Include --notes when any of these apply:
+- You chose between 2+ viable approaches
+- You rejected an obvious approach for a non-obvious reason
+- Something surprised you during implementation
+- The decision constrains future options or creates lock-in
+- A teammate unfamiliar with context would find the choice non-obvious
+
+Skip --notes for: version bumps, typo fixes, dependency updates,
+mechanical refactors, straightforward bug fixes with obvious causes.
 
 BAD (restates what/why):
   --notes "Added notes field to support richer template output"
@@ -57,28 +72,26 @@ GOOD (short):
   --notes "Considered AND vs OR for multi-tag queries. AND felt correct
   formally but real usage is 'show me anything tagged security or auth.'"
 
-What would help someone revisiting this decision in 6 months understand HOW you got there?
+What would help someone revisiting this decision in 6 months?
+</notes-coaching>
 
-# Core Rules (MANDATORY)
-- You MUST commit code first, then document with timbers log
-- You MUST capture design decisions in --why, not feature summaries
-- You MUST run ` + "`timbers pending`" + ` before session end (MUST be zero)
-- You MUST run ` + "`git push`" + ` to sync ledger to remote (entries are committed files)
-
+<commands>
 # Essential Commands
-### Recording Work
-- ` + "`timbers log \"what\" --why \"why\" --how \"how\" [--notes \"deliberation\"]`" + ` - Run after EVERY commit
-- ` + "`timbers pending`" + ` - MUST be zero before session end
 
-### Querying
-- ` + "`timbers query --last 5`" + ` - Recent entries
-- ` + "`timbers show <id>`" + ` - Single entry details
+Recording work:
+- ` + "`timbers log \"what\" --why \"why\" --how \"how\" [--notes \"deliberation\"]`" + ` - after each commit
+- ` + "`timbers pending`" + ` - check for undocumented commits
 
-### Generating Documents
-- ` + "`timbers draft --list`" + ` - List available templates
-- ` + "`timbers draft release-notes --last 10`" + ` - Render for piping to LLM
-- ` + "`timbers draft devblog --since 7d --model opus`" + ` - Generate directly
+Querying:
+- ` + "`timbers query --last 5`" + ` - recent entries
+- ` + "`timbers show <id>`" + ` - single entry details
 
-### Sync
+Generating documents:
+- ` + "`timbers draft --list`" + ` - list available templates
+- ` + "`timbers draft release-notes --last 10`" + ` - render for piping to LLM
+- ` + "`timbers draft devblog --since 7d --model opus`" + ` - generate directly
+
+Sync:
 - Entries are committed files in .timbers/ — use standard git push/pull
+</commands>
 `
