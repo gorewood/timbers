@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timbers — Git knows what changed. Timbers captures why.</title>
+    <meta name="description" content="A development ledger for teams building with AI agents. Capture decisions at the moment they exist. Harvest insights whenever you need them.">
+    <meta property="og:title" content="Timbers — Development Ledger">
+    <meta property="og:description" content="Git knows what changed. Timbers captures why.">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Tailwind Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                fontFamily: {
+                    sans: ['Inter', 'system-ui', 'sans-serif'],
+                    mono: ['JetBrains Mono', 'Consolas', 'monospace'],
+                },
+            }
+        }
+    }
+    </script>
+
+    <style>
+        html { scroll-behavior: smooth; }
+        ::selection { background: rgba(245, 158, 11, 0.3); }
+
+        body {
+            background:
+                radial-gradient(ellipse at 50% 0%, rgba(245, 158, 11, 0.04) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 40%, rgba(245, 158, 11, 0.02) 0%, transparent 40%),
+                #09090b;
+        }
+
+        /* Hide elements before GSAP animates them */
+        .gs { opacity: 0; }
+
+        /* Subtle glow on "why" */
+        .why-glow {
+            text-shadow: 0 0 30px rgba(245, 158, 11, 0.3), 0 0 60px rgba(245, 158, 11, 0.1);
+        }
+
+        /* Terminal chrome */
+        .terminal {
+            background: #111113;
+            border: 1px solid #27272a;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .terminal-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 12px 16px;
+            background: rgba(24, 24, 27, 0.6);
+            border-bottom: 1px solid #27272a;
+        }
+        .terminal-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .terminal-body {
+            padding: 20px 24px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            text-align: left;
+            overflow-x: hidden;
+        }
+        .terminal-body .prompt { color: #52525b; }
+        .terminal-body .cmd { color: #e4e4e7; }
+        .terminal-body .sub { color: #f59e0b; }
+        .terminal-body .flag { color: #38bdf8; }
+        .terminal-body .str { color: #4ade80; }
+        .terminal-body .cont { color: #3f3f46; }
+        .terminal-body .cmt { color: #52525b; font-style: italic; }
+
+        /* Copy button (sits inside terminal-header) */
+        .copy-btn {
+            margin-left: auto;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-family: 'Inter', sans-serif;
+            color: #71717a;
+            background: rgba(39, 39, 42, 0.6);
+            border: 1px solid #3f3f46;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .copy-btn:hover { color: #d4d4d8; border-color: #52525b; }
+
+        /* Scroll indicator bounce */
+        @keyframes gentle-bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(6px); }
+        }
+        .scroll-indicator { animation: gentle-bounce 2s ease-in-out infinite; }
+    </style>
+</head>
+
+<body class="text-zinc-300 font-sans antialiased">
+
+<!-- ============================================================
+     NAV
+     ============================================================ -->
+<nav id="nav" class="fixed top-0 w-full z-50 transition-all duration-300">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <a href="{{ "" | relURL }}" class="font-mono font-bold text-lg text-white tracking-tight">
+            timbers
+        </a>
+        <div class="hidden md:flex items-center gap-8 text-sm text-zinc-400">
+            <a href="https://github.com/gorewood/timbers/blob/main/docs/tutorial.md" class="hover:text-white transition-colors">Docs</a>
+            <a href="{{ "examples/" | relURL }}" class="hover:text-white transition-colors">Examples</a>
+            <a href="{{ "posts/" | relURL }}" class="hover:text-white transition-colors">Blog</a>
+            <a href="https://github.com/gorewood/timbers" class="flex items-center gap-1.5 hover:text-white transition-colors" target="_blank" rel="noopener">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                GitHub
+            </a>
+        </div>
+        <!-- Mobile menu button -->
+        <button id="mobile-menu-btn" class="md:hidden text-zinc-400 hover:text-white transition-colors">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+    </div>
+    <!-- Mobile menu -->
+    <div id="mobile-menu" class="hidden md:hidden border-t border-zinc-800/50 bg-zinc-950/95 backdrop-blur-xl">
+        <div class="px-6 py-4 flex flex-col gap-4 text-sm text-zinc-400">
+            <a href="https://github.com/gorewood/timbers/blob/main/docs/tutorial.md" class="hover:text-white transition-colors">Docs</a>
+            <a href="{{ "examples/" | relURL }}" class="hover:text-white transition-colors">Examples</a>
+            <a href="{{ "posts/" | relURL }}" class="hover:text-white transition-colors">Blog</a>
+            <a href="https://github.com/gorewood/timbers" class="hover:text-white transition-colors" target="_blank" rel="noopener">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+
+<!-- ============================================================
+     HERO
+     ============================================================ -->
+<section class="relative min-h-screen flex items-center justify-center pt-20 pb-32 overflow-hidden">
+    <!-- Background orb -->
+    <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-amber-500/[0.06] rounded-full blur-[140px] pointer-events-none"></div>
+
+    <div class="relative max-w-4xl mx-auto px-6 text-center">
+        <!-- Badge -->
+        <div class="gs hero-badge inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 text-xs text-zinc-400 font-medium mb-8">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+            v0.9.0 &middot; Open Source &middot; MIT
+        </div>
+
+        <!-- Headline -->
+        <h1 class="gs hero-title text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-white leading-[1.1] tracking-tight mb-6">
+            Git knows what changed.<br>
+            Timbers captures <span class="text-amber-400 why-glow">why</span>.
+        </h1>
+
+        <!-- Subhead -->
+        <p class="gs hero-sub text-lg md:text-xl text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-10">
+            A development ledger for teams building with AI agents.
+            Capture decisions at the moment they exist.
+            Harvest insights whenever you need them.
+        </p>
+
+        <!-- CTAs -->
+        <div class="gs hero-cta flex flex-col sm:flex-row gap-4 justify-center mb-14">
+            <a href="https://github.com/gorewood/timbers/blob/main/docs/tutorial.md"
+               class="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-amber-500 text-zinc-950 font-semibold text-sm hover:bg-amber-400 transition-colors">
+                Get Started
+            </a>
+            <a href="https://github.com/gorewood/timbers"
+               class="inline-flex items-center justify-center px-6 py-3 rounded-lg border border-zinc-700 text-zinc-300 font-medium text-sm hover:border-zinc-500 hover:text-white transition-colors" target="_blank" rel="noopener">
+                View on GitHub &rarr;
+            </a>
+        </div>
+
+        <!-- Install terminal -->
+        <div class="gs hero-terminal mx-auto">
+            <div class="terminal">
+                <div class="terminal-header">
+                    <span class="terminal-dot bg-[#ff5f57]"></span>
+                    <span class="terminal-dot bg-[#febc2e]"></span>
+                    <span class="terminal-dot bg-[#28c840]"></span>
+                    <button class="copy-btn" onclick="copyInstall(this)">Copy</button>
+                </div>
+                <div class="terminal-body" style="white-space: nowrap;"><span class="prompt">$</span> <span class="cmd">curl</span> <span class="flag">-fsSL</span> <span class="str">https://raw.githubusercontent.com/gorewood/timbers/main/install.sh</span> <span class="cmd">| bash</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scroll indicator -->
+    <div class="absolute bottom-10 left-1/2 -translate-x-1/2 scroll-indicator">
+        <svg class="w-5 h-5 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>
+    </div>
+</section>
+
+
+<!-- ============================================================
+     PROBLEM
+     ============================================================ -->
+<section class="relative py-24 md:py-32">
+    <div class="max-w-6xl mx-auto px-6">
+        <!-- Section label -->
+        <p class="gs text-xs font-semibold tracking-[0.2em] text-amber-500/80 uppercase mb-4 text-center">The Problem</p>
+        <h2 class="gs text-3xl md:text-4xl font-bold text-white text-center mb-16 leading-tight">
+            Your agents write code.<br class="hidden sm:block"> Who writes down why?
+        </h2>
+
+        <div class="grid md:grid-cols-3 gap-6">
+            <!-- Card 1 -->
+            <div class="gs problem-card rounded-xl border border-zinc-800/80 bg-zinc-900/30 p-8">
+                <div class="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center mb-5">
+                    <svg class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z"/></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-3">Session logs vanish</h3>
+                <p class="text-zinc-400 leading-relaxed">Agent sessions get compacted, cleared, rotated. The reasoning that produced your code disappears with them.</p>
+            </div>
+
+            <!-- Card 2 -->
+            <div class="gs problem-card rounded-xl border border-zinc-800/80 bg-zinc-900/30 p-8">
+                <div class="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center mb-5">
+                    <svg class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"/></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-3">Commit messages lie</h3>
+                <p class="text-zinc-400 leading-relaxed"><code class="text-zinc-500 text-sm">fix: update auth</code> tells you nothing about which approach was chosen or what was rejected.</p>
+            </div>
+
+            <!-- Card 3 -->
+            <div class="gs problem-card rounded-xl border border-zinc-800/80 bg-zinc-900/30 p-8">
+                <div class="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center mb-5">
+                    <svg class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M8.625 9.75a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"/></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-3">PR reviews decay</h3>
+                <p class="text-zinc-400 leading-relaxed">Comments get outdated, threads collapse, context rots. Nobody reads them six months later.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<!-- ============================================================
+     SOLUTION — the log command
+     ============================================================ -->
+<section class="relative py-24 md:py-32">
+    <!-- Subtle divider gradient -->
+    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-zinc-800 to-transparent"></div>
+
+    <div class="max-w-6xl mx-auto px-6">
+        <p class="gs text-xs font-semibold tracking-[0.2em] text-amber-500/80 uppercase mb-4 text-center">The Solution</p>
+        <h2 class="gs text-3xl md:text-4xl font-bold text-white text-center mb-6 leading-tight">
+            Three fields. That's the whole API.
+        </h2>
+        <p class="gs text-zinc-400 text-center max-w-xl mx-auto mb-14">
+            The what, the why, the how &mdash; captured as structured data, versioned in Git, queryable forever.
+        </p>
+
+        <div class="gs max-w-3xl mx-auto">
+            <div class="terminal">
+                <div class="terminal-header">
+                    <span class="terminal-dot bg-[#ff5f57]"></span>
+                    <span class="terminal-dot bg-[#febc2e]"></span>
+                    <span class="terminal-dot bg-[#28c840]"></span>
+                </div>
+                <div class="terminal-body"><span class="prompt">$</span> <span class="cmd">timbers</span> <span class="sub">log</span> <span class="str">"Fixed auth bypass vulnerability"</span> <span class="cont">\</span>
+    <span class="flag">--why</span> <span class="str">"Input validation over rate limiting &mdash; catches root cause"</span> <span class="cont">\</span>
+    <span class="flag">--how</span> <span class="str">"Added validation middleware before auth handler"</span> <span class="cont">\</span>
+    <span class="flag">--notes</span> <span class="str">"Considered rate limiting but it masks the problem.
+             Validation is cheaper and catches the issue at the boundary."</span>
+
+<span class="cmt"># Entry stored in .timbers/ &mdash; committed with your code, queryable by any tool.</span></div>
+            </div>
+        </div>
+
+        <!-- Three-column feature callout -->
+        <div class="grid md:grid-cols-3 gap-8 mt-16 max-w-3xl mx-auto">
+            <div class="gs text-center">
+                <p class="text-2xl font-bold text-white font-mono mb-2">what</p>
+                <p class="text-sm text-zinc-500">What you did, in one line.</p>
+            </div>
+            <div class="gs text-center">
+                <p class="text-2xl font-bold text-amber-400 font-mono mb-2">why</p>
+                <p class="text-sm text-zinc-500">The trade-off. The verdict.</p>
+            </div>
+            <div class="gs text-center">
+                <p class="text-2xl font-bold text-white font-mono mb-2">how</p>
+                <p class="text-sm text-zinc-500">The approach you chose.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<!-- ============================================================
+     ARTIFACTS — draft templates
+     ============================================================ -->
+<section class="relative py-24 md:py-32">
+    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-zinc-800 to-transparent"></div>
+
+    <div class="max-w-6xl mx-auto px-6">
+        <p class="gs text-xs font-semibold tracking-[0.2em] text-amber-500/80 uppercase mb-4 text-center">Artifacts</p>
+        <h2 class="gs text-3xl md:text-4xl font-bold text-white text-center mb-6 leading-tight">
+            Your ledger becomes documents.
+        </h2>
+        <p class="gs text-zinc-400 text-center max-w-lg mx-auto mb-14">
+            Seven built-in templates. Bring your own. Pipe to any LLM or use the built-in <code class="text-zinc-300 text-sm">--model</code> flag.
+        </p>
+
+        <div class="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            <!-- Decision Log -->
+            <div class="gs artifact-card rounded-xl border border-zinc-800/80 bg-zinc-900/30 overflow-hidden">
+                <div class="p-6 pb-4">
+                    <h3 class="text-base font-semibold text-white mb-1">Decision Log</h3>
+                    <p class="text-xs text-zinc-500 font-mono mb-4">timbers draft decision-log --last 20</p>
+                </div>
+                <div class="px-6 pb-6">
+                    <div class="rounded-lg bg-zinc-950/60 border border-zinc-800/50 p-4 text-xs font-mono leading-relaxed text-zinc-500">
+                        <p class="text-amber-400/80">## ADR-003: Auth Validation Strategy</p>
+                        <p class="mt-2"><span class="text-zinc-400">Status:</span> Accepted</p>
+                        <p><span class="text-zinc-400">Context:</span> Auth bypass in API layer</p>
+                        <p><span class="text-zinc-400">Decision:</span> Input validation over rate limiting</p>
+                        <p><span class="text-zinc-400">Consequences:</span> Higher upfront cost,</p>
+                        <p class="text-zinc-600">&nbsp; catches root cause...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Changelog -->
+            <div class="gs artifact-card rounded-xl border border-zinc-800/80 bg-zinc-900/30 overflow-hidden">
+                <div class="p-6 pb-4">
+                    <h3 class="text-base font-semibold text-white mb-1">Changelog</h3>
+                    <p class="text-xs text-zinc-500 font-mono mb-4">timbers draft changelog --since 7d</p>
+                </div>
+                <div class="px-6 pb-6">
+                    <div class="rounded-lg bg-zinc-950/60 border border-zinc-800/50 p-4 text-xs font-mono leading-relaxed text-zinc-500">
+                        <p class="text-amber-400/80">## [0.9.0] - 2026-02-13</p>
+                        <p class="mt-2 text-zinc-400">### Added</p>
+                        <p>- Coaching rewrite with motivated rules</p>
+                        <p>- Concrete notes trigger checklist</p>
+                        <p class="mt-2 text-zinc-400">### Fixed</p>
+                        <p>- Hugo baseURL after org migration</p>
+                        <p class="text-zinc-600">- CI pipeline for daily devblog...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sprint Report -->
+            <div class="gs artifact-card rounded-xl border border-zinc-800/80 bg-zinc-900/30 overflow-hidden">
+                <div class="p-6 pb-4">
+                    <h3 class="text-base font-semibold text-white mb-1">Sprint Report</h3>
+                    <p class="text-xs text-zinc-500 font-mono mb-4">timbers draft sprint-report --last 10</p>
+                </div>
+                <div class="px-6 pb-6">
+                    <div class="rounded-lg bg-zinc-950/60 border border-zinc-800/50 p-4 text-xs font-mono leading-relaxed text-zinc-500">
+                        <p class="text-amber-400/80">## Sprint 7 Summary</p>
+                        <p class="mt-2"><span class="text-zinc-400">Completed:</span> 6 items</p>
+                        <p class="mt-2 text-zinc-400">### Highlights</p>
+                        <p>- Shipped v0.9.0 coaching rewrite</p>
+                        <p>- Fixed CI/CD pipeline</p>
+                        <p>- Updated tutorial documentation</p>
+                        <p class="text-zinc-600">- Resolved Hugo baseURL drift...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Template list -->
+        <p class="gs text-center text-sm text-zinc-500 mt-10">
+            <span class="text-zinc-400">Built-in:</span>
+            changelog &middot; decision-log &middot; devblog &middot; exec-summary &middot; pr-description &middot; release-notes &middot; sprint-report
+        </p>
+    </div>
+</section>
+
+
+<!-- ============================================================
+     PHILOSOPHY — intentional vs automatic
+     ============================================================ -->
+<section class="relative py-24 md:py-32">
+    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-zinc-800 to-transparent"></div>
+
+    <div class="max-w-6xl mx-auto px-6">
+        <p class="gs text-xs font-semibold tracking-[0.2em] text-amber-500/80 uppercase mb-4 text-center">Philosophy</p>
+        <h2 class="gs text-3xl md:text-4xl font-bold text-white text-center mb-16 leading-tight">
+            Capture the synthesis, not the session.
+        </h2>
+
+        <div class="gs max-w-4xl mx-auto grid md:grid-cols-2 gap-0 rounded-xl border border-zinc-800/80 overflow-hidden">
+            <!-- Left: Raw capture -->
+            <div class="p-8 md:p-10 bg-zinc-900/20 border-b md:border-b-0 md:border-r border-zinc-800/80">
+                <p class="text-xs font-semibold tracking-[0.15em] text-zinc-600 uppercase mb-6">Raw session capture</p>
+                <ul class="space-y-4 text-sm text-zinc-500">
+                    <li class="flex items-start gap-3">
+                        <span class="text-zinc-700 mt-0.5">&#9679;</span>
+                        Dump every prompt, response, tool call
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span class="text-zinc-700 mt-0.5">&#9679;</span>
+                        Thousands of tokens per commit
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span class="text-zinc-700 mt-0.5">&#9679;</span>
+                        Search through transcripts for decisions
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span class="text-zinc-700 mt-0.5">&#9679;</span>
+                        Hope the LLM can extract what matters
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Right: Timbers -->
+            <div class="p-8 md:p-10 bg-zinc-900/40">
+                <p class="text-xs font-semibold tracking-[0.15em] text-amber-500/80 uppercase mb-6">Timbers</p>
+                <ul class="space-y-4 text-sm text-zinc-300">
+                    <li class="flex items-start gap-3">
+                        <span class="text-amber-500 mt-0.5">&#9679;</span>
+                        Record the verdict in one sentence
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span class="text-amber-500 mt-0.5">&#9679;</span>
+                        Three structured fields per commit
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span class="text-amber-500 mt-0.5">&#9679;</span>
+                        Query structured data directly
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span class="text-amber-500 mt-0.5">&#9679;</span>
+                        The decision <em>is</em> the entry
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <p class="gs text-center text-zinc-500 mt-12 text-lg italic">
+            AI sessions are the haystack. Timbers entries are the needles.
+        </p>
+    </div>
+</section>
+
+
+<!-- ============================================================
+     AGENT INTEGRATION
+     ============================================================ -->
+<section class="relative py-24 md:py-32">
+    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-zinc-800 to-transparent"></div>
+
+    <div class="max-w-6xl mx-auto px-6">
+        <p class="gs text-xs font-semibold tracking-[0.2em] text-amber-500/80 uppercase mb-4 text-center">Integrations</p>
+        <h2 class="gs text-3xl md:text-4xl font-bold text-white text-center mb-6 leading-tight">
+            Works with your agent.
+        </h2>
+        <p class="gs text-zinc-400 text-center max-w-lg mx-auto mb-12">
+            If it can run a shell command, it can use timbers. Claude Code has the deepest integration via hooks &mdash; others work via MCP or instruction files.
+        </p>
+
+        <!-- Agent badges -->
+        <div class="gs flex flex-wrap justify-center gap-3 mb-14">
+            <span class="px-4 py-2 rounded-lg border border-zinc-800 bg-zinc-900/40 text-sm text-zinc-300 font-medium">Claude Code</span>
+            <span class="px-4 py-2 rounded-lg border border-zinc-800 bg-zinc-900/40 text-sm text-zinc-400">Gemini CLI</span>
+            <span class="px-4 py-2 rounded-lg border border-zinc-800 bg-zinc-900/40 text-sm text-zinc-400">Cursor</span>
+            <span class="px-4 py-2 rounded-lg border border-zinc-800 bg-zinc-900/40 text-sm text-zinc-400">Windsurf</span>
+            <span class="px-4 py-2 rounded-lg border border-zinc-800 bg-zinc-900/40 text-sm text-zinc-400">Codex</span>
+            <span class="px-4 py-2 rounded-lg border border-zinc-800 bg-zinc-900/40 text-sm text-zinc-400">Aider</span>
+            <span class="px-4 py-2 rounded-lg border border-zinc-800/60 bg-transparent text-sm text-zinc-600 italic">any CLI agent</span>
+        </div>
+
+        <!-- Instruction snippet -->
+        <div class="gs max-w-2xl mx-auto">
+            <div class="terminal">
+                <div class="terminal-header">
+                    <span class="terminal-dot bg-[#ff5f57]"></span>
+                    <span class="terminal-dot bg-[#febc2e]"></span>
+                    <span class="terminal-dot bg-[#28c840]"></span>
+                    <span class="ml-3 text-xs text-zinc-600 font-mono">AGENTS.md / GEMINI.md / .cursor/rules/</span>
+                </div>
+                <div class="terminal-body text-zinc-400">
+<span class="cmt"># Add to your agent's instruction file:</span>
+
+At the start of every session, run <span class="cmd">`timbers prime`</span>
+and follow the workflow it describes.
+
+After completing work, run <span class="cmd">`timbers pending`</span> to check
+for undocumented commits, then:
+
+<span class="cmd">timbers</span> <span class="sub">log</span> <span class="str">"what"</span> <span class="flag">--why</span> <span class="str">"why"</span> <span class="flag">--how</span> <span class="str">"how"</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<!-- ============================================================
+     QUICK START
+     ============================================================ -->
+<section class="relative py-24 md:py-32">
+    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-zinc-800 to-transparent"></div>
+    <!-- Background orb -->
+    <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-amber-500/[0.04] rounded-full blur-[120px] pointer-events-none"></div>
+
+    <div class="relative max-w-6xl mx-auto px-6">
+        <p class="gs text-xs font-semibold tracking-[0.2em] text-amber-500/80 uppercase mb-4 text-center">Get Started</p>
+        <h2 class="gs text-3xl md:text-4xl font-bold text-white text-center mb-16 leading-tight">
+            Five minutes to your first entry.
+        </h2>
+
+        <div class="max-w-2xl mx-auto space-y-6 text-left">
+            <!-- Step 1 -->
+            <div class="gs step flex gap-6">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-sm font-mono">1</div>
+                <div class="flex-1">
+                    <p class="text-white font-semibold mb-3">Install</p>
+                    <div class="terminal">
+                        <div class="terminal-body py-3" style="white-space: nowrap; overflow-x: auto;"><span class="prompt">$</span> <span class="cmd">curl</span> <span class="flag">-fsSL</span> <span class="str">https://raw.githubusercontent.com/gorewood/timbers/main/install.sh</span> <span class="cmd">| bash</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="gs step flex gap-6">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-sm font-mono">2</div>
+                <div class="flex-1">
+                    <p class="text-white font-semibold mb-3">Initialize in your repo</p>
+                    <div class="terminal">
+                        <div class="terminal-body py-3"><span class="prompt">$</span> <span class="cmd">timbers</span> <span class="sub">init</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="gs step flex gap-6">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-sm font-mono">3</div>
+                <div class="flex-1">
+                    <p class="text-white font-semibold mb-1">Your agent documents the work</p>
+                    <p class="text-zinc-500 text-sm mb-3">Once configured, your agent runs this automatically after every commit. You harvest the insights.</p>
+                    <div class="terminal">
+                        <div class="terminal-body py-3"><span class="cmt"># Your agent runs this after each commit:</span>
+<span class="prompt">$</span> <span class="cmd">timbers</span> <span class="sub">log</span> <span class="str">"Implemented rate limiting"</span> <span class="cont">\</span>
+    <span class="flag">--why</span> <span class="str">"Token bucket over sliding window for simplicity"</span> <span class="cont">\</span>
+    <span class="flag">--how</span> <span class="str">"Token bucket with Redis backend"</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CTA -->
+        <div class="gs text-center mt-14">
+            <a href="https://github.com/gorewood/timbers/blob/main/docs/tutorial.md"
+               class="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-amber-500 text-zinc-950 font-semibold text-sm hover:bg-amber-400 transition-colors">
+                Read the tutorial &rarr;
+            </a>
+        </div>
+    </div>
+</section>
+
+
+<!-- ============================================================
+     FOOTER
+     ============================================================ -->
+<footer class="relative py-16 border-t border-zinc-800/50">
+    <div class="max-w-6xl mx-auto px-6">
+        <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div class="flex items-center gap-6">
+                <span class="font-mono font-bold text-white">timbers</span>
+                <span class="text-xs text-zinc-600">MIT License</span>
+            </div>
+            <div class="flex items-center gap-6 text-sm text-zinc-500">
+                <a href="https://github.com/gorewood/timbers" class="hover:text-zinc-300 transition-colors">GitHub</a>
+                <a href="https://github.com/gorewood/timbers/blob/main/docs/tutorial.md" class="hover:text-zinc-300 transition-colors">Docs</a>
+                <a href="{{ "examples/" | relURL }}" class="hover:text-zinc-300 transition-colors">Examples</a>
+                <a href="{{ "posts/" | relURL }}" class="hover:text-zinc-300 transition-colors">Blog</a>
+            </div>
+        </div>
+        <p class="text-center text-xs text-zinc-700 mt-8">
+            Simple tools that do one thing well.
+        </p>
+    </div>
+</footer>
+
+
+<!-- ============================================================
+     SCRIPTS — GSAP + ScrollTrigger
+     ============================================================ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.7/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.7/ScrollTrigger.min.js"></script>
+<script>
+    gsap.registerPlugin(ScrollTrigger);
+
+    // ---- Hero entrance animations ----
+    const heroTl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+    heroTl
+        .to('.hero-badge', { opacity: 1, y: 0, duration: 0.6 }, 0.1)
+        .fromTo('.hero-badge', { y: 20 }, { y: 0 }, 0.1)
+        .to('.hero-title', { opacity: 1, duration: 0.7 }, 0.25)
+        .fromTo('.hero-title', { y: 30 }, { y: 0, ease: 'power3.out' }, 0.25)
+        .to('.hero-sub', { opacity: 1, duration: 0.6 }, 0.5)
+        .fromTo('.hero-sub', { y: 20 }, { y: 0 }, 0.5)
+        .to('.hero-cta', { opacity: 1, duration: 0.5 }, 0.65)
+        .fromTo('.hero-cta', { y: 15 }, { y: 0 }, 0.65)
+        .to('.hero-terminal', { opacity: 1, duration: 0.8 }, 0.8)
+        .fromTo('.hero-terminal', { y: 25, scale: 0.98 }, { y: 0, scale: 1 }, 0.8);
+
+    // ---- Scroll-triggered reveals ----
+    // Generic reveal for elements with .gs class (excluding hero elements)
+    const revealElements = gsap.utils.toArray('.gs:not(.hero-badge):not(.hero-title):not(.hero-sub):not(.hero-cta):not(.hero-terminal)');
+    revealElements.forEach(el => {
+        gsap.to(el, {
+            scrollTrigger: {
+                trigger: el,
+                start: 'top 85%',
+                toggleActions: 'play none none none',
+            },
+            opacity: 1,
+            y: 0,
+            duration: 0.7,
+            ease: 'power3.out',
+        });
+        gsap.set(el, { y: 30 });
+    });
+
+    // Staggered reveals for card groups
+    document.querySelectorAll('.problem-card, .artifact-card, .step').forEach((el, i) => {
+        gsap.to(el, {
+            scrollTrigger: {
+                trigger: el,
+                start: 'top 85%',
+                toggleActions: 'play none none none',
+            },
+            opacity: 1,
+            y: 0,
+            duration: 0.6,
+            delay: (i % 3) * 0.12,
+            ease: 'power3.out',
+        });
+    });
+
+    // ---- Nav glassmorphism on scroll ----
+    const nav = document.getElementById('nav');
+    ScrollTrigger.create({
+        start: 50,
+        onUpdate: (self) => {
+            if (self.scroll() > 50) {
+                nav.classList.add('bg-zinc-950/80', 'backdrop-blur-xl', 'shadow-lg', 'shadow-black/10');
+            } else {
+                nav.classList.remove('bg-zinc-950/80', 'backdrop-blur-xl', 'shadow-lg', 'shadow-black/10');
+            }
+        }
+    });
+
+    // ---- Mobile menu toggle ----
+    const menuBtn = document.getElementById('mobile-menu-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+    menuBtn.addEventListener('click', () => {
+        mobileMenu.classList.toggle('hidden');
+    });
+
+    // ---- Copy install command ----
+    function copyInstall(btn) {
+        const cmd = 'curl -fsSL https://raw.githubusercontent.com/gorewood/timbers/main/install.sh | bash';
+        navigator.clipboard.writeText(cmd).then(() => {
+            btn.textContent = 'Copied!';
+            btn.style.color = '#f59e0b';
+            setTimeout(() => {
+                btn.textContent = 'Copy';
+                btn.style.color = '';
+            }, 2000);
+        });
+    }
+</script>
+
+</body>
+</html>

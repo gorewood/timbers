@@ -84,6 +84,8 @@ Desktop.ini
 !site/go.sum
 !site/content/
 !site/content/**
+!site/layouts/
+!site/layouts/**
 
 # Allow directories to be traversed
 !*/
