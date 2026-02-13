@@ -9,11 +9,13 @@ For dynamic session context, use `timbers prime`. For CLAUDE.md integration, use
 
 **Development Ledger**: A persistent record of work that pairs objective facts from Git with human-authored rationale.
 
-**Entry**: A single ledger record documenting a unit of work. It contains a workset (git data) and summary (what/why/how).
+**Entry**: A single ledger record documenting a unit of work. It contains a workset (git data), summary (what/why/how), and optional notes.
 
 **Workset**: Captures the Git evidence: anchor commit, commit list, range, and diffstat.
 
-**Summary**: Provides the rationale: what was done, why it was done, and how it was accomplished.
+**Summary**: Provides the rationale: what was done, why it was done (the verdict), and how it was accomplished.
+
+**Notes**: Optional free-form deliberation context — the journey to the decision. Use when you explored alternatives or made a real choice. Skip for routine work.
 
 ### Key Points
 
@@ -60,8 +62,9 @@ Record work as a ledger entry
 **Usage**: `timbers log <what> --why <why> --how <how> [flags]`
 
 **Flags**:
-- `--why`: Why (required unless --minor/--auto)
+- `--why`: Why — the verdict (required unless --minor/--auto)
 - `--how`: How (required unless --minor/--auto)
+- `--notes`: Deliberation context — the journey (optional, use selectively)
 - `--tag`: Add tag (repeatable)
 - `--work-item`: Link work item (system:id)
 - `--range`: Commit range (A..B)
@@ -74,8 +77,10 @@ Record work as a ledger entry
 
 **Examples**:
 ```bash
-timbers log "Added auth" --why "Security" --how "JWT"
-timbers log "Fix" --why "Bug" --how "Check" --tag bugfix
+timbers log "Added auth" --why "JWT chosen over session cookies for stateless scaling" --how "JWT with refresh flow"
+timbers log "Fix" --why "Race condition in cache" --how "Added mutex" --tag bugfix
+timbers log "Refactored auth" --why "Middleware over decorator for route coverage" --how "Extracted to middleware" \
+  --notes "Decorator approach missed 3 routes. Middleware catches all by default."
 ```
 
 ### pending
@@ -209,6 +214,7 @@ Update an existing ledger entry
 - `--what <text>`: Update the what field
 - `--why <text>`: Update the why field
 - `--how <text>`: Update the how field
+- `--notes <text>`: Update the notes field
 - `--tag <name>`: Add tag (repeatable)
 - `--dry-run`: Preview without writing
 - `--json`: Structured JSON output

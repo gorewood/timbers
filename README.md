@@ -13,8 +13,9 @@ Timbers is a development ledger that captures what/why/how as structured JSON fi
 ```bash
 # Record work (agents or humans)
 timbers log "Fixed auth bypass" \
-  --why "User input wasn't sanitized before JWT validation" \
-  --how "Added validation middleware before auth handler"
+  --why "Chose validation over rate limiting — catches root cause" \
+  --how "Added validation middleware before auth handler" \
+  --notes "Debated rate limiting vs input validation. Rate limiting masks the problem."
 
 # Generate artifacts from your ledger
 timbers draft decision-log --last 20 --model opus
@@ -43,7 +44,7 @@ timbers query --last 10   # Query your ledger
 
 | Command | Purpose |
 |---------|---------|
-| `log` | Record work with what/why/how |
+| `log` | Record work with what/why/how (optional `--notes` for deliberation) |
 | `pending` | Show commits awaiting documentation |
 | `query` | Search entries by time, tags, or content |
 | `show` | Display a single entry |
@@ -72,7 +73,7 @@ timbers draft --list
 
 **Built-in templates:** `changelog`, `decision-log`, `devblog`, `exec-summary`, `pr-description`, `release-notes`, `sprint-report`
 
-The decision-log template is particularly valuable — it extracts the *why* behind each change into an architectural decision record. No other tool produces this from structured commit data.
+The decision-log template is particularly valuable — it extracts the *why* behind each change into an architectural decision record, enriched by `--notes` when agents capture their deliberation process. No other tool produces this from structured commit data.
 
 **Model guidance:** Use `opus` for best output quality. For local generation, pipe to `claude -p` (uses your subscription instead of API tokens). For CI/CD, use `--model opus` with an API key. For high-volume batch operations (e.g., `catchup` over hundreds of commits), `haiku` or `local` models offer a lower-cost alternative.
 
@@ -136,11 +137,12 @@ timbers prime
 # After work: agent documents it
 timbers pending
 timbers log "Implemented rate limiting" \
-  --why "API abuse detected in logs" \
-  --how "Token bucket with Redis backend"
+  --why "Token bucket chosen over sliding window for simplicity" \
+  --how "Token bucket with Redis backend" \
+  --notes "Considered sliding window but token bucket covers our load patterns"
 ```
 
-Agent-friendly features: `--json` everywhere, `prime` for context injection, `pending` for clear signals, structured errors with recovery hints.
+Agent-friendly features: `--json` everywhere, `prime` for context injection, `pending` for clear signals, `--notes` for capturing deliberation, structured errors with recovery hints.
 
 **Agent environment support:** Timbers is built and tested with [Claude Code](https://claude.ai/claude-code), which has the deepest integration via hooks that auto-inject `timbers prime` at session start. The CLI itself is agent-agnostic — any agent that can run shell commands can use timbers.
 
@@ -150,6 +152,7 @@ For **non-Claude agents** (Gemini CLI, Cursor, Windsurf, Codex, Kilo Code, Conti
 At the start of every session, run `timbers prime` and follow the workflow it describes.
 After completing work, run `timbers pending` to check for undocumented commits,
 then `timbers log "what" --why "why" --how "how"` to document your work.
+Use `--notes` when you explored alternatives or made a real choice.
 ```
 
 Native hooks and setup commands for additional agent environments are planned for a future release.

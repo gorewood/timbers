@@ -147,10 +147,11 @@ timbers log "Fixed race condition in cache invalidation" \
 
 **Required fields:**
 - The first argument is **what** you did
-- `--why` explains the reasoning, context, or motivation
+- `--why` explains the verdict — why *this* approach over alternatives
 - `--how` describes the approach or implementation
 
 **Optional fields:**
+- `--notes` for deliberation context — the journey to the decision (alternatives explored, trade-offs weighed). Skip for routine work; use when you made a real choice.
 - `--tag` for categorization (repeatable)
 - `--work-item` for linking to issue trackers (e.g., `--work-item jira:PROJ-123`)
 - `--minor` for trivial changes (skips why/how requirement)
@@ -206,7 +207,7 @@ At session start:
   timbers prime
 
 After completing work:
-  timbers log "what" --why "why" --how "how"
+  timbers log "what" --why "why" --how "how" [--notes "deliberation"]
 
 At session end:
   timbers pending  # Verify all work documented
@@ -459,8 +460,9 @@ Use Timbers as a work journal:
 # End of day ritual
 timbers pending
 timbers log "Debugged flaky test in CI" \
-  --why "Test was failing 10% of runs, blocking deploys" \
-  --how "Found race condition in setup, added synchronization barrier"
+  --why "Race condition in setup was the root cause, not timing" \
+  --how "Added synchronization barrier before assertion" \
+  --notes "Initially suspected timing issue, but adding sleep didn't help. Traced to shared state in setup."
 
 # Weekly review
 timbers query --since 7d
@@ -556,7 +558,7 @@ Example: `tb_2026-01-15T10:30:00Z_abc123`
 
 ## Next Steps
 
-1. **Start documenting** — Begin with `timbers log` after your next piece of work
+1. **Start documenting** — Begin with `timbers log` after your next piece of work. Use `--notes` when you explored alternatives.
 2. **Set up agent workflow** — Add `timbers prime` to your agent's session start
 3. **Explore templates** — Try `timbers draft changelog --since 7d | claude -p`
 4. **Customize** — Create `.timbers/PRIME.md` or custom templates for your project

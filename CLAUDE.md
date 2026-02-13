@@ -203,7 +203,7 @@ func TestLogPendingCycle(t *testing.T) {
 | Command | Purpose |
 |---------|---------|
 | `timbers init` | Full setup (.timbers/, hooks, Claude integration) |
-| `timbers log` | Record work with what/why/how |
+| `timbers log` | Record work with what/why/how (optional --notes for deliberation) |
 | `timbers pending` | Show undocumented commits |
 | `timbers prime` | Context injection for session start |
 | `timbers status` | Repo/ledger state |

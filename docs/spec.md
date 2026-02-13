@@ -41,6 +41,8 @@ Git captures *what* changed (the diff). Commit messages describe *how*. But *why
 | Technical reasoning | "Existing approach caused N+1 queries" | Performance-motivated refactoring |
 | Architectural | "Chose middleware over decorator due to route sprawl" | Decisions with alternatives |
 
+When the "why" captures the verdict, optional **notes** capture the journey — alternatives explored, trade-offs weighed, dead ends encountered. Use `--notes` selectively for non-trivial decisions.
+
 ### 0.4 Evidence vs Meaning (Anti-hallucination Boundary)
 
 - **Evidence (automatic):** Git-derived facts — commits, diffstat, changed paths
@@ -153,6 +155,8 @@ Example: `tb_2026-01-15T15:04:05Z_8f2c1a`
     "how": "Added input validation middleware before auth handler"
   },
 
+  "notes": "Considered rate limiting vs input validation. Validation catches the root cause; rate limiting only masks symptoms.",
+
   "tags": ["security", "auth"],
 
   "work_items": [
@@ -168,6 +172,7 @@ Example: `tb_2026-01-15T15:04:05Z_8f2c1a`
 - `summary.what`, `summary.why`, `summary.how`
 
 **Optional fields:**
+- `notes` — deliberation context (the journey to the decision)
 - `workset.range`, `workset.diffstat`
 - `tags[]`, `work_items[]`
 
@@ -213,8 +218,9 @@ timbers log "Test" --why "Test" --how "Test" --dry-run --json
 - `<what>` (positional) — What was done (required unless --auto or --batch)
 
 **Flags:**
-- `--why <text>` — Why it was done (required unless --minor, --auto, or --batch)
+- `--why <text>` — Why it was done — the verdict (required unless --minor, --auto, or --batch)
 - `--how <text>` — How it was done (required unless --minor, --auto, or --batch)
+- `--notes <text>` — Deliberation context — the journey (optional, use selectively)
 - `--range <A..B>` — Explicit commit range (default: since last entry)
 - `--anchor <sha>` — Override anchor commit (default: HEAD)
 - `--tag <tag>` — Add tag (repeatable)
@@ -490,7 +496,7 @@ As an agent, you have access to context that will be lost after the session:
 - **Constraints discovered** — Limitations encountered, workarounds applied
 - **User feedback incorporated** — Iterations based on review
 
-**Your job:** Synthesize this ephemeral context into a concise "why" that someone reading in 6 months will understand.
+**Your job:** Synthesize this ephemeral context into a concise "why" (the verdict) that someone reading in 6 months will understand. When you explored alternatives or made a real choice, capture the journey in `--notes`.
 
 **Example transformation:**
 
@@ -505,8 +511,9 @@ As an agent, you have access to context that will be lost after the session:
 ```bash
 # At work completion — capture while context is fresh
 timbers log "What I did" \
-  --why "Why I did it (enriched from session!)" \
-  --how "How I did it"
+  --why "Why I did it (the verdict)" \
+  --how "How I did it" \
+  --notes "Alternatives explored, trade-offs weighed (optional, use selectively)"
 
 # For trivial changes
 timbers log --minor "Updated dependencies"
