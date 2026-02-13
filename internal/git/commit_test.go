@@ -240,7 +240,36 @@ func TestResolveRefOrEmptyTree(t *testing.T) {
 
 func TestCommitFiles(t *testing.T) {
 	t.Run("in git repo", func(t *testing.T) {
-		chdirToRepoRoot(t)
+		// Use a temp repo with a known non-merge commit so the test
+		// doesn't break when the real repo's HEAD is a merge commit.
+		dir := t.TempDir()
+		origDir, _ := os.Getwd()
+		defer func() { _ = os.Chdir(origDir) }()
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("chdir: %v", err)
+		}
+
+		run := func(args ...string) {
+			t.Helper()
+			out, err := Run(args...)
+			if err != nil {
+				t.Fatalf("git %v failed: %v (output: %s)", args, err, out)
+			}
+		}
+		run("init")
+		run("config", "user.email", "test@test.com")
+		run("config", "user.name", "Test")
+		if err := os.WriteFile("hello.txt", []byte("hello"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		run("add", "hello.txt")
+		run("commit", "-m", "initial")
+		// Add a second commit so HEAD has a parent (diff-tree needs a parent).
+		if err := os.WriteFile("world.txt", []byte("world"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		run("add", "world.txt")
+		run("commit", "-m", "second")
 
 		files, err := CommitFiles("HEAD")
 		if err != nil {
