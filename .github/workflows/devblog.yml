@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   generate:
@@ -40,9 +41,16 @@ jobs:
           } > "$FILE"
 
       - name: Commit and push
+        id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add site/content/posts/
-          git commit -m "blog: dev log $(date +%Y-%m-%d)" || exit 0
+          git commit -m "blog: dev log $(date +%Y-%m-%d)" && echo "committed=true" >> "$GITHUB_OUTPUT" || echo "committed=false" >> "$GITHUB_OUTPUT"
           git push
+
+      - name: Trigger pages deploy
+        if: steps.commit.outputs.committed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml
