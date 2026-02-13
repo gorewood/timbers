@@ -1,5 +1,5 @@
 // Package setup provides business logic for installing and managing
-// timbers integrations: git hooks and Claude Code session hooks.
+// timbers integrations: git hooks and agent coding environment hooks.
 //
 // This package contains pure functions for hook generation, installation,
 // backup, and removal. Command-layer adapters in cmd/timbers/ handle
@@ -14,12 +14,13 @@
 //	content := setup.GeneratePreCommitHook(true)
 //	err := setup.BackupExistingHook(hookPath)
 //
-// # Claude Integration
+// # Agent Environment Integration
 //
-// Claude Code hook operations (install, remove, check):
+// Agent environments (Claude Code, Gemini CLI, Codex, etc.) are handled
+// through the AgentEnv interface. Each implementation manages detection,
+// installation, and removal of timbers hooks for its specific tool.
 //
-//	path, scope, err := setup.ResolveClaudeHookPath(false)
-//	installed := setup.IsTimbersSectionInstalled(path)
-//	err := setup.InstallTimbersSection(path)
-//	err := setup.RemoveTimbersSectionFromHook(path)
+//	envs := setup.AllAgentEnvs()          // all registered environments
+//	env := setup.GetAgentEnv("claude")    // specific environment
+//	detected := setup.DetectedAgentEnvs() // environments with timbers installed
 package setup
