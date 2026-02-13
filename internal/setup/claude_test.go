@@ -189,7 +189,7 @@ func TestInstallTimbersSection(t *testing.T) {
 		}
 	})
 
-	t.Run("detects legacy format as already installed", func(t *testing.T) {
+	t.Run("upgrades legacy format to current", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "settings.json")
 		// Write legacy format for SessionStart only
@@ -205,22 +205,26 @@ func TestInstallTimbersSection(t *testing.T) {
 				},
 			},
 		})
-		// Install should skip SessionStart (legacy detected) and add the 3 new events
 		if err := InstallTimbersSection(path); err != nil {
 			t.Fatal(err)
 		}
 		settings := readJSON(t, path)
-		// SessionStart should have exactly 1 hook (the legacy one, not duplicated)
+		// SessionStart should have exactly 1 hook (upgraded, not duplicated)
 		count := countTimbersHooksForEvent(settings, "SessionStart")
 		if count != 1 {
 			t.Errorf("SessionStart: expected exactly 1 timbers hook, got %d", count)
 		}
-		// Other events should be added
-		for _, event := range []string{"PreCompact", "Stop", "PostToolUse"} {
-			if !hasHookForEvent(settings, event) {
-				t.Errorf("event %s should be installed during upgrade", event)
+		// Should be the current command, not the legacy one
+		groups := getSessionStartGroups(settings)
+		for _, g := range groups {
+			for _, h := range g.Hooks {
+				if h.Command == legacyHookCommand {
+					t.Error("legacy 'timbers prime' should be upgraded to current format")
+				}
 			}
 		}
+		// All events should be installed
+		assertAllTimbersHooksPresent(t, settings)
 	})
 }
 
@@ -266,6 +270,36 @@ func TestAddTimbersHooks_UpgradeFromSingle(t *testing.T) {
 			t.Errorf("event %s should be added during upgrade", event)
 		}
 	}
+}
+
+func TestAddTimbersHooks_UpgradePostToolUse(t *testing.T) {
+	// Simulate existing install with the broken $TOOL_INPUT version
+	settings := map[string]any{
+		"hooks": map[string]any{
+			"PostToolUse": []any{
+				map[string]any{
+					"matcher": "Bash",
+					"hooks": []any{
+						map[string]any{"type": "command", "command": legacyPostToolUseBashCommand},
+					},
+				},
+			},
+		},
+	}
+	addTimbersHooks(settings)
+
+	// Legacy PostToolUse should be replaced with stdin-reading version
+	groups := getEventGroups(settings, "PostToolUse")
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 PostToolUse group, got %d", len(groups))
+	}
+	if groups[0].Hooks[0].Command != postToolUseBashCommand {
+		t.Errorf("PostToolUse hook should be upgraded\ngot:  %s\nwant: %s",
+			groups[0].Hooks[0].Command, postToolUseBashCommand)
+	}
+
+	// All other events should also be added
+	assertAllTimbersHooksPresent(t, settings)
 }
 
 func TestRemoveTimbersHooks_AllEvents(t *testing.T) {
@@ -398,6 +432,7 @@ func TestIsTimbersCommand(t *testing.T) {
 	}{
 		{"resilient prime command", timbersHookCommand, true},
 		{"legacy prime command", legacyHookCommand, true},
+		{"legacy post-tool-use command", legacyPostToolUseBashCommand, true},
 		{"stop command", stopCommand, true},
 		{"post-tool-use command", postToolUseBashCommand, true},
 		{"unrelated command", "bd prime", false},

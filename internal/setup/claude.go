@@ -41,10 +41,18 @@ const legacyHookCommand = "timbers prime"
 //nolint:lll // shell one-liner
 const stopCommand = `command -v timbers >/dev/null 2>&1 && timbers pending --json 2>/dev/null | grep -q '"count":[1-9][0-9]*' && echo "timbers: undocumented commits - run 'timbers pending' to review" || true`
 
-// postToolUseBashCommand nudges after git commits to document work.
+// legacyPostToolUseBashCommand is the old format that used $TOOL_INPUT (always empty).
+// Claude Code hooks receive input via stdin, not env vars. Kept for upgrade detection.
 //
 //nolint:lll // shell one-liner
-const postToolUseBashCommand = `printf '%s\n' "$TOOL_INPUT" | grep -q 'git commit' && command -v timbers >/dev/null 2>&1 && echo "timbers: remember to run 'timbers log' to document this commit" || true`
+const legacyPostToolUseBashCommand = `printf '%s\n' "$TOOL_INPUT" | grep -q 'git commit' && command -v timbers >/dev/null 2>&1 && echo "timbers: remember to run 'timbers log' to document this commit" || true`
+
+// postToolUseBashCommand nudges after git commits to document work.
+// Reads tool input from stdin (Claude Code hook protocol) — hooks receive
+// JSON on stdin, not via environment variables.
+//
+//nolint:lll // shell one-liner
+const postToolUseBashCommand = `grep -q 'git commit' && command -v timbers >/dev/null 2>&1 && echo "timbers: remember to run 'timbers log' to document this commit" || true`
 
 // timbersHooks defines all hook events timbers installs into Claude Code settings.
 var timbersHooks = []timbersHookConfig{
@@ -154,7 +162,20 @@ func isTimbersCommand(cmd string) bool {
 			return true
 		}
 	}
-	return cmd == legacyHookCommand
+	return cmd == legacyHookCommand || cmd == legacyPostToolUseBashCommand
+}
+
+// hasExactHookCommand checks if a specific command exists in an event's hooks.
+func hasExactHookCommand(settings map[string]any, event, command string) bool {
+	groups := getEventGroups(settings, event)
+	for _, group := range groups {
+		for _, hook := range group.Hooks {
+			if hook.Command == command {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // hasTimbersHooks checks if any timbers hooks are installed across all events.
@@ -180,7 +201,7 @@ func hasHookForEvent(settings map[string]any, event string) bool {
 	return false
 }
 
-// addTimbersHooks adds all timbers hooks, skipping events that already have one.
+// addTimbersHooks adds all timbers hooks, upgrading stale hooks to current versions.
 func addTimbersHooks(settings map[string]any) {
 	hooks, _ := settings["hooks"].(map[string]any)
 	if hooks == nil {
@@ -189,9 +210,12 @@ func addTimbersHooks(settings map[string]any) {
 	}
 
 	for _, cfg := range timbersHooks {
-		if hasHookForEvent(settings, cfg.Event) {
-			continue
+		if hasExactHookCommand(settings, cfg.Event, cfg.Command) {
+			continue // Already up to date
 		}
+
+		// Remove stale timbers hooks for this event before adding current version
+		removeTimbersHooksFromEvent(hooks, cfg.Event)
 
 		newGroup := map[string]any{
 			"matcher": cfg.Matcher,
@@ -208,6 +232,21 @@ func addTimbersHooks(settings map[string]any) {
 	}
 }
 
+// removeTimbersHooksFromEvent removes timbers hooks from a single event,
+// preserving non-timbers hooks.
+func removeTimbersHooksFromEvent(hooks map[string]any, event string) {
+	groups, ok := hooks[event].([]any)
+	if !ok {
+		return
+	}
+	filtered := filterGroups(groups)
+	if len(filtered) > 0 {
+		hooks[event] = filtered
+	} else {
+		delete(hooks, event)
+	}
+}
+
 // removeTimbersHooks removes all timbers hooks from all events.
 func removeTimbersHooks(settings map[string]any) {
 	hooks, ok := settings["hooks"].(map[string]any)
@@ -216,18 +255,7 @@ func removeTimbersHooks(settings map[string]any) {
 	}
 
 	for _, cfg := range timbersHooks {
-		groups, ok := hooks[cfg.Event].([]any)
-		if !ok {
-			continue
-		}
-
-		filtered := filterGroups(groups)
-
-		if len(filtered) > 0 {
-			hooks[cfg.Event] = filtered
-		} else {
-			delete(hooks, cfg.Event)
-		}
+		removeTimbersHooksFromEvent(hooks, cfg.Event)
 	}
 
 	if len(hooks) == 0 {
@@ -272,67 +300,4 @@ func filterHooks(rawHooks []any) []any {
 		filtered = append(filtered, rawHook)
 	}
 	return filtered
-}
-
-// getEventGroups parses hook groups from settings for a specific event.
-func getEventGroups(settings map[string]any, event string) []hookGroup {
-	hooks, ok := settings["hooks"].(map[string]any)
-	if !ok {
-		return nil
-	}
-
-	groups, ok := hooks[event].([]any)
-	if !ok {
-		return nil
-	}
-
-	var result []hookGroup
-	for _, rawGroup := range groups {
-		if parsed, ok := parseHookGroup(rawGroup); ok {
-			result = append(result, parsed)
-		}
-	}
-	return result
-}
-
-// getSessionStartGroups parses SessionStart hook groups from settings.
-func getSessionStartGroups(settings map[string]any) []hookGroup {
-	return getEventGroups(settings, "SessionStart")
-}
-
-// parseHookGroup converts a raw JSON group into a typed hookGroup.
-func parseHookGroup(rawGroup any) (hookGroup, bool) {
-	group, ok := rawGroup.(map[string]any)
-	if !ok {
-		return hookGroup{}, false
-	}
-
-	parsed := hookGroup{}
-	if matcher, ok := group["matcher"].(string); ok {
-		parsed.Matcher = matcher
-	}
-
-	rawHooks, _ := group["hooks"].([]any)
-	for _, rawHook := range rawHooks {
-		if entry, ok := parseHookEntry(rawHook); ok {
-			parsed.Hooks = append(parsed.Hooks, entry)
-		}
-	}
-	return parsed, true
-}
-
-// parseHookEntry converts a raw JSON hook into a typed hookEntry.
-func parseHookEntry(rawHook any) (hookEntry, bool) {
-	hook, ok := rawHook.(map[string]any)
-	if !ok {
-		return hookEntry{}, false
-	}
-	entry := hookEntry{}
-	if hookType, ok := hook["type"].(string); ok {
-		entry.Type = hookType
-	}
-	if command, ok := hook["command"].(string); ok {
-		entry.Command = command
-	}
-	return entry, true
 }
