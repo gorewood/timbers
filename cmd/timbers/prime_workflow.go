@@ -14,7 +14,7 @@ Session checklist:
 - [ ] git add && git commit (commit code first)
 - [ ] timbers log "what" --why "why" --how "how" (document committed work)
 - [ ] timbers pending (should be zero before session end)
-- [ ] git push (entries are committed files, push to sync)
+- [ ] git push (timbers log auto-commits entries, push to sync)
 </protocol>
 
 <why-coaching>
@@ -74,6 +74,19 @@ GOOD (short):
 
 What would help someone revisiting this decision in 6 months?
 </notes-coaching>
+
+<content-safety>
+# Content Safety
+
+Entries are committed to git and may be visible in public repositories.
+Never include in timbers entries:
+- API keys, tokens, passwords, or secrets
+- Personal names, emails, or identifying information
+- Internal URLs, IP addresses, or infrastructure details
+- Customer data or business-sensitive information
+
+Focus on technical decisions, not people or credentials.
+</content-safety>
 
 <commands>
 # Essential Commands
