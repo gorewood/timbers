@@ -1,6 +1,6 @@
 +++
 title = 'Changelog'
-date = '2026-02-13'
+date = '2026-02-14'
 tags = ['example', 'changelog']
 +++
 
@@ -14,6 +14,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.10.0] - 2026-02-14
+
+### Added
+- Added `--color` flag (`never`/`auto`/`always`) as a global persistent flag for terminal color control, fixing invisible text on Solarized Dark and other non-standard themes — all `NewPrinter` call sites plumbed through `useColor(cmd)`
+- Added auto-commit in `timbers log` — entry files are now staged and committed atomically using `git commit -m "timbers: document <id>" -- <path>`, eliminating the gap where `.timbers/*.json` files were staged but never committed
+- Added `<content-safety>` coaching section to prime workflow warning agents not to include PII, secrets, or sensitive data in ledger entries
+- Added marketing landing page for Hugo site homepage with dark theme, terminal-styled code blocks, and GSAP ScrollTrigger animations
+
+### Fixed
+- Fixed `PostToolUse` hook to read JSON from stdin instead of empty `$TOOL_INPUT` environment variable, which was always empty and made the post-commit reminder a no-op since creation
+- Fixed landing page terminal block alignment, continuation indentation, and quick start container width
+
+### Technical
+- Added legacy hook detection and upgrade logic via `hasExactHookCommand` and `removeTimbersHooksFromEvent` for replacing stale hooks automatically
+- Added daily devblog automation at 9am UTC with workflow_dispatch chain to pages deploy
 
 ## [0.9.0] - 2026-02-13
 
@@ -203,6 +219,8 @@ Initial public release.
 - GitHub Actions workflows for releases, dev blog generation, and CI (test + lint)
 - Comprehensive documentation: tutorial, agent reference, LLM commands guide, publishing artifacts guide, agent DX guide, and spec
 
+[0.10.0]: https://github.com/gorewood/timbers/releases/tag/v0.10.0
+[0.9.0]: https://github.com/gorewood/timbers/releases/tag/v0.9.0
 [0.8.0]: https://github.com/gorewood/timbers/releases/tag/v0.8.0
 [0.4.0]: https://github.com/gorewood/timbers/releases/tag/v0.4.0
 [0.3.0]: https://github.com/gorewood/timbers/releases/tag/v0.3.0
