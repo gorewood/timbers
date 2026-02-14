@@ -100,6 +100,98 @@ func TestRootCommand_JSONFlag_Persistence(t *testing.T) {
 	}
 }
 
+func TestRootCommand_ColorFlag_Persistence(t *testing.T) {
+	cmd := newRootCmd()
+
+	flag := cmd.PersistentFlags().Lookup("color")
+	if flag == nil {
+		t.Fatal("--color flag should be a persistent flag")
+	}
+	if flag.DefValue != "auto" {
+		t.Errorf("--color default = %q, want %q", flag.DefValue, "auto")
+	}
+}
+
+func TestRootCommand_ColorFlag_InHelp(t *testing.T) {
+	cmd := newRootCmd()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"--help"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "--color") {
+		t.Errorf("--help output should contain --color: %q", output)
+	}
+}
+
+func TestGetColorMode(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "default is auto", args: []string{"--help"}, want: "auto"},
+		{name: "never", args: []string{"--color", "never", "--help"}, want: "never"},
+		{name: "always", args: []string{"--color", "always", "--help"}, want: "always"},
+		{name: "auto explicit", args: []string{"--color", "auto", "--help"}, want: "auto"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := newRootCmd()
+			buf := new(bytes.Buffer)
+			cmd.SetOut(buf)
+			cmd.SetErr(buf)
+			cmd.SetArgs(tt.args)
+
+			_ = cmd.Execute()
+
+			got := getColorMode(cmd)
+			if got != tt.want {
+				t.Errorf("getColorMode() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUseColor_Never(t *testing.T) {
+	// --color never should produce unstyled output even if IsTTY would be true.
+	// Because we write to a buffer (non-TTY), both auto and never give false.
+	// The key test: even if the underlying writer were a TTY, "never" overrides.
+	cmd := newRootCmd()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetArgs([]string{"--color", "never", "--help"})
+	_ = cmd.Execute()
+
+	// useColor resolves through ResolveColorMode which is tested in output_test.go.
+	// Here we verify the plumbing works end-to-end.
+	got := useColor(cmd)
+	if got {
+		t.Error("useColor() with --color never should return false")
+	}
+}
+
+func TestUseColor_Always(t *testing.T) {
+	// --color always should enable colors even on a non-TTY writer (buffer).
+	cmd := newRootCmd()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetArgs([]string{"--color", "always", "--help"})
+	_ = cmd.Execute()
+
+	got := useColor(cmd)
+	if !got {
+		t.Error("useColor() with --color always should return true")
+	}
+}
+
 func TestExecute_WithError(t *testing.T) {
 	// Test that Execute() properly returns exit codes
 	// This tests the run() function behavior

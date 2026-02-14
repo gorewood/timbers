@@ -104,7 +104,7 @@ func validateCatchupFlags(flags catchupFlags) error {
 }
 
 func runCatchup(cmd *cobra.Command, flags catchupFlags) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
 	storage, groups, err := setupCatchup(printer, flags)
 	if err != nil {

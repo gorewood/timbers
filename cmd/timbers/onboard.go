@@ -50,7 +50,7 @@ Examples:
 
 // runOnboard executes the onboard command.
 func runOnboard(cmd *cobra.Command, formatFlag, targetFlag string) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
 	// Validate target flag
 	if targetFlag != "claude" && targetFlag != "agents" {

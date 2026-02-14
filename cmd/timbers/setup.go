@@ -98,7 +98,7 @@ Examples:
 
 // runSetupClaude executes the setup claude command.
 func runSetupClaude(cmd *cobra.Command, project, check, remove, dryRun bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
 	hookPath, scope, err := setup.ResolveClaudeSettingsPath(project)
 	if err != nil {
@@ -119,7 +119,7 @@ func runSetupClaude(cmd *cobra.Command, project, check, remove, dryRun bool) err
 
 // runSetupList lists available integrations and their status.
 func runSetupList(cmd *cobra.Command) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
 	envs := setup.AllAgentEnvs()
 	integrations := make([]integrationInfo, 0, len(envs))

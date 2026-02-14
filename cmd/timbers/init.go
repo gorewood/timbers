@@ -111,7 +111,7 @@ func runInit(cmd *cobra.Command, flags *initFlags) error {
 		flags.noAgent = true
 	}
 
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 	styles := initStyles(printer.IsTTY())
 
 	if !git.IsRepo() {

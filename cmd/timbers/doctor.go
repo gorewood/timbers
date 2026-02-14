@@ -87,7 +87,7 @@ Examples:
 
 // runDoctor executes the doctor command.
 func runDoctor(cmd *cobra.Command, flags *doctorFlags) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
 	// Check if we're in a git repo
 	if !git.IsRepo() {

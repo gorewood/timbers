@@ -67,7 +67,7 @@ Examples:
 
 // runPending executes the pending command.
 func runPending(cmd *cobra.Command, storage *ledger.Storage, countOnly bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
 	// Check if we're in a git repo (only when using real git)
 	if storage == nil && !git.IsRepo() {

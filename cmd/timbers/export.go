@@ -66,7 +66,7 @@ func runExport(
 	cmd *cobra.Command, storage *ledger.Storage,
 	lastFlag, sinceFlag, untilFlag, rangeFlag, formatFlag, outFlag string, tagFlags []string,
 ) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout())).
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd)).
 		WithStderr(cmd.ErrOrStderr())
 
 	if err := validateExportFlags(printer, lastFlag, sinceFlag, untilFlag, rangeFlag); err != nil {

@@ -120,7 +120,7 @@ func resolveStorage(storage *ledger.Storage, verbose bool, printer *output.Print
 
 // runPrime executes the prime command.
 func runPrime(cmd *cobra.Command, storage *ledger.Storage, lastN int, verbose bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
 	resolved, err := resolveStorage(storage, verbose, printer)
 	if errors.Is(err, errNotInitialized) {

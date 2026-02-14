@@ -46,7 +46,7 @@ Examples:
 
 // runShow executes the show command.
 func runShow(cmd *cobra.Command, storage *ledger.Storage, args []string, latestFlag bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
 	if err := validateShowArgs(args, latestFlag); err != nil {
 		printer.Error(err)

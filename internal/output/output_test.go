@@ -111,14 +111,6 @@ func TestPrinter_Println(t *testing.T) {
 	}
 }
 
-func TestIsTTY(t *testing.T) {
-	// IsTTY on a buffer should return false
-	var buf bytes.Buffer
-	if IsTTY(&buf) {
-		t.Error("IsTTY(buffer) should return false")
-	}
-}
-
 func TestPrinter_IsJSON(t *testing.T) {
 	var buf bytes.Buffer
 

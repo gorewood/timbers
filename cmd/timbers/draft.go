@@ -69,7 +69,7 @@ Examples:
 
 // runDraft executes the draft command.
 func runDraft(cmd *cobra.Command, args []string, flags draftFlags) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout())).
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd)).
 		WithStderr(cmd.ErrOrStderr())
 
 	// Handle --list

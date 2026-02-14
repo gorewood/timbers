@@ -62,7 +62,7 @@ Examples:
 
 // runAmend executes the amend command.
 func runAmend(cmd *cobra.Command, storage *ledger.Storage, entryID string, flags amendFlags) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
 	if err := validateAmendFlags(flags, printer); err != nil {
 		return err

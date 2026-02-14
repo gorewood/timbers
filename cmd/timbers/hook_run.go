@@ -50,7 +50,7 @@ func runHookRun(cmd *cobra.Command, args []string) error {
 // It checks for pending commits and warns if any exist.
 // This is non-blocking - it never returns an error to allow the commit.
 func runPreCommitHook(cmd *cobra.Command) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), false, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), false, useColor(cmd))
 
 	// Check if we're in a git repo
 	if !git.IsRepo() {

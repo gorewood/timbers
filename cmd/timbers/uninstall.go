@@ -37,7 +37,7 @@ func runUninstall(cmd *cobra.Command, dryRun, force, removeBinary, keepData bool
 	if kn, _ := cmd.Flags().GetBool("keep-notes"); kn {
 		keepData = true
 	}
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 	info, err := gatherUninstallInfo(removeBinary)
 	if err != nil {
 		printer.Error(err)
@@ -159,7 +159,7 @@ func printComponents(printer *output.Printer, styles uninstallStyleSet, info *se
 }
 
 func confirmUninstall(cmd *cobra.Command, info *setup.UninstallInfo, binary, keep bool) bool {
-	printer := output.NewPrinter(cmd.OutOrStdout(), false, output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), false, useColor(cmd))
 	styles := uninstallStyles(printer.IsTTY())
 	if info.RepoName != "" {
 		printer.Println(styles.warning.Render("Removing timbers from " + info.RepoName + "..."))

@@ -39,7 +39,7 @@ Use --force to overwrite existing hooks without backup.`,
 
 // runHooksInstall executes the hooks install command.
 func runHooksInstall(cmd *cobra.Command, chain, force, dryRun bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")
@@ -145,7 +145,7 @@ func newHooksUninstallCmd() *cobra.Command {
 
 // runHooksUninstall executes the hooks uninstall command.
 func runHooksUninstall(cmd *cobra.Command, dryRun bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
 	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")

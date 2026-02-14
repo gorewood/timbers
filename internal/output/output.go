@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -197,20 +196,6 @@ func ErrorJSON(message string, code int) []byte {
 	}
 	result, _ := json.Marshal(data)
 	return result
-}
-
-// IsTTY checks if a writer is a terminal.
-// Returns true only for os.File that is a terminal.
-func IsTTY(writer io.Writer) bool {
-	file, ok := writer.(*os.File)
-	if !ok {
-		return false
-	}
-	stat, err := file.Stat()
-	if err != nil {
-		return false
-	}
-	return (stat.Mode() & os.ModeCharDevice) != 0
 }
 
 // mustWrite panics if a write operation fails.

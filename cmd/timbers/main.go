@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/charmbracelet/fang"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
 	"github.com/gorewood/timbers/internal/config"
@@ -34,6 +33,25 @@ func isJSONMode(cmd *cobra.Command) bool {
 		flag = cmd.Root().PersistentFlags().Lookup("json")
 	}
 	return flag != nil && flag.Value.String() == "true"
+}
+
+// getColorMode reads the --color persistent flag from the command hierarchy.
+// Returns "auto" if the flag is not set or not found.
+func getColorMode(cmd *cobra.Command) string {
+	flag := cmd.Flags().Lookup("color")
+	if flag == nil {
+		flag = cmd.Root().PersistentFlags().Lookup("color")
+	}
+	if flag == nil {
+		return "auto"
+	}
+	return flag.Value.String()
+}
+
+// useColor resolves the effective color setting for a command by combining
+// the --color flag with TTY detection on the command's stdout.
+func useColor(cmd *cobra.Command) bool {
+	return output.ResolveColorMode(getColorMode(cmd), output.IsTTY(cmd.OutOrStdout()))
 }
 
 // buildVersion returns the full version string including commit and date.
@@ -99,8 +117,8 @@ All commands support --json for structured output.`,
 	// Add persistent --json flag (available to all subcommands)
 	cmd.PersistentFlags().Bool("json", false, "Output in JSON format")
 
-	// Configure lipgloss for TTY detection
-	lipgloss.SetHasDarkBackground(true)
+	// Add persistent --color flag (available to all subcommands)
+	cmd.PersistentFlags().String("color", "auto", "Color output: never, auto, always")
 
 	// Define command groups and add commands
 	addCommandGroups(cmd)

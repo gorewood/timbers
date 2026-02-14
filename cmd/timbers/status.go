@@ -53,7 +53,7 @@ Examples:
 
 // runStatus executes the status command.
 func runStatus(cmd *cobra.Command, _ []string, verbose bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
 	// Check if we're in a git repo
 	if !git.IsRepo() {

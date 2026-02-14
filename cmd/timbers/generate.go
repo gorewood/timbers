@@ -109,7 +109,7 @@ func formatInt(i int) string {
 
 // runGenerate executes the generate command.
 func runGenerate(cmd *cobra.Command, args []string, flags generateFlags) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
 	// Validate flags before any other work
 	if err := validateGenerateFlags(flags); err != nil {

@@ -69,7 +69,7 @@ func runQuery(
 	cmd *cobra.Command, storage *ledger.Storage,
 	lastFlag, sinceFlag, untilFlag string, tagFlags []string, onelineFlag bool,
 ) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), output.IsTTY(cmd.OutOrStdout()))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
 	// Parse and validate flags
 	params, err := parseQueryFlags(lastFlag, sinceFlag, untilFlag, tagFlags)
