@@ -50,7 +50,7 @@ func (m *mockGitOps) CommitFiles(sha string) ([]string, error) {
 func makeTestStorage(t *testing.T, gitOps *mockGitOps, entries []*ledger.Entry) *ledger.Storage {
 	t.Helper()
 	tmpDir := t.TempDir()
-	fileStore := ledger.NewFileStorage(tmpDir, noopGitAdd)
+	fileStore := ledger.NewFileStorage(tmpDir, noopGitAdd, noopGitCommit)
 	for _, entry := range entries {
 		if err := fileStore.WriteEntry(entry, false); err != nil {
 			t.Fatalf("writing test entry: %v", err)
@@ -59,7 +59,8 @@ func makeTestStorage(t *testing.T, gitOps *mockGitOps, entries []*ledger.Entry) 
 	return ledger.NewStorage(gitOps, fileStore)
 }
 
-func noopGitAdd(_ string) error { return nil }
+func noopGitAdd(_ string) error       { return nil }
+func noopGitCommit(_, _ string) error { return nil }
 
 func makeEntry(anchor, what, why, how string, created time.Time, tags []string) *ledger.Entry {
 	return &ledger.Entry{
@@ -251,7 +252,7 @@ func TestHandleLog_Success(t *testing.T) {
 		diffstat: git.Diffstat{Files: 2, Insertions: 10, Deletions: 3},
 	}
 	tmpDir := t.TempDir()
-	fileStore := ledger.NewFileStorage(tmpDir, noopGitAdd)
+	fileStore := ledger.NewFileStorage(tmpDir, noopGitAdd, noopGitCommit)
 	storage := ledger.NewStorage(gitOps, fileStore)
 	handler := handleLog(storage)
 
@@ -326,7 +327,7 @@ func TestHandleLog_WithWorkItem(t *testing.T) {
 		},
 	}
 	tmpDir := t.TempDir()
-	fileStore := ledger.NewFileStorage(tmpDir, noopGitAdd)
+	fileStore := ledger.NewFileStorage(tmpDir, noopGitAdd, noopGitCommit)
 	storage := ledger.NewStorage(gitOps, fileStore)
 	handler := handleLog(storage)
 
@@ -355,7 +356,7 @@ func TestHandleLog_WithNotes(t *testing.T) {
 		},
 	}
 	tmpDir := t.TempDir()
-	fileStore := ledger.NewFileStorage(tmpDir, noopGitAdd)
+	fileStore := ledger.NewFileStorage(tmpDir, noopGitAdd, noopGitCommit)
 	storage := ledger.NewStorage(gitOps, fileStore)
 	handler := handleLog(storage)
 
@@ -381,7 +382,7 @@ func TestHandleLog_NotesOmitted(t *testing.T) {
 		},
 	}
 	tmpDir := t.TempDir()
-	fileStore := ledger.NewFileStorage(tmpDir, noopGitAdd)
+	fileStore := ledger.NewFileStorage(tmpDir, noopGitAdd, noopGitCommit)
 	storage := ledger.NewStorage(gitOps, fileStore)
 	handler := handleLog(storage)
 

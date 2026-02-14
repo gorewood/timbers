@@ -60,7 +60,7 @@ func newExportTestStorage(t *testing.T, notes map[string][]byte) *ledger.Storage
 	for _, data := range notes {
 		writeExportEntryFile(t, dir, data)
 	}
-	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
 	return ledger.NewStorage(&mockGitOpsForExport{}, files)
 }
 

@@ -86,7 +86,7 @@ func TestPendingCommand(t *testing.T) {
 				t.Fatalf("failed to write entry file: %v", err)
 			}
 		}
-		return ledger.NewFileStorage(dir, func(_ string) error { return nil })
+		return ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
 	}
 
 	tests := []struct {

@@ -61,7 +61,7 @@ func setupAmendTestStorage(t *testing.T, mock *mockGitOpsForAmend, entry *ledger
 			t.Fatalf("failed to write setup entry file: %v", err)
 		}
 	}
-	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
 	return ledger.NewStorage(mock, files), dir
 }
 
@@ -397,7 +397,7 @@ func TestAmendCommand(t *testing.T) {
 					}
 				}
 				failAdd := func(_ string) error { return output.NewSystemError("write failed") }
-				files := ledger.NewFileStorage(dir, failAdd)
+				files := ledger.NewFileStorage(dir, failAdd, func(_, _ string) error { return nil })
 				storage = ledger.NewStorage(mock, files)
 			} else {
 				storage, dir = setupAmendTestStorage(t, mock, tt.setupEntry)

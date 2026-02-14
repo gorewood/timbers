@@ -77,7 +77,7 @@ func (m *mockGitOpsForLog) CommitFiles(sha string) ([]string, error) { return ni
 func newLogTestStorage(t *testing.T, mock *mockGitOpsForLog) (*ledger.Storage, string) {
 	t.Helper()
 	dir := t.TempDir()
-	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
 	return ledger.NewStorage(mock, files), dir
 }
 
@@ -985,7 +985,7 @@ func TestLogWriteError(t *testing.T) {
 
 	dir := t.TempDir()
 	failAdd := func(_ string) error { return output.NewSystemError("write failed") }
-	files := ledger.NewFileStorage(dir, failAdd)
+	files := ledger.NewFileStorage(dir, failAdd, func(_, _ string) error { return nil })
 	storage := ledger.NewStorage(mock, files)
 
 	cmd := newLogCmdWithStorage(storage)

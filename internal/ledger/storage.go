@@ -86,7 +86,7 @@ func NewDefaultStorage() (*Storage, error) {
 	if err != nil {
 		return nil, err
 	}
-	files := NewFileStorage(filepath.Join(root, ".timbers"), DefaultGitAdd)
+	files := NewFileStorage(filepath.Join(root, ".timbers"), DefaultGitAdd, DefaultGitCommit)
 	return NewStorage(nil, files), nil
 }
 

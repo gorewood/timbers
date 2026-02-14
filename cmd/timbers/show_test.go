@@ -136,7 +136,7 @@ func TestShowCommand(t *testing.T) {
 				for _, entry := range tt.entries {
 					writeShowEntryFile(t, dir, entry)
 				}
-				files = ledger.NewFileStorage(dir, func(_ string) error { return nil })
+				files = ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
 			}
 			storage := ledger.NewStorage(&mockGitOpsForShow{}, files)
 
@@ -236,7 +236,7 @@ func TestShowWithTags(t *testing.T) {
 
 	dir := t.TempDir()
 	writeShowEntryFile(t, dir, entry)
-	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
 	storage := ledger.NewStorage(&mockGitOpsForShow{}, files)
 
 	cmd := newShowCmdWithStorage(storage)
@@ -298,7 +298,7 @@ func TestShowWithNotes(t *testing.T) {
 
 	dir := t.TempDir()
 	writeShowEntryFile(t, dir, entry)
-	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
 	storage := ledger.NewStorage(&mockGitOpsForShow{}, files)
 
 	cmd := newShowCmdWithStorage(storage)
@@ -329,7 +329,7 @@ func TestShowWithoutNotes(t *testing.T) {
 
 	dir := t.TempDir()
 	writeShowEntryFile(t, dir, entry)
-	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
 	storage := ledger.NewStorage(&mockGitOpsForShow{}, files)
 
 	cmd := newShowCmdWithStorage(storage)
@@ -415,7 +415,7 @@ func TestShowAnchorAnnotation(t *testing.T) {
 		entry := createShowTestEntryStruct("staleanchor12345", now)
 		dir := t.TempDir()
 		writeShowEntryFile(t, dir, entry)
-		files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+		files := ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
 		storage := ledger.NewStorage(&mockGitOpsForShow{}, files)
 
 		cmd := newShowCmdWithStorage(storage)
@@ -441,7 +441,7 @@ func TestShowAnchorAnnotation(t *testing.T) {
 		entry := createShowTestEntryStruct("validanchor12345", now)
 		dir := t.TempDir()
 		writeShowEntryFile(t, dir, entry)
-		files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+		files := ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
 		storage := ledger.NewStorage(&mockGitOpsForShow{}, files)
 
 		cmd := newShowCmdWithStorage(storage)

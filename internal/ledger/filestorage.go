@@ -20,20 +20,36 @@ func DefaultGitAdd(path string) error {
 	return err
 }
 
+// GitCommitFunc commits a file at the given path with the given message.
+type GitCommitFunc func(path string, message string) error
+
+// DefaultGitCommit commits a specific file using git commit with pathspec.
+// The -- before the path ensures only the entry file is committed,
+// not other staged files.
+func DefaultGitCommit(path string, message string) error {
+	_, err := git.Run("commit", "-m", message, "--", path)
+	return err
+}
+
 // FileStorage provides file-based storage for ledger entries in YYYY/MM/DD subdirectories.
 // Each entry is stored as a JSON file at YYYY/MM/DD/<entry-id>.json.
 type FileStorage struct {
-	dir    string
-	gitAdd GitAddFunc
+	dir       string
+	gitAdd    GitAddFunc
+	gitCommit GitCommitFunc
 }
 
 // NewFileStorage creates a FileStorage for the given directory.
 // If gitAdd is nil, uses DefaultGitAdd.
-func NewFileStorage(dir string, gitAdd GitAddFunc) *FileStorage {
+// If gitCommit is nil, uses DefaultGitCommit.
+func NewFileStorage(dir string, gitAdd GitAddFunc, gitCommit GitCommitFunc) *FileStorage {
 	if gitAdd == nil {
 		gitAdd = DefaultGitAdd
 	}
-	return &FileStorage{dir: dir, gitAdd: gitAdd}
+	if gitCommit == nil {
+		gitCommit = DefaultGitCommit
+	}
+	return &FileStorage{dir: dir, gitAdd: gitAdd, gitCommit: gitCommit}
 }
 
 // Dir returns the storage directory path.
@@ -182,6 +198,10 @@ func (fs *FileStorage) WriteEntry(entry *Entry, force bool) error {
 
 	if err = fs.gitAdd(path); err != nil {
 		return output.NewSystemErrorWithCause("failed to stage entry file", err)
+	}
+
+	if err = fs.gitCommit(path, "timbers: document "+entry.ID); err != nil {
+		return output.NewSystemErrorWithCause("failed to commit entry file", err)
 	}
 
 	return nil

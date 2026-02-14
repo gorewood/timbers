@@ -67,7 +67,7 @@ func TestPrimeCommand(t *testing.T) {
 				t.Fatalf("failed to write entry file: %v", err)
 			}
 		}
-		return ledger.NewFileStorage(dir, func(_ string) error { return nil })
+		return ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
 	}
 
 	tests := []struct {
@@ -400,7 +400,7 @@ func TestPrimeVerboseFlag(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(entryDir, entry.ID+".json"), data, 0o600); err != nil {
 		t.Fatalf("failed to write entry file: %v", err)
 	}
-	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
 	storage := ledger.NewStorage(mock, files)
 
 	// Without verbose: should show what but not why/how
@@ -493,7 +493,7 @@ func TestPrimeVerboseJSON(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(entryDir, entry.ID+".json"), data, 0o600); err != nil {
 		t.Fatalf("failed to write entry file: %v", err)
 	}
-	files := ledger.NewFileStorage(dir, func(_ string) error { return nil })
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
 	storage := ledger.NewStorage(mock, files)
 
 	// JSON with verbose: should include why/how fields

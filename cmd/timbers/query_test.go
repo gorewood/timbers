@@ -226,7 +226,7 @@ func TestQueryCommand(t *testing.T) {
 				for _, entry := range tt.entries {
 					writeQueryEntryFile(t, dir, entry)
 				}
-				files = ledger.NewFileStorage(dir, func(_ string) error { return nil })
+				files = ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
 			}
 			storage := ledger.NewStorage(&mockGitOpsForQuery{}, files)
 

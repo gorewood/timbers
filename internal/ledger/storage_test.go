@@ -89,7 +89,7 @@ func newTestStorage(t *testing.T, mock *mockGitOps, entries ...*Entry) *Storage 
 	for _, entry := range entries {
 		writeTestEntryFile(t, dir, entry)
 	}
-	files := NewFileStorage(dir, noopGitAdd)
+	files := NewFileStorage(dir, noopGitAdd, noopGitCommit)
 	return NewStorage(mock, files)
 }
 

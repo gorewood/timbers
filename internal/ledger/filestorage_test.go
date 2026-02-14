@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,7 +13,8 @@ import (
 
 // --- Test Helpers ---
 
-func noopGitAdd(_ string) error { return nil }
+func noopGitAdd(_ string) error       { return nil }
+func noopGitCommit(_, _ string) error { return nil }
 
 type gitAddRecorder struct {
 	paths []string
@@ -20,6 +22,17 @@ type gitAddRecorder struct {
 
 func (r *gitAddRecorder) add(path string) error {
 	r.paths = append(r.paths, path)
+	return nil
+}
+
+type gitCommitRecorder struct {
+	paths    []string
+	messages []string
+}
+
+func (r *gitCommitRecorder) commit(path string, message string) error {
+	r.paths = append(r.paths, path)
+	r.messages = append(r.messages, message)
 	return nil
 }
 
@@ -115,7 +128,7 @@ func TestFileStorage_ReadEntry(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			tt.setupDir(t, dir)
-			store := NewFileStorage(dir, noopGitAdd)
+			store := NewFileStorage(dir, noopGitAdd, noopGitCommit)
 
 			entry, err := store.ReadEntry(tt.entryID)
 
@@ -148,7 +161,7 @@ func TestFileStorage_ReadEntry_NotTimbersNote(t *testing.T) {
 	writeRawFile(t, dir, "other.json",
 		[]byte(`{"schema": "other.tool/v1", "type": "annotation"}`))
 
-	store := NewFileStorage(dir, noopGitAdd)
+	store := NewFileStorage(dir, noopGitAdd, noopGitCommit)
 
 	_, err := store.ReadEntry("other")
 	if err == nil {
@@ -215,7 +228,7 @@ func TestFileStorage_ListEntries(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			tt.setupDir(t, dir)
-			store := NewFileStorage(dir, noopGitAdd)
+			store := NewFileStorage(dir, noopGitAdd, noopGitCommit)
 
 			entries, err := store.ListEntries()
 
@@ -238,7 +251,7 @@ func TestFileStorage_ListEntries(t *testing.T) {
 }
 
 func TestFileStorage_ListEntries_NonexistentDir(t *testing.T) {
-	store := NewFileStorage("/nonexistent/dir", noopGitAdd)
+	store := NewFileStorage("/nonexistent/dir", noopGitAdd, noopGitCommit)
 
 	entries, err := store.ListEntries()
 	if err != nil {
@@ -302,7 +315,7 @@ func TestFileStorage_ListEntriesWithStats(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			tt.setupDir(t, dir)
-			store := NewFileStorage(dir, noopGitAdd)
+			store := NewFileStorage(dir, noopGitAdd, noopGitCommit)
 
 			entries, stats, err := store.ListEntriesWithStats()
 			if err != nil {
@@ -390,8 +403,9 @@ func TestFileStorage_WriteEntry(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			tt.setupDir(t, dir)
-			recorder := &gitAddRecorder{}
-			store := NewFileStorage(dir, recorder.add)
+			addRecorder := &gitAddRecorder{}
+			commitRecorder := &gitCommitRecorder{}
+			store := NewFileStorage(dir, addRecorder.add, commitRecorder.commit)
 
 			err := store.WriteEntry(tt.entry, tt.force)
 
@@ -434,10 +448,23 @@ func TestFileStorage_WriteEntry(t *testing.T) {
 			}
 
 			// Verify git add was called
-			if len(recorder.paths) == 0 {
+			if len(addRecorder.paths) == 0 {
 				t.Error("expected git add to be called")
-			} else if recorder.paths[0] != path {
-				t.Errorf("git add path = %q, want %q", recorder.paths[0], path)
+			} else if addRecorder.paths[0] != path {
+				t.Errorf("git add path = %q, want %q", addRecorder.paths[0], path)
+			}
+
+			// Verify git commit was called
+			if len(commitRecorder.paths) == 0 {
+				t.Error("expected git commit to be called")
+			} else {
+				if commitRecorder.paths[0] != path {
+					t.Errorf("git commit path = %q, want %q", commitRecorder.paths[0], path)
+				}
+				wantMsg := "timbers: document " + tt.entry.ID
+				if commitRecorder.messages[0] != wantMsg {
+					t.Errorf("git commit message = %q, want %q", commitRecorder.messages[0], wantMsg)
+				}
 			}
 		})
 	}
@@ -448,7 +475,7 @@ func TestFileStorage_WriteEntry_GitAddError(t *testing.T) {
 	failGitAdd := func(_ string) error {
 		return output.NewSystemError("git add failed")
 	}
-	store := NewFileStorage(dir, failGitAdd)
+	store := NewFileStorage(dir, failGitAdd, noopGitCommit)
 
 	entry := makeTestEntry("failcommit", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
 	err := store.WriteEntry(entry, false)
@@ -469,9 +496,74 @@ func TestFileStorage_WriteEntry_GitAddError(t *testing.T) {
 	}
 }
 
+func TestFileStorage_WriteEntry_GitCommitError(t *testing.T) {
+	dir := t.TempDir()
+	failGitCommit := func(_, _ string) error {
+		return output.NewSystemError("git commit failed")
+	}
+	store := NewFileStorage(dir, noopGitAdd, failGitCommit)
+
+	entry := makeTestEntry("commitfail1", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+	err := store.WriteEntry(entry, false)
+
+	if err == nil {
+		t.Error("expected error, got nil")
+		return
+	}
+	if !containsString(err.Error(), "commit entry") {
+		t.Errorf("error %q should mention committing entry", err.Error())
+	}
+}
+
+func TestFileStorage_WriteEntry_CommitMessageFormat(t *testing.T) {
+	dir := t.TempDir()
+	commitRecorder := &gitCommitRecorder{}
+	store := NewFileStorage(dir, noopGitAdd, commitRecorder.commit)
+
+	entry := makeTestEntry("msgformat1", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+	if err := store.WriteEntry(entry, false); err != nil {
+		t.Fatalf("WriteEntry failed: %v", err)
+	}
+
+	if len(commitRecorder.messages) != 1 {
+		t.Fatalf("expected 1 commit call, got %d", len(commitRecorder.messages))
+	}
+
+	wantPrefix := "timbers: document "
+	if !strings.HasPrefix(commitRecorder.messages[0], wantPrefix) {
+		t.Errorf("commit message %q should start with %q", commitRecorder.messages[0], wantPrefix)
+	}
+	if !strings.Contains(commitRecorder.messages[0], entry.ID) {
+		t.Errorf("commit message %q should contain entry ID %q", commitRecorder.messages[0], entry.ID)
+	}
+}
+
+func TestFileStorage_WriteEntry_CommitPathspec(t *testing.T) {
+	dir := t.TempDir()
+	commitRecorder := &gitCommitRecorder{}
+	store := NewFileStorage(dir, noopGitAdd, commitRecorder.commit)
+
+	entry := makeTestEntry("pathspec01", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+	if err := store.WriteEntry(entry, false); err != nil {
+		t.Fatalf("WriteEntry failed: %v", err)
+	}
+
+	if len(commitRecorder.paths) != 1 {
+		t.Fatalf("expected 1 commit call, got %d", len(commitRecorder.paths))
+	}
+
+	// The path should be the full entry file path (gitCommit receives it directly;
+	// DefaultGitCommit places it after -- in the git command)
+	sub := EntryDateDir(entry.ID)
+	wantPath := filepath.Join(dir, sub, entry.ID+".json")
+	if commitRecorder.paths[0] != wantPath {
+		t.Errorf("commit path = %q, want %q", commitRecorder.paths[0], wantPath)
+	}
+}
+
 func TestFileStorage_WriteEntry_RoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	store := NewFileStorage(dir, noopGitAdd)
+	store := NewFileStorage(dir, noopGitAdd, noopGitCommit)
 
 	entry := makeTestEntry("roundtrip1", time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC))
 	entry.Tags = []string{"security", "auth"}
@@ -509,7 +601,7 @@ func TestFileStorage_EntryExists(t *testing.T) {
 	entry := makeTestEntry("existscommit", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
 	writeTestEntryFile(t, dir, entry)
 
-	store := NewFileStorage(dir, noopGitAdd)
+	store := NewFileStorage(dir, noopGitAdd, noopGitCommit)
 
 	if !store.EntryExists(entry.ID) {
 		t.Error("expected entry to exist")
@@ -524,13 +616,13 @@ func TestFileStorage_EntryExists(t *testing.T) {
 
 func TestFileStorage_DirExists(t *testing.T) {
 	dir := t.TempDir()
-	store := NewFileStorage(dir, noopGitAdd)
+	store := NewFileStorage(dir, noopGitAdd, noopGitCommit)
 
 	if !store.DirExists() {
 		t.Error("expected directory to exist")
 	}
 
-	storeNone := NewFileStorage("/nonexistent/path", noopGitAdd)
+	storeNone := NewFileStorage("/nonexistent/path", noopGitAdd, noopGitCommit)
 	if storeNone.DirExists() {
 		t.Error("expected directory to not exist")
 	}
@@ -540,7 +632,7 @@ func TestFileStorage_DirExists(t *testing.T) {
 
 func TestFileStorage_WriteEntry_NoTempFilesLeftBehind(t *testing.T) {
 	dir := t.TempDir()
-	store := NewFileStorage(dir, noopGitAdd)
+	store := NewFileStorage(dir, noopGitAdd, noopGitCommit)
 
 	entry := makeTestEntry("cleancommit", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
 	if err := store.WriteEntry(entry, false); err != nil {
