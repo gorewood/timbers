@@ -1,15 +1,15 @@
 +++
 title = 'Executive Summary'
-date = '2026-02-13'
+date = '2026-02-14'
 tags = ['example', 'exec-summary']
 +++
 
-Generated with `timbers draft exec-summary --last 15 | claude -p --model opus`
+Generated with `timbers draft exec-summary --last 20 | claude -p --model opus`
 
 ---
 
-- **Released v0.6.0, v0.7.0, and v0.8.0** in rapid succession — pivoting storage to merge-safe flat files, adding an MCP server for universal editor integration, and introducing a `--notes` field for capturing deliberation context alongside design decisions
-- **Built an MCP server** (`timbers serve`) with 6 tools over stdio transport, enabling integration with Claude Code, Cursor, Windsurf, Gemini CLI, and other MCP-compatible editors through a single implementation
-- **Made timbers agent-environment neutral** via an `AgentEnv` registry interface — adding support for new AI coding environments (Gemini, Cursor, Windsurf, Codex) is now a single-file task instead of touching multiple commands
-- **Added `--notes` flag** to capture the journey to decisions (alternatives explored, trade-offs weighed), distinct from `--why` which captures the verdict — with coaching in `prime` output to ensure quality
-- **Resolved the pending chicken-and-egg problem** where file-based entry storage caused entry commits to always appear as undocumented work, by filtering ledger-only commits inside `GetPendingCommits`
+- Released **v0.8.0**, **v0.9.0**, and **v0.10.0** with features including `--notes` flag documentation, coaching rewrite with motivated rules and XML structure, `--color` flag, auto-commit on `timbers log`, and PII/content safety guardrails
+- Fixed a long-standing bug where the `PostToolUse` hook read `$TOOL_INPUT` env var instead of stdin, making post-commit reminders a silent no-op since creation
+- Built a marketing landing page for the Hugo site and fixed CI pipeline issues (stale `baseURL`, broken devblog→pages deploy chain, removed dead git-notes fetch)
+- Introduced `AgentEnv` interface with registry pattern, decoupling `init`/`doctor`/`setup` from Claude-specific assumptions to support future agent environments
+- Rewrote coaching system informed by Opus 4.6 prompt guide analysis — added motivation to rules, concrete 5-point notes triggers, and BAD/GOOD examples

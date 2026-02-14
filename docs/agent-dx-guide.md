@@ -1,6 +1,6 @@
 # Agent DX Guide for CLI Projects
 
-A pattern language for designing command-line tools that agents can use effectively. Extracted from building timbers.
+A pattern language for designing command-line tools that agents can use effectively.
 
 ---
 

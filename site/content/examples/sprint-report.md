@@ -1,6 +1,6 @@
 +++
 title = 'Sprint Report'
-date = '2026-02-13'
+date = '2026-02-14'
 tags = ['example', 'sprint-report']
 +++
 
@@ -8,44 +8,76 @@ Generated with `timbers draft sprint-report --since 7d | claude -p --model opus`
 
 ---
 
-# Sprint Report: 2026-02-09 → 2026-02-13
+# Sprint Report: Feb 9–14, 2026
 
 ## Summary
 
-This sprint shipped three releases (v0.6.0, v0.7.0, v0.8.0) in five days, pivoting the storage layer, adding MCP server support, and making timbers agent-environment neutral. The sprint also introduced the `--notes` field for deliberation capture — the first structural addition to the entry schema since v0.1.0.
+A dense 6-day sprint that shipped 4 releases (v0.5.0 through v0.10.0), pivoted the entire storage layer from git notes to file-based storage, added an MCP server, rewrote the coaching system, and stood up a marketing site. 54 entries across core infrastructure, agent integration, and developer experience.
 
 ## By Category
 
-### Storage Pivot (v0.6.0)
-- Pivoted from git notes to flat directory files (`.timbers/<id>.json`) with atomic writes via temp+rename
-- Adopted `YYYY/MM/DD` directory layout for filesystem scalability at high commit volumes
-- Migrated all 37 existing entries from git notes to the new format
-- Removed all git notes code, simplifying the `GitOps` interface from 8 to 4 methods
-- Built 14 integration tests proving file-per-entry storage is inherently merge-safe across branches
-- Resolved the pending chicken-and-egg problem: entry commits no longer appear as undocumented work
+### Storage Pivot
+- Replaced git notes with `.timbers/<id>.json` file-per-entry storage — atomic writes, no merge conflicts, simplified `GitOps` interface from 8 to 4 methods
+- Added YYYY/MM/DD directory layout for scalability at high commit volumes
+- Migrated 37 existing entries from git notes to new format
+- Removed all git notes code and references
+- Filtered ledger-only commits from `GetPendingCommits` to break the chicken-and-egg loop where entry commits appeared as undocumented
+- Auto-commit entry files in `timbers log` — closes the staged-but-uncommitted gap that confused users
 
-### MCP Server (v0.7.0)
-- Added `timbers serve` subcommand with 6 tools over stdio transport using go-sdk v1.3.0
-- Moved filter functions to `internal/ledger/` for sharing between CLI and MCP handlers
-- Added `idempotentHint` to read tools for client-side caching optimization
-- Added `validateLogInput` to catch empty strings the MCP SDK's required-field check misses
-- Updated onboard snippet and all documentation for the storage pivot
+### MCP Server
+- Built `timbers serve` with 6 tools over stdio transport using `go-sdk` v1.3.0
+- Handlers call `internal/` packages directly — zero business logic duplication
+- Added `idempotentHint` to read tools for client caching/retry optimization
+- Released as v0.7.0
 
-### Agent-Environment Neutral (v0.8.0)
-- Introduced `AgentEnv` interface with registry pattern — each environment self-registers via `init()`
-- Built `ClaudeEnv` as reference implementation wrapping existing setup functions
-- Refactored `init`, `doctor`, `setup`, and `uninstall` to iterate `AllAgentEnvs()`
-- Replaced `--no-claude` with generic `--no-agent` (deprecated alias preserved)
-- Added `--notes` flag for capturing deliberation context alongside design decisions
-- Tightened why coaching to differentiate from notes: why is the verdict, notes is the journey
-- Updated all documentation (README, tutorial, agent reference, spec) for `--notes`
+### Agent Integration & Hooks
+- Rewrote Claude Code hook integration from shell scripts to JSON `settings.json` format — the old shell script approach was a complete no-op (0% adoption)
+- Expanded to 4-event lifecycle hooks: `SessionStart`, `PreCompact`, `Stop`, `PostToolUse`
+- Fixed `PostToolUse` hook to read stdin instead of empty `$TOOL_INPUT` env var (broken since creation)
+- Added graceful degradation — hooks warn with install URL instead of erroring when `timbers` is missing
+- Switched from global to project-level hooks
+
+### Architecture & Extensibility
+- Introduced `AgentEnv` interface with registry pattern — adding Gemini/Codex support is now a single-file task
+- Refactored `init`, `doctor`, `setup`, and `uninstall` to use the new interface
+- `--no-claude` flag replaced with generic `--no-agent` (deprecated alias kept)
+
+### Coaching & Content Quality
+- Rewrote coaching: motivated rules (explaining WHY), concrete 5-point notes trigger checklist, XML section tags, reduced imperative density
+- Added `--notes` field for deliberation capture — distinct from `--why` (verdict vs journey)
+- Tightened why/notes differentiation in coaching
+- Added PII/content safety coaching as a guardrail for public repos
+
+### Developer Experience
+- Added `--color` flag (`never`/`auto`/`always`) for terminal color scheme compatibility (Solarized Dark fix)
+- Renamed `prompt` command to `draft`
+- Added ADR `decision-log` template
+- Centralized config dir with cross-platform support (`XDG_CONFIG_HOME`, Windows `AppData`)
+- Added `.env.local` support for API keys
+- Routed errors/warnings to stderr when piped
+- Enhanced `doctor` with CONFIG section and version check against GitHub releases
+
+### Site & Docs
+- Built marketing landing page with Tailwind + GSAP animations
+- Published Hugo site to GitHub Pages with 5 example artifacts
+- Regenerated examples from richer ledger data (real entries with notes >> backfilled entries)
+- Documented `--notes` across all docs (README, tutorial, spec, agent reference)
+- Updated onboard snippet and 7 doc files for storage pivot
+
+### CI & Release
+- Fixed Hugo `baseURL` after org migration (`rbergman` → `gorewood`)
+- Chained devblog workflow to pages deploy via `workflow_dispatch`
+- Switched devblog CI from weekly to daily
+- Removed stale git-notes fetch from CI
+- Shipped v0.5.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0, v0.10.0
 
 ### Testing & Fixes
-- Fixed `TestCommitFiles` — used isolated temp repo instead of live HEAD (merge commits return empty from `diff-tree`)
-- Fixed `TestRepoRoot` — replaced hardcoded directory name with absolute path check for worktree compatibility
-- Dogfood round 3 validated notes coaching with Opus subagents: selective usage (1/3 commits), genuine thinking-out-loud quality
+- Fixed `TestCommitFiles` to use isolated temp repo instead of live HEAD
+- Fixed `TestRepoRoot` for worktree compatibility
+- 14 integration tests for multi-branch merge scenarios
+- Added `--tag` filtering to both `query` and `export` commands with OR semantics
 
 ## Highlights
 
-- **Storage pivot was the highest-risk change in timbers' history** — touching all 26 source files, migrating 37 entries, and removing the entire git notes subsystem. The decision to use individual files was validated by 14 merge integration tests proving conflict-free concurrent worktree operation.
-- **The `AgentEnv` registry pattern** transforms multi-environment support from "change N files per environment" to "add one file." The deliberation notes on this entry — debating registry vs switch, analyzing the goal of single-file additions — are exactly the kind of content `--notes` was designed to capture.
+- **Storage pivot**: The move from git notes to `.timbers/` files touched 54+ files and fundamentally changed how the tool works — atomic writes, merge-safe concurrent worktrees, and a dramatically simpler Git interface. This was the prerequisite for everything else.
+- **Coaching rewrite informed by Opus 4.6 prompt guide**: A council debate converged on "good coaching IS Opus-optimized coaching" — no model-specific variants needed. The concrete notes trigger checklist and motivated rules represent a qualitative shift in how the tool shapes agent behavior.

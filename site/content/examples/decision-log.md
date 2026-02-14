@@ -1,101 +1,111 @@
 +++
 title = 'Decision Log'
-date = '2026-02-13'
+date = '2026-02-14'
 tags = ['example', 'decision-log']
 +++
 
-Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
+Generated with `timbers draft decision-log --last 25 | claude -p --model opus`
 
 ---
 
-## ADR-1: Flat Files Over Git Notes for Entry Storage
+## ADR-1: Auto-Commit Entry Files on `timbers log`
 
-**Context:** Timbers originally stored entries as git notes — a built-in Git mechanism for attaching metadata to commits. This worked for single-branch workflows but caused merge conflicts in concurrent worktrees: git notes are a single ref that two branches can't modify independently. The alternatives were: keep notes and document the worktree limitation, add merge tooling for notes, or pivot to a different storage model entirely.
+**Context:** After switching from git-notes to `.timbers/` directory storage, running `timbers log` would create and stage an entry file but leave it uncommitted. Users had to remember a manual `git commit` step, and the staged-but-uncommitted gap caused confusion — entry files sitting in the index could get swept into unrelated commits or lost on branch switches.
 
-**Decision:** Pivoted to individual JSON files in `.timbers/YYYY/MM/DD/`, where each entry is a standalone file. This eliminates merge conflicts because independent files don't collide. The `GitOps` interface was simplified from 8 methods to 4 (`HEAD`, `Log`, `CommitsReachableFrom`, `GetDiffstat`) since notes-specific operations were no longer needed.
+The original git-notes design didn't have this problem because notes lived in a separate ref. The `.timbers/` approach introduced it but never added an automatic commit step. Two alternatives were considered: committing on the working branch (simple, filesystem-visible) or storing entries on a separate branch (like beads/entire.io, cleaner separation but invisible to `timbers prime`/`draft` without worktree indirection).
+
+**Decision:** `timbers log` auto-commits the entry file using `git commit -m ... -- <path>` with pathspec scoping. Entries stay on the working branch for filesystem visibility. The commit is scoped with `--` to prevent sweeping other staged files into the timbers commit.
 
 **Consequences:**
-- Positive: Entries are inherently merge-safe — concurrent worktrees can't conflict on independent files
-- Positive: Atomic writes via temp-file-plus-rename pattern prevent partial entries on crash
-- Positive: Standard `git push/pull` syncs entries — no special `notes push/fetch` commands needed
-- Positive: Simplified the GitOps interface by half, reducing testing surface
-- Negative: Entry commits appear in mainline history (required filtering in `GetPendingCommits` to avoid a chicken-and-egg loop)
-- Negative: More files in the repository — potentially thousands of small JSON files over time
+- Positive: Eliminates the manual commit step and the staged-but-uncommitted gap entirely
+- Positive: Agent DX preserved — `timbers prime` and `timbers draft` can read entries without worktree indirection
+- Positive: Pathspec scoping (`--`) is a safety mechanism that prevents accidentally committing unrelated staged work
+- Negative: Every `timbers log` creates a commit on the working branch, adding noise to `git log`
+- Constraint: Entries must remain as working-branch files rather than a separate ref, which couples the ledger to the branch history
 
 ---
 
-## ADR-2: YYYY/MM/DD Directory Buckets Over Flat Storage
+## ADR-2: `--color` Flag Over Full Theme Configuration
 
-**Context:** After pivoting to file-based storage, all entries lived in a flat `.timbers/` directory. At high commit volumes (100+ commits/day over months), a single directory would accumulate thousands of files, degrading filesystem performance on some platforms.
+**Context:** Users on Solarized Dark terminals reported that color 8 (bright black) used for dim/hint text was completely invisible. Terminals don't expose their color scheme to applications, so automatic detection isn't possible. The options ranged from a simple override flag (`--color never/auto/always`) to full theme configuration via environment variables and config files. Lipgloss v1.1.0 also offers `AdaptiveColor` and `HasDarkBackground()` that weren't yet in use.
 
-**Decision:** Adopted a `YYYY/MM/DD` directory layout parsed from the entry's timestamp. Replaced `ReadDir` with `WalkDir` for recursive discovery. Added `atomicWrite` helper and recursive cleanup in `uninstall`.
+**Decision:** Ship a global `--color` persistent flag with `never/auto/always` values, plumbed through `ResolveColorMode` to all `NewPrinter` call sites. Defer `AdaptiveColor` and `HasDarkBackground()` to a future iteration.
 
 **Consequences:**
-- Positive: Directory sizes stay bounded — at most a handful of entries per day-bucket
-- Positive: Sparse layout works well with git — most directories are small
-- Positive: Natural chronological browsing when inspecting `.timbers/` manually
-- Negative: More complex path construction and cleanup logic
-- Negative: WalkDir is marginally slower than ReadDir for small datasets
+- Positive: Covers ~95% of terminal compatibility issues with minimal implementation surface
+- Positive: Persistent flag means users set it once, not per-command
+- Negative: Users with exotic color schemes still can't customize individual colors — only disable them entirely
+- Constraint: Full theme support deferred, creating a known gap for users who want colors but different ones
 
 ---
 
-## ADR-3: MCP Server Over Per-Editor CLI Wrappers
+## ADR-3: Registry Pattern Over Switch Statement for Agent Environments
 
-**Context:** Timbers needed to integrate with multiple AI coding environments — Claude Code, Cursor, Windsurf, Gemini CLI, Kilo Code, Continue, Codex, and others. The choice was between writing per-editor integration wrappers (each calling the CLI differently) or implementing a single MCP (Model Context Protocol) server that all MCP-compatible editors can consume.
+**Context:** Timbers needed to support multiple agent environments (Claude Code, and eventually Gemini, Codex, etc.) for `init`, `doctor`, and `uninstall` commands. Two patterns were considered: a centralized switch statement where each addition touches multiple files, or a registry pattern where each environment is self-contained in a single file and registers itself via `init()`.
 
-**Decision:** Built an MCP server (`timbers serve`) with 6 tools over stdio transport. Handlers call `internal/` packages directly, sharing filter functions with the CLI by moving them to `internal/ledger/`.
+**Decision:** Registry pattern with an `AgentEnv` interface (`Detect`/`Install`/`Remove`/`Check` methods). `ClaudeEnv` wraps existing setup functions. New environments register via `init()` with stable ordering maintained by the registry.
 
 **Consequences:**
-- Positive: One implementation serves all MCP-compatible editors — highest leverage investment
-- Positive: Read tools annotated with `idempotentHint` enable client-side caching and retry optimization
-- Positive: Shared filter functions between CLI and MCP prevent behavioral drift
-- Negative: Depends on go-sdk v1.3.0 which has a known limitation — `google/jsonschema-go` produces `["null","array"]` for Go slices with no override
-- Negative: Editors without MCP support still need CLI-based integration
+- Positive: Adding a new agent environment (Gemini, Codex) is a single-file task — no changes to existing code
+- Positive: Interface methods map naturally to what `doctor`/`setup`/`init` already need
+- Negative: One file per environment adds slight file count overhead
+- Negative: `init()` registration makes the dependency graph implicit — you can't see what's registered without checking each file
+- Enables: `doctor` iterates `AllAgentEnvs()` for health checks; `uninstall` gathers all detected envs via `AgentEnvState` slice
 
 ---
 
-## ADR-4: Registry Pattern Over Switch Statement for Agent Environments
+## ADR-4: Notes Field Coaches by Question, Not by Structure
 
-**Context:** With the goal of supporting multiple AI agent environments (Claude Code, Gemini CLI, Cursor, Windsurf, Codex), the `init`, `doctor`, `setup`, and `uninstall` commands needed to work across all environments. The choice was between a switch statement that dispatches per environment (centralized, every addition touches multiple files) and a registry pattern where each environment self-registers.
+**Context:** The ledger had `what`/`why`/`how` fields but no way to capture the *journey* to a decision — the alternatives considered, surprises encountered, reasoning chains. A council deliberated the design. The key question was how to coach agents to write good notes: provide a structured template (headings like "## Alternatives", "## Decision") or use the same question-based coaching that proved effective for the `why` field.
 
-**Decision:** Chose registry pattern with an `AgentEnv` interface (`Detect`/`Install`/`Remove`/`Check` methods). Each environment registers itself via `init()` in its own file. `ClaudeEnv` wraps existing setup functions as the reference implementation.
+**Decision:** Notes captures deliberation as free-form "thinking out loud," coached by question ("What would help someone revisiting this decision in 6 months?") rather than by imposed structure. The `why` field holds the verdict; `notes` holds the journey. A concrete 5-point trigger checklist determines when notes are warranted: 2+ viable approaches, rejected an obvious approach, encountered surprise, creates lock-in, or non-obvious to a teammate.
 
 **Consequences:**
-- Positive: Adding a new agent environment is a single-file task — implement the interface, register in `init()`
-- Positive: No changes needed to existing code when adding environments
-- Positive: Interface methods mirror what `doctor`/`setup`/`init` already need — natural fit
-- Positive: Backward-compatible JSON keys preserved (`claude_installed`, `claude_removed`) while step names became generic
-- Negative: Registry adds indirection — `AllAgentEnvs()` iterates instead of direct function calls
-- Negative: Stable sort ordering needed to keep deterministic output across runs
-
-*Notes from the entry:* "Debated registry vs switch. Registry adds one file per environment but each is self-contained with no changes needed to existing code. Switch would centralize all environments but every addition touches multiple files. Registry won because the goal is to make adding Gemini/Codex later a single-file task."
+- Positive: Follows the proven pattern — `why` coaching by question already produced high-quality verdicts
+- Positive: Free-form notes are richer for template output — the decision-log template can extract genuine fork-in-the-road context
+- Positive: Trigger checklist prevents both over-use (form-filling on every commit) and under-use (never writing notes)
+- Negative: Free-form means inconsistent structure across entries, harder to parse programmatically
+- Constraint: `why` and `notes` must be clearly differentiated in coaching or agents will put journey content in `why`
 
 ---
 
-## ADR-5: Notes Field with "Journey vs Verdict" Coaching Over Structured Deliberation Format
+## ADR-5: Motivated Rules Over Imperative Density in Coaching
 
-**Context:** The `--why` field captures design decisions, but doesn't have room for the full reasoning process — alternatives explored, dead ends encountered, trade-offs weighed. A new field was needed, but the design question was whether to impose structure (e.g., mandatory sections for Alternatives, Decision, Rationale) or keep it free-form with coaching.
+**Context:** The prime coaching text used 11 instances of `MUST`/`CRITICAL` to enforce rules. Analysis of the Opus 4.6 prompt guide revealed that imperative density causes overtriggering — the model treats everything as equally critical and can't prioritize. A council debated three approaches: generic clarity improvements, Opus-specific tuning, and a pragmatist middle ground. All three converged on the same conclusion.
 
-**Decision:** Added `notes` as an optional free-form string field, coached by BAD/GOOD examples in `prime` output. The framing: `--why` captures the verdict (one sentence), `--notes` captures the journey (thinking out loud). Coaching by question ("what did you try that didn't work?") rather than structure, following the proven pattern from why-field coaching.
+**Decision:** Replace imperative shouting with motivated rules — each rule explains *why* it exists, enabling the model to generalize correctly. Added XML section tags for structure, concrete BAD/GOOD examples, and calm framing. No model-specific coaching variants needed because good coaching IS Opus-optimized coaching.
 
 **Consequences:**
-- Positive: Agents produce natural "thinking out loud" content instead of mechanical form-filling
-- Positive: Optional field means no ceremony overhead for routine work — use selectively
-- Positive: Decision-log template can pull from both `why` (verdict) and `notes` (context) for richer ADRs
-- Positive: Why coaching was tightened to explicitly differentiate from notes, preventing field confusion
-- Negative: Free-form field means inconsistent quality across entries — some notes will be more useful than others
-- Negative: Coaching must be in `prime` output (seen every session) to be effective — agents don't read docs
+- Positive: Models generalize better when they understand the reason behind a rule, not just the demand
+- Positive: Single coaching text works across models — no maintenance burden of model-specific variants
+- Positive: XML tags provide clear section boundaries at zero cost (coaching is a Go string consumed only by LLMs)
+- Negative: Motivated rules are longer than bare imperatives — coaching text grows
+- Constraint: BAD/GOOD examples must be maintained as the tool evolves or they become misleading
 
 ---
 
-## ADR-6: Filtering Ledger-Only Commits in GetPendingCommits Over Caller-Side Filtering
+## ADR-6: Stdin-Based Hook Input Over Environment Variables
 
-**Context:** After pivoting to file-based storage, every `timbers log` command creates a commit containing the `.timbers/` entry file. This caused a chicken-and-egg problem: `pending` would always report the most recent entry commit as undocumented work, since it was a commit without a corresponding entry documenting *that specific commit*.
+**Context:** The PostToolUse hook that reminded users to run `timbers log` after `git commit` had been silently broken since creation. It read `$TOOL_INPUT` from an environment variable, but Claude Code hooks receive JSON on stdin — `$TOOL_INPUT` was always empty. Two fix approaches: parse stdin with `jq` to extract the specific `tool_input.command` field, or grep the raw JSON blob from stdin for `git commit`.
 
-**Decision:** Filter ledger-only commits inside `GetPendingCommits` using `git.CommitFiles()` and an `isLedgerOnlyCommit` helper that checks whether all files in a commit are under `.timbers/`. Safe default: if `CommitFiles` fails or returns unknown files, keep the commit visible. Applied to all 3 return paths in `GetPendingCommits`.
+**Decision:** Read stdin directly with `grep` rather than parsing with `jq`. Also added upgrade logic (`hasExactHookCommand` detection + `removeTimbersHooksFromEvent` cleanup) so reinstall replaces stale hooks rather than skipping them.
 
 **Consequences:**
-- Positive: All 7 callers of `GetPendingCommits` benefit from the fix without individual changes
-- Positive: Safe default means unknown commits are never hidden — false positives over false negatives
-- Negative: Adds a `diff-tree` call per commit when checking pending — minor performance cost
-- Negative: `diff-tree` returns empty for merge commits and root commits, which is a known limitation
+- Positive: No dependency on `jq` — works on any system with standard Unix tools
+- Positive: Upgrade logic prevents broken hooks from persisting forever (the old skip-if-any-exists behavior)
+- Negative: Grepping raw JSON for `git commit` is technically imprecise — could false-positive on a commit message mentioning "git commit," though the risk is negligible in practice
+- Constraint: Any future hook input format changes in Claude Code require updating the stdin reading approach
+
+---
+
+## ADR-7: GITHUB_TOKEN Workflow Chaining via `workflow_dispatch`
+
+**Context:** The devblog CI workflow commits generated blog posts and pushes them, but the subsequent GitHub Pages deployment never triggered. Root cause: pushes made with `GITHUB_TOKEN` intentionally don't fire `on: push` workflows — this is GitHub's infinite-loop prevention. The devblog posts were being committed but never published.
+
+**Decision:** Chain workflows explicitly using `workflow_dispatch`. The devblog workflow triggers `pages.yml` via the GitHub API after a successful push, with `actions: write` permission and a committed-gate check.
+
+**Consequences:**
+- Positive: Blog posts now reliably deploy after generation
+- Positive: Explicit chaining is visible and auditable — no hidden coupling via push events
+- Negative: Requires `actions: write` permission, which is broader than the workflow otherwise needs
+- Constraint: Any new workflow that depends on devblog pushes must also be explicitly chained — implicit `on: push` triggers will never fire from `GITHUB_TOKEN` commits

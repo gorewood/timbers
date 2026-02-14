@@ -1,31 +1,33 @@
 +++
 title = 'Release Notes'
-date = '2026-02-13'
+date = '2026-02-14'
 tags = ['example', 'release-notes']
 +++
 
-Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
+Generated with `timbers draft release-notes --last 25 | claude -p --model opus`
 
 ---
 
-# Release Notes
+## Release Notes — v0.7.0 through v0.10.0
 
-## New Features
+### New Features
 
-- You can now capture your reasoning process with the `--notes` flag on `timbers log` — record what alternatives you considered and why you chose one approach over another. The `--why` flag captures the verdict; `--notes` captures the journey.
-- Timbers now includes an MCP server (`timbers serve`) that works with any MCP-compatible editor — Claude Code, Cursor, Windsurf, Gemini CLI, and more — providing 6 tools (`pending`, `prime`, `query`, `show`, `status`, `log`) over stdio transport.
-- Timbers is now agent-environment neutral. The `init`, `doctor`, `setup`, and `uninstall` commands work across multiple AI coding environments. Adding support for a new environment requires a single file implementing the `AgentEnv` interface.
-- Entry storage now uses a `YYYY/MM/DD` directory layout under `.timbers/`, providing better filesystem performance at scale while keeping entries merge-safe across concurrent worktrees.
+- **Capture your decision-making process with `--notes`.** You can now add a `--notes` flag to `timbers log` to record the thinking behind a decision — alternatives you considered, surprises you hit, trade-offs you weighed. The `--why` flag stays focused on the verdict; `--notes` tells the story of how you got there.
+- **Control terminal colors with `--color`.** If you use a color scheme like Solarized Dark where some text was hard to read, you can now pass `--color never`, `--color auto`, or `--color always` to override color detection.
+- **Entries are auto-committed when you log them.** `timbers log` now commits the entry file to git automatically, so you no longer need a separate `git commit` step after logging your work.
+- **MCP server for tool integrations.** Timbers now ships with an MCP server (stdio transport) exposing 6 tools, so editor extensions and other MCP-compatible clients can read and write ledger entries directly.
+- **Content safety coaching built into `timbers prime`.** The session workflow now reminds agents to keep secrets, personal data, and internal URLs out of entries — since entries are git-committed and potentially public.
 
-## Improvements
+### Improvements
 
-- `timbers pending` no longer reports entry commits as undocumented work — the chicken-and-egg problem from file-based storage has been resolved.
-- MCP read tools advertise `idempotentHint`, allowing editors to optimize with caching and retry logic.
-- The `--no-claude` flag has been replaced with the more generic `--no-agent` (the old flag still works as a deprecated alias).
-- Documentation across README, tutorial, agent reference, and spec now covers the `--notes` flag with clear guidance on when to use it.
-- The `onboard` snippet includes a `command -v` check for graceful degradation when timbers isn't installed — team members see an install URL instead of an error.
+- **Smarter coaching for better entries.** The guidance that `timbers prime` provides has been rewritten with clearer explanations, concrete examples, and a five-point checklist for when to include notes. The result: agents write more useful `--why` fields and know when `--notes` adds value.
+- **Ready for more agent environments.** `timbers init`, `timbers doctor`, and `timbers uninstall` now use a pluggable architecture internally, making it straightforward to support additional agent environments beyond Claude Code in the future. The `--no-claude` flag has been renamed to `--no-agent` (the old flag still works).
+- **Post-commit reminder hook fixed.** The hook that reminds you to run `timbers log` after a git commit was silently broken — it now works correctly. If you have an older installation, `timbers init` will detect and upgrade the stale hook automatically.
+- **Landing page and documentation refresh.** Timbers has a proper homepage now, and the tutorial, README, and reference docs have all been updated to cover `--notes` and reflect current best practices.
+- **Daily dev blog generation.** The automated dev blog now publishes daily instead of weekly, better matching the pace of development.
 
-## Breaking Changes
+### Bug Fixes
 
-- Storage has pivoted from git notes to `.timbers/` flat files. If you have existing entries in git notes, run the migration script or use `timbers catchup` to recreate them. The `timbers notes push/fetch` commands have been removed.
-- The `--no-claude` flag on `timbers init` is deprecated in favor of `--no-agent`. The old flag continues to work but will be removed in a future release.
+- **Fixed invisible text on Solarized Dark and similar themes** — dim/hint text that used color 8 (bright black) is now readable regardless of your terminal's color scheme.
+- **Fixed site publishing under the wrong URL** after an organization migration.
+- **Fixed a CI issue** where automated blog posts weren't triggering site rebuilds.
