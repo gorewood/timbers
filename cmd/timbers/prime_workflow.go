@@ -103,6 +103,9 @@ Generating documents:
 - ` + "`timbers draft --list`" + ` - list available templates
 - ` + "`timbers draft release-notes --last 10`" + ` - render for piping to LLM
 - ` + "`timbers draft devblog --since 7d --model opus`" + ` - generate directly
+- When piping through ` + "`claude -p`" + ` from an agent session, prefix with
+  ` + "`CLAUDECODE=`" + ` to bypass the nested-session guard:
+  ` + "`CLAUDECODE= timbers draft release-notes --last 10 | claude -p --model opus`" + `
 
 Sync:
 - Entries are committed files in .timbers/ — use standard git push/pull
