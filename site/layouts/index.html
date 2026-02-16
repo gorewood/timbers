@@ -156,7 +156,7 @@
         <!-- Badge -->
         <div class="gs hero-badge inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 text-xs text-zinc-400 font-medium mb-8">
             <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-            v0.9.0 &middot; Open Source &middot; MIT
+            v0.10.0 &middot; Open Source &middot; MIT
         </div>
 
         <!-- Headline -->
@@ -272,10 +272,10 @@
                     <span class="terminal-dot bg-[#28c840]"></span>
                 </div>
                 <div class="terminal-body"><span class="prompt">$</span> <span class="cmd">timbers</span> <span class="sub">log</span> <span class="str">"Fixed auth bypass vulnerability"</span> <span class="cont">\</span>
-      <span class="flag">--why</span> <span class="str">"Input validation over rate limiting &mdash; catches root cause"</span> <span class="cont">\</span>
-      <span class="flag">--how</span> <span class="str">"Added validation middleware before auth handler"</span> <span class="cont">\</span>
-      <span class="flag">--notes</span> <span class="str">"Considered rate limiting but it masks the problem.
-               Validation is cheaper and catches the issue at the boundary."</span>
+<span class="cmd">    </span><span class="flag">--why</span> <span class="str">"Input validation over rate limiting &mdash; catches root cause"</span> <span class="cont">\</span>
+<span class="cmd">    </span><span class="flag">--how</span> <span class="str">"Added validation middleware before auth handler"</span> <span class="cont">\</span>
+<span class="cmd">    </span><span class="flag">--notes</span> <span class="str">"Considered rate limiting but it masks the problem.
+<span class="cmd">             </span>Validation is cheaper and catches the issue at the boundary."</span>
 
 <span class="cmt"># Entry stored in .timbers/ &mdash; committed with your code, queryable by any tool.</span></div>
             </div>
@@ -342,13 +342,13 @@
                 </div>
                 <div class="px-6 pb-6">
                     <div class="rounded-lg bg-zinc-950/60 border border-zinc-800/50 p-4 text-xs font-mono leading-relaxed text-zinc-500">
-                        <p class="text-amber-400/80">## [0.9.0] - 2026-02-13</p>
+                        <p class="text-amber-400/80">## [0.10.0] - 2026-02-14</p>
                         <p class="mt-2 text-zinc-400">### Added</p>
-                        <p>- Coaching rewrite with motivated rules</p>
-                        <p>- Concrete notes trigger checklist</p>
+                        <p>- Auto-commit entries on timbers log</p>
+                        <p>- Content safety coaching in prime</p>
                         <p class="mt-2 text-zinc-400">### Fixed</p>
-                        <p>- Hugo baseURL after org migration</p>
-                        <p class="text-zinc-600">- CI pipeline for daily devblog...</p>
+                        <p>- PostToolUse hook reading stdin</p>
+                        <p class="text-zinc-600">- Terminal colors on Solarized Dark...</p>
                     </div>
                 </div>
             </div>
@@ -547,8 +547,8 @@ for undocumented commits, then:
                     <div class="terminal">
                         <div class="terminal-body py-3"><span class="cmt"># Your agent captures decisions as it works:</span>
 <span class="prompt">$</span> <span class="cmd">timbers</span> <span class="sub">log</span> <span class="str">"Pivoted storage from git notes to file-per-entry"</span> <span class="cont">\</span>
-      <span class="flag">--why</span> <span class="str">"Files enable atomic writes and eliminate merge conflicts in concurrent worktrees"</span> <span class="cont">\</span>
-      <span class="flag">--how</span> <span class="str">"JSON files in .timbers/ with temp+rename atomicity"</span></div>
+<span class="cmd">    </span><span class="flag">--why</span> <span class="str">"Files enable atomic writes and eliminate merge conflicts in concurrent worktrees"</span> <span class="cont">\</span>
+<span class="cmd">    </span><span class="flag">--how</span> <span class="str">"JSON files in .timbers/ with temp+rename atomicity"</span></div>
                     </div>
                 </div>
             </div>
