@@ -1,6 +1,6 @@
 +++
 title = 'Changelog'
-date = '2026-02-14'
+date = '2026-02-15'
 tags = ['example', 'changelog']
 +++
 
@@ -14,6 +14,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.10.1] - 2026-02-16
+
+### Changed
+- Regenerated site examples and devblog from 69-entry ledger, replacing stale content from v0.9.0
+- Added provenance note to agent DX guide subtitle crediting pattern origins
+- Updated landing page to v0.10.0 with terminal indentation fix
+
+### Fixed
+- Removed `PostToolUse` hook that fired but whose stdout was not surfaced by Claude Code — `Stop` hook already covers the same case via `timbers pending` at session end
+
+### Technical
+- Added retired event cleanup list for graceful hook removal on upgrade
+
 
 ## [0.10.0] - 2026-02-14
 
@@ -229,3 +243,4 @@ Initial public release.
 [0.5.0]: https://github.com/gorewood/timbers/releases/tag/v0.5.0
 [0.6.0]: https://github.com/gorewood/timbers/releases/tag/v0.6.0
 [0.7.0]: https://github.com/gorewood/timbers/releases/tag/v0.7.0
+[0.10.1]: https://github.com/gorewood/timbers/releases/tag/v0.10.1
