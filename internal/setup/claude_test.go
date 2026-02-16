@@ -264,15 +264,15 @@ func TestAddTimbersHooks_UpgradeFromSingle(t *testing.T) {
 	if count := countTimbersHooksForEvent(settings, "SessionStart"); count != 1 {
 		t.Errorf("SessionStart: expected 1, got %d", count)
 	}
-	// 3 new events added
-	for _, event := range []string{"PreCompact", "Stop", "PostToolUse"} {
+	// 2 new events added
+	for _, event := range []string{"PreCompact", "Stop"} {
 		if !hasHookForEvent(settings, event) {
 			t.Errorf("event %s should be added during upgrade", event)
 		}
 	}
 }
 
-func TestAddTimbersHooks_UpgradePostToolUse(t *testing.T) {
+func TestAddTimbersHooks_CleansUpLegacyPostToolUse(t *testing.T) {
 	// Simulate existing install with the broken $TOOL_INPUT version
 	settings := map[string]any{
 		"hooks": map[string]any{
@@ -288,17 +288,14 @@ func TestAddTimbersHooks_UpgradePostToolUse(t *testing.T) {
 	}
 	addTimbersHooks(settings)
 
-	// Legacy PostToolUse should be replaced with stdin-reading version
+	// Legacy PostToolUse should be removed (not replaced — PostToolUse was
+	// dropped because Claude Code doesn't surface its stdout)
 	groups := getEventGroups(settings, "PostToolUse")
-	if len(groups) != 1 {
-		t.Fatalf("expected 1 PostToolUse group, got %d", len(groups))
-	}
-	if groups[0].Hooks[0].Command != postToolUseBashCommand {
-		t.Errorf("PostToolUse hook should be upgraded\ngot:  %s\nwant: %s",
-			groups[0].Hooks[0].Command, postToolUseBashCommand)
+	if len(groups) != 0 {
+		t.Errorf("expected PostToolUse to be removed, got %d groups", len(groups))
 	}
 
-	// All other events should also be added
+	// All current events should be added
 	assertAllTimbersHooksPresent(t, settings)
 }
 
@@ -432,9 +429,9 @@ func TestIsTimbersCommand(t *testing.T) {
 	}{
 		{"resilient prime command", timbersHookCommand, true},
 		{"legacy prime command", legacyHookCommand, true},
-		{"legacy post-tool-use command", legacyPostToolUseBashCommand, true},
+		{"legacy post-tool-use env command", legacyPostToolUseBashCommand, true},
+		{"legacy post-tool-use stdin command", legacyPostToolUseStdinCommand, true},
 		{"stop command", stopCommand, true},
-		{"post-tool-use command", postToolUseBashCommand, true},
 		{"unrelated command", "bd prime", false},
 		{"empty string", "", false},
 		{"partial match", "timbers", false},
@@ -479,25 +476,9 @@ func TestResolveClaudeSettingsPath(t *testing.T) {
 	})
 }
 
-func TestPostToolUseHasBashMatcher(t *testing.T) {
-	settings := make(map[string]any)
-	addTimbersHooks(settings)
-
-	hooks, _ := settings["hooks"].(map[string]any)
-	groups, ok := hooks["PostToolUse"].([]any)
-	if !ok || len(groups) == 0 {
-		t.Fatal("PostToolUse hook group should exist")
-	}
-	group, _ := groups[0].(map[string]any)
-	matcher, _ := group["matcher"].(string)
-	if matcher != "Bash" {
-		t.Errorf("PostToolUse matcher = %q, want %q", matcher, "Bash")
-	}
-}
-
 // --- test helpers ---
 
-// assertAllTimbersHooksPresent checks that all 4 hook events are installed.
+// assertAllTimbersHooksPresent checks that all hook events are installed.
 func assertAllTimbersHooksPresent(t *testing.T, settings map[string]any) {
 	t.Helper()
 	for _, cfg := range timbersHooks {

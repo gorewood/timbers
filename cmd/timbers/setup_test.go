@@ -62,7 +62,7 @@ func timbersSettings() map[string]any {
 }
 
 // allTimbersEvents are the events timbers installs hooks for.
-var allTimbersEvents = []string{"SessionStart", "PreCompact", "Stop", "PostToolUse"}
+var allTimbersEvents = []string{"SessionStart", "PreCompact", "Stop"}
 
 // assertAllEventsPresent checks that all expected hook events exist in settings.
 func assertAllEventsPresent(t *testing.T, settings map[string]any) {
@@ -224,11 +224,11 @@ func TestSetupClaudeInstall(t *testing.T) {
 			}
 		}
 
-		// Verify exactly one timbers hook per event (4 total)
+		// Verify exactly one timbers hook per event (3 total)
 		settings := readSettingsJSON(t, settingsPath)
 		count := countTimbersHooks(settings)
-		if count != 4 {
-			t.Errorf("expected exactly 4 timbers hooks (one per event), found %d", count)
+		if count != 3 {
+			t.Errorf("expected exactly 3 timbers hooks (one per event), found %d", count)
 		}
 	})
 
@@ -292,32 +292,43 @@ func TestSetupClaudeInstall(t *testing.T) {
 		}
 	})
 
-	t.Run("PostToolUse has Bash matcher", func(t *testing.T) {
+	t.Run("PostToolUse cleaned up on install", func(t *testing.T) {
 		tmpHome := t.TempDir()
 		t.Setenv("HOME", tmpHome)
+
+		// Pre-seed with a legacy PostToolUse hook
+		settingsPath := filepath.Join(tmpHome, ".claude", "settings.json")
+		if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		//nolint:lll // legacy hook command, must match exactly
+		legacyCmd := `printf '%s\n' "$TOOL_INPUT" | grep -q 'git commit' && command -v timbers >/dev/null 2>&1 && echo "timbers: remember to run 'timbers log' to document this commit" || true`
+		writeSettingsJSON(t, settingsPath, map[string]any{
+			"hooks": map[string]any{
+				"PostToolUse": []any{
+					map[string]any{
+						"matcher": "Bash",
+						"hooks": []any{
+							map[string]any{"type": "command", "command": legacyCmd},
+						},
+					},
+				},
+			},
+		})
 
 		var buf bytes.Buffer
 		cmd := newSetupCmd()
 		cmd.SetOut(&buf)
 		cmd.SetArgs([]string{"claude", "--global"})
 
-		err := cmd.Execute()
-		if err != nil {
+		if err := cmd.Execute(); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		settingsPath := filepath.Join(tmpHome, ".claude", "settings.json")
 		settings := readSettingsJSON(t, settingsPath)
-
 		hooks, _ := settings["hooks"].(map[string]any)
-		groups, ok := hooks["PostToolUse"].([]any)
-		if !ok || len(groups) == 0 {
-			t.Fatal("PostToolUse hook group should exist")
-		}
-		group, _ := groups[0].(map[string]any)
-		matcher, _ := group["matcher"].(string)
-		if matcher != "Bash" {
-			t.Errorf("PostToolUse matcher = %q, want %q", matcher, "Bash")
+		if _, exists := hooks["PostToolUse"]; exists {
+			t.Error("PostToolUse should be cleaned up on install (retired event)")
 		}
 	})
 }

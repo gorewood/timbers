@@ -42,24 +42,23 @@ const legacyHookCommand = "timbers prime"
 const stopCommand = `command -v timbers >/dev/null 2>&1 && timbers pending --json 2>/dev/null | grep -q '"count":[1-9][0-9]*' && echo "timbers: undocumented commits - run 'timbers pending' to review" || true`
 
 // legacyPostToolUseBashCommand is the old format that used $TOOL_INPUT (always empty).
-// Claude Code hooks receive input via stdin, not env vars. Kept for upgrade detection.
+// Kept for upgrade detection so reinstall removes stale hooks.
 //
 //nolint:lll // shell one-liner
 const legacyPostToolUseBashCommand = `printf '%s\n' "$TOOL_INPUT" | grep -q 'git commit' && command -v timbers >/dev/null 2>&1 && echo "timbers: remember to run 'timbers log' to document this commit" || true`
 
-// postToolUseBashCommand nudges after git commits to document work.
-// Reads tool input from stdin (Claude Code hook protocol) — hooks receive
-// JSON on stdin, not via environment variables.
+// legacyPostToolUseStdinCommand was the fixed version reading stdin.
+// Removed because Claude Code doesn't surface PostToolUse hook stdout —
+// the Stop hook covers the same case by checking timbers pending at session end.
 //
 //nolint:lll // shell one-liner
-const postToolUseBashCommand = `grep -q 'git commit' && command -v timbers >/dev/null 2>&1 && echo "timbers: remember to run 'timbers log' to document this commit" || true`
+const legacyPostToolUseStdinCommand = `grep -q 'git commit' && command -v timbers >/dev/null 2>&1 && echo "timbers: remember to run 'timbers log' to document this commit" || true`
 
 // timbersHooks defines all hook events timbers installs into Claude Code settings.
 var timbersHooks = []timbersHookConfig{
 	{Event: "SessionStart", Matcher: "", Command: timbersHookCommand},
 	{Event: "PreCompact", Matcher: "", Command: timbersHookCommand},
 	{Event: "Stop", Matcher: "", Command: stopCommand},
-	{Event: "PostToolUse", Matcher: "Bash", Command: postToolUseBashCommand},
 }
 
 // ResolveClaudeSettingsPath determines the settings file path based on scope.
@@ -162,7 +161,7 @@ func isTimbersCommand(cmd string) bool {
 			return true
 		}
 	}
-	return cmd == legacyHookCommand || cmd == legacyPostToolUseBashCommand
+	return cmd == legacyHookCommand || cmd == legacyPostToolUseBashCommand || cmd == legacyPostToolUseStdinCommand
 }
 
 // hasExactHookCommand checks if a specific command exists in an event's hooks.
@@ -201,12 +200,21 @@ func hasHookForEvent(settings map[string]any, event string) bool {
 	return false
 }
 
+// retiredEvents lists hook events that timbers previously installed but no longer uses.
+// On upgrade, these are cleaned up to avoid dead hooks lingering in settings.
+var retiredEvents = []string{"PostToolUse"}
+
 // addTimbersHooks adds all timbers hooks, upgrading stale hooks to current versions.
 func addTimbersHooks(settings map[string]any) {
 	hooks, _ := settings["hooks"].(map[string]any)
 	if hooks == nil {
 		hooks = make(map[string]any)
 		settings["hooks"] = hooks
+	}
+
+	// Clean up retired events
+	for _, event := range retiredEvents {
+		removeTimbersHooksFromEvent(hooks, event)
 	}
 
 	for _, cfg := range timbersHooks {
