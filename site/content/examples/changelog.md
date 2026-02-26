@@ -1,6 +1,6 @@
 +++
 title = 'Changelog'
-date = '2026-02-15'
+date = '2026-02-26'
 tags = ['example', 'changelog']
 +++
 
@@ -14,6 +14,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.10.2] - 2026-02-26
+
+### Fixed
+- Fixed `timbers prime` treating stale anchor as fatal error after squash merges — now handles `ErrStaleAnchor` gracefully like `pending` and MCP already do
+- Improved stale anchor warning messages in CLI and MCP to be actionable: explains that squash-merged branches with timbers entries are already documented, advises against catch-up logging, and notes that the anchor self-heals on next `timbers log`
+- Synced MCP `defaultWorkflowContent` with CLI version — MCP had a stale 4-line checklist instead of the full coaching content
+
+### Added
+- Added `<stale-anchor>` coaching section to prime workflow, guiding agents through the correct response when anchor commits are missing from history after squash merges
 
 ## [0.10.1] - 2026-02-16
 
@@ -244,3 +254,4 @@ Initial public release.
 [0.6.0]: https://github.com/gorewood/timbers/releases/tag/v0.6.0
 [0.7.0]: https://github.com/gorewood/timbers/releases/tag/v0.7.0
 [0.10.1]: https://github.com/gorewood/timbers/releases/tag/v0.10.1
+[0.10.2]: https://github.com/gorewood/timbers/releases/tag/v0.10.2
