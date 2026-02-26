@@ -51,7 +51,9 @@ func handlePending(storage *ledger.Storage) mcp.ToolHandlerFor[PendingInput, Pen
 			return nil, PendingOutput{}, fmt.Errorf("getting pending commits: %w", err)
 		}
 		if errors.Is(err, ledger.ErrStaleAnchor) {
-			warning = "anchor commit not found in current history; showing all reachable commits"
+			warning = "anchor commit not found in current history (likely squash merge or rebase); " +
+				"showing all reachable commits — if the squash-merged branch had timbers entries, " +
+				"this work is already documented; do not catch up; the anchor self-heals on your next timbers log"
 		}
 
 		out := PendingOutput{

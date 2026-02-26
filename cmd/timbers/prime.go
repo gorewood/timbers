@@ -168,9 +168,9 @@ func gatherPrimeContext(storage *ledger.Storage, lastN int, verbose bool) (*prim
 		return nil, err
 	}
 
-	pendingCommits, _, err := storage.GetPendingCommits()
-	if err != nil {
-		return nil, err
+	pendingCommits, _, pendingErr := storage.GetPendingCommits()
+	if pendingErr != nil && !errors.Is(pendingErr, ledger.ErrStaleAnchor) {
+		return nil, pendingErr
 	}
 
 	recentEntries, err := storage.GetLastNEntries(lastN)

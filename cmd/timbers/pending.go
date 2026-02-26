@@ -93,7 +93,9 @@ func runPending(cmd *cobra.Command, storage *ledger.Storage, countOnly bool) err
 		return err
 	}
 	if errors.Is(err, ledger.ErrStaleAnchor) {
-		printer.Warn("last entry's anchor commit is no longer in git history (squash merge or rebase?); showing all reachable commits")
+		printer.Warn("last entry's anchor commit is no longer in git history (likely squash merge or rebase); " +
+			"showing all reachable commits — if the squash-merged branch had timbers entries, " +
+			"this work is already documented; do not catch up; the anchor self-heals on your next timbers log")
 	}
 
 	// Build result

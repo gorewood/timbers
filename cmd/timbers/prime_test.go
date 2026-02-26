@@ -4,6 +4,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -172,6 +173,45 @@ func TestPrimeCommand(t *testing.T) {
 			lastN:        3,
 			jsonOutput:   true,
 			wantContains: []string{`"entry_count": 0`, `"recent_entries": []`, `"workflow":`},
+		},
+		{
+			name: "stale anchor - graceful degradation with fallback commits",
+			mock: &mockGitOpsForPrime{
+				head:       "abc123def456",
+				commitsErr: errors.New("bad object oldanchor1234"), // git log fails for missing anchor
+				reachableResult: []git.Commit{
+					{SHA: "abc123def456", Short: "abc123d", Subject: "Latest commit"},
+					{SHA: "def456789012", Short: "def4567", Subject: "Earlier commit"},
+				},
+			},
+			files: func(t *testing.T) *ledger.FileStorage {
+				return writeEntries(t,
+					makePrimeTestEntry("oldanchor1234", oneHourAgo, "Previous work"),
+				)
+			},
+			lastN: 3,
+			wantContains: []string{
+				"Timbers Session Context", "Entries: 1", "2 undocumented",
+				"Previous work", "Session Protocol",
+			},
+		},
+		{
+			name: "stale anchor - json output still works",
+			mock: &mockGitOpsForPrime{
+				head:       "abc123def456",
+				commitsErr: errors.New("bad object oldanchor1234"),
+				reachableResult: []git.Commit{
+					{SHA: "abc123def456", Short: "abc123d", Subject: "Latest commit"},
+				},
+			},
+			files: func(t *testing.T) *ledger.FileStorage {
+				return writeEntries(t,
+					makePrimeTestEntry("oldanchor1234", oneHourAgo, "Previous work"),
+				)
+			},
+			lastN:        3,
+			jsonOutput:   true,
+			wantContains: []string{`"entry_count": 1`, `"count": 1`, `"recent_entries":`, `"workflow":`},
 		},
 	}
 

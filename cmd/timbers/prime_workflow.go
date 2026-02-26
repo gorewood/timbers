@@ -110,4 +110,18 @@ Generating documents:
 Sync:
 - Entries are committed files in .timbers/ — use standard git push/pull
 </commands>
+
+<stale-anchor>
+# Stale Anchor After Squash Merge
+
+If timbers warns that the anchor commit is missing from history, this typically
+means a branch was squash-merged or rebased. The pending list may show commits
+that are already documented by entries from the original branch.
+
+What to do:
+- Do NOT try to catch up or re-document these commits
+- If the squash-merged branch had timbers entries, the work is already covered
+- Just proceed with your normal work — the anchor self-heals the next time you
+  run timbers log after a real commit
+</stale-anchor>
 `
