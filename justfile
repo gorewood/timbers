@@ -43,6 +43,10 @@ doctor:
 # Run all quality checks
 check: fmt-check lint test
 
+# Check for known vulnerabilities (informational — stdlib vulns require Go upgrades)
+vulncheck:
+    go tool govulncheck ./...
+
 # Run linter (skip site/ which is Hugo-only)
 lint:
     go tool golangci-lint run ./cmd/... ./internal/...
@@ -207,8 +211,11 @@ release version:
         cat CHANGELOG.md
     } > site/content/examples/changelog.md
 
+    # Update landing page version badge
+    sed -i '' "s/v[0-9]*\.[0-9]*\.[0-9]* \&middot; Open Source/v${ver} \&middot; Open Source/" site/layouts/index.html
+
     # Commit, tag, push
-    git add CHANGELOG.md site/content/examples/changelog.md
+    git add CHANGELOG.md site/content/examples/changelog.md site/layouts/index.html
     git commit -m "chore: changelog for $tag"
     git tag "$tag"
     git push origin main "$tag"
