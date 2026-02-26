@@ -229,6 +229,7 @@ git push             # Entries are files, sync via regular push
 
 **Before releasing a new version:**
 ```bash
+git pull --rebase    # Sync with remote BEFORE tagging (avoids tag/rebase conflicts)
 just build-local     # Build bin/timbers with version info
 bin/timbers --version  # Verify the build
 just release 0.x.x   # Tag and push (triggers GitHub Actions)
