@@ -24,7 +24,19 @@ jobs:
       - name: Install timbers
         run: go install ./cmd/timbers
 
+      - name: Check for entries
+        id: check
+        run: |
+          COUNT=$(timbers query --since 1d --json | jq 'length')
+          echo "entry_count=$COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "No entries in the last day, skipping blog post"
+          else
+            echo "Found $COUNT entries, generating blog post"
+          fi
+
       - name: Generate blog post
+        if: steps.check.outputs.entry_count != '0'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -41,6 +53,7 @@ jobs:
           } > "$FILE"
 
       - name: Commit and push
+        if: steps.check.outputs.entry_count != '0'
         id: commit
         run: |
           git config user.name "github-actions[bot]"
