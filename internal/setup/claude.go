@@ -124,6 +124,41 @@ func RemoveTimbersSectionFromHook(settingsPath string) error {
 	return writeSettings(settingsPath, settings)
 }
 
+// CheckHookStaleness checks if installed timbers hooks are outdated.
+// Returns whether any hooks are stale and descriptions of what's outdated.
+// A hook is stale if a timbers hook exists for the event but doesn't match the current command.
+func CheckHookStaleness(settingsPath string) (stale bool, details []string) {
+	settings, err := readSettings(settingsPath)
+	if err != nil {
+		return false, nil
+	}
+
+	for _, cfg := range timbersHooks {
+		if hasExactHookCommand(settings, cfg.Event, cfg.Command) {
+			continue // This event's hook is current
+		}
+		if hasHookForEvent(settings, cfg.Event) {
+			// Has a timbers hook but it's not the current version
+			stale = true
+			details = append(details, cfg.Event+": outdated hook command")
+			continue
+		}
+		// Missing entirely — also stale (added in newer version)
+		stale = true
+		details = append(details, cfg.Event+": missing hook")
+	}
+
+	// Check for retired events that still have timbers hooks
+	for _, event := range retiredEvents {
+		if hasHookForEvent(settings, event) {
+			stale = true
+			details = append(details, event+": retired hook (will be removed)")
+		}
+	}
+
+	return stale, details
+}
+
 // readSettings reads and parses a JSON settings file.
 // Returns the raw os error on read failure so callers can check os.IsNotExist.
 func readSettings(path string) (map[string]any, error) {

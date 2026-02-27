@@ -476,6 +476,155 @@ func TestResolveClaudeSettingsPath(t *testing.T) {
 	})
 }
 
+func TestCheckHookStaleness(t *testing.T) {
+	tests := []struct {
+		name        string
+		settings    map[string]any // nil means no file
+		wantStale   bool
+		wantDetails []string
+	}{
+		{
+			name: "all current hooks - not stale",
+			settings: func() map[string]any {
+				s := make(map[string]any)
+				addTimbersHooks(s)
+				return s
+			}(),
+			wantStale:   false,
+			wantDetails: nil,
+		},
+		{
+			name: "legacy SessionStart command - stale",
+			settings: map[string]any{
+				"hooks": map[string]any{
+					"SessionStart": []any{
+						map[string]any{
+							"matcher": "",
+							"hooks": []any{
+								map[string]any{"type": "command", "command": legacyHookCommand},
+							},
+						},
+					},
+					"PreCompact": []any{
+						map[string]any{
+							"matcher": "",
+							"hooks": []any{
+								map[string]any{"type": "command", "command": timbersHookCommand},
+							},
+						},
+					},
+					"Stop": []any{
+						map[string]any{
+							"matcher": "",
+							"hooks": []any{
+								map[string]any{"type": "command", "command": stopCommand},
+							},
+						},
+					},
+				},
+			},
+			wantStale:   true,
+			wantDetails: []string{"SessionStart: outdated hook command"},
+		},
+		{
+			name: "missing Stop hook - stale",
+			settings: map[string]any{
+				"hooks": map[string]any{
+					"SessionStart": []any{
+						map[string]any{
+							"matcher": "",
+							"hooks": []any{
+								map[string]any{"type": "command", "command": timbersHookCommand},
+							},
+						},
+					},
+					"PreCompact": []any{
+						map[string]any{
+							"matcher": "",
+							"hooks": []any{
+								map[string]any{"type": "command", "command": timbersHookCommand},
+							},
+						},
+					},
+				},
+			},
+			wantStale:   true,
+			wantDetails: []string{"Stop: missing hook"},
+		},
+		{
+			name: "retired PostToolUse hook - stale",
+			settings: func() map[string]any {
+				settings := make(map[string]any)
+				addTimbersHooks(settings)
+				// Add a retired PostToolUse hook
+				hooks, ok := settings["hooks"].(map[string]any)
+				if !ok {
+					return settings
+				}
+				hooks["PostToolUse"] = []any{
+					map[string]any{
+						"matcher": "Bash",
+						"hooks": []any{
+							map[string]any{"type": "command", "command": legacyPostToolUseBashCommand},
+						},
+					},
+				}
+				return settings
+			}(),
+			wantStale:   true,
+			wantDetails: []string{"PostToolUse: retired hook (will be removed)"},
+		},
+		{
+			name: "no hooks at all - stale",
+			settings: map[string]any{
+				"permissions": map[string]any{"allow": []any{}},
+			},
+			wantStale: true,
+			wantDetails: []string{
+				"SessionStart: missing hook",
+				"PreCompact: missing hook",
+				"Stop: missing hook",
+			},
+		},
+		{
+			name:        "nonexistent file - not stale",
+			settings:    nil,
+			wantStale:   false,
+			wantDetails: nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "settings.json")
+
+			if tc.settings != nil {
+				writeJSON(t, path, tc.settings)
+			}
+			// If settings is nil, don't create file (nonexistent case)
+
+			gotStale, gotDetails := CheckHookStaleness(path)
+
+			if gotStale != tc.wantStale {
+				t.Errorf("stale = %v, want %v", gotStale, tc.wantStale)
+			}
+
+			if len(gotDetails) != len(tc.wantDetails) {
+				t.Errorf("details length = %d, want %d\ngot:  %v\nwant: %v",
+					len(gotDetails), len(tc.wantDetails), gotDetails, tc.wantDetails)
+				return
+			}
+
+			for i, want := range tc.wantDetails {
+				if gotDetails[i] != want {
+					t.Errorf("details[%d] = %q, want %q", i, gotDetails[i], want)
+				}
+			}
+		})
+	}
+}
+
 // --- test helpers ---
 
 // assertAllTimbersHooksPresent checks that all hook events are installed.

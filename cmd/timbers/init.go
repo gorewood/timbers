@@ -20,6 +20,7 @@ type initFlags struct {
 	hooks   bool
 	noAgent bool
 	dryRun  bool
+	force   bool
 }
 
 // initStepResult tracks the result of a single initialization step.
@@ -80,13 +81,16 @@ This command sets up everything needed to use timbers:
   - Sets up agent environment integration (optional, e.g. Claude Code)
 
 The command is idempotent - safe to run multiple times.
+If hooks are outdated, they are automatically upgraded on re-run.
+Use --force to re-run all initialization steps regardless of current state.
 
 Examples:
   timbers init              # Interactive setup
   timbers init --yes        # Accept all defaults, no prompts
   timbers init --hooks      # Also install git hooks
   timbers init --no-agent   # Skip agent environment integration
-  timbers init --dry-run    # Show what would be done`,
+  timbers init --dry-run    # Show what would be done
+  timbers init --force      # Force full re-initialization`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runInit(cmd, flags)
 		},
@@ -96,6 +100,7 @@ Examples:
 	cmd.Flags().BoolVar(&flags.hooks, "hooks", false, "Install git hooks (pre-commit)")
 	cmd.Flags().BoolVar(&flags.noAgent, "no-agent", false, "Skip agent environment integration")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Show what would be done without doing it")
+	cmd.Flags().BoolVar(&flags.force, "force", false, "Force full re-initialization, ignoring current state")
 
 	// Deprecated alias for backward compatibility.
 	cmd.Flags().Bool("no-claude", false, "Alias for --no-agent (deprecated)")
@@ -208,8 +213,8 @@ func performInit(
 	cmd *cobra.Command, printer *output.Printer, styles initStyleSet,
 	repoName string, state *initState, flags *initFlags,
 ) error {
-	if isAlreadyInitialized(state, flags) {
-		return outputAlreadyInitialized(printer, styles, repoName)
+	if !flags.force && isAlreadyInitialized(state, flags) {
+		return handleAlreadyInitialized(printer, styles, repoName, flags)
 	}
 
 	if !printer.IsJSON() {
@@ -220,6 +225,48 @@ func performInit(
 
 	steps := executeInitSteps(cmd, printer, styles, state, flags)
 	return outputInitResult(printer, styles, repoName, state, steps)
+}
+
+// handleAlreadyInitialized checks for stale hooks before returning "already initialized".
+// If hooks are stale, auto-upgrades them and reports changes.
+func handleAlreadyInitialized(printer *output.Printer, styles initStyleSet, repoName string, flags *initFlags) error {
+	if flags.noAgent {
+		return outputAlreadyInitialized(printer, styles, repoName)
+	}
+
+	// Check agent env hook staleness
+	settingsPath, _, err := setup.ResolveClaudeSettingsPath(true) // project scope
+	if err != nil {
+		return outputAlreadyInitialized(printer, styles, repoName)
+	}
+
+	stale, details := setup.CheckHookStaleness(settingsPath)
+	if !stale {
+		return outputAlreadyInitialized(printer, styles, repoName)
+	}
+
+	// Auto-upgrade stale hooks
+	if upgradeErr := setup.InstallTimbersSection(settingsPath); upgradeErr != nil {
+		printer.Error(upgradeErr)
+		return upgradeErr
+	}
+
+	if printer.IsJSON() {
+		return printer.Success(map[string]any{
+			"status":        "ok",
+			"hooks_updated": true,
+			"repo_name":     repoName,
+			"details":       details,
+		})
+	}
+
+	printer.Println()
+	printer.Print("%s %s\n", styles.pass.Render("Hooks upgraded in"), repoName)
+	for _, d := range details {
+		printer.Print("  %s %s\n", styles.accent.Render("->"), d)
+	}
+	printer.Println()
+	return nil
 }
 
 // isAlreadyInitialized checks if timbers is fully initialized.
