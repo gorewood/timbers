@@ -31,7 +31,7 @@ type Styles struct {
 	Muted   lipgloss.Style
 	Key     lipgloss.Style
 	Value   lipgloss.Style
-	Border  lipgloss.Color
+	Border  lipgloss.TerminalColor
 	Accent  lipgloss.Style
 }
 
@@ -40,17 +40,17 @@ type Styles struct {
 // If isTTY is true, colors will be enabled for human output.
 func NewPrinter(writer io.Writer, jsonMode bool, isTTY bool) *Printer {
 	styles := &Styles{
-		Error:   lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true), // Red
-		Success: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),           // Green
-		Warning: lipgloss.NewStyle().Foreground(lipgloss.Color("11")),           // Yellow
+		Error:   lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "9", Dark: "9"}).Bold(true), // Red
+		Success: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "10", Dark: "10"}),          // Green
+		Warning: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "11", Dark: "11"}),          // Yellow
 		Bold:    lipgloss.NewStyle().Bold(true),
-		Dim:     lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
-		Title:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12")), // Blue
+		Dim:     lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "8", Dark: "7"}),
+		Title:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "12", Dark: "12"}), // Blue
 		Muted:   lipgloss.NewStyle().Faint(true),
-		Key:     lipgloss.NewStyle().Foreground(lipgloss.Color("14")), // Cyan
+		Key:     lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "14", Dark: "14"}), // Cyan
 		Value:   lipgloss.NewStyle(),
-		Border:  lipgloss.Color("8"),                                  // Gray
-		Accent:  lipgloss.NewStyle().Foreground(lipgloss.Color("13")), // Magenta
+		Border:  lipgloss.AdaptiveColor{Light: "8", Dark: "7"},                                   // Gray
+		Accent:  lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "13", Dark: "13"}), // Magenta
 	}
 
 	// Disable colors if not a TTY
@@ -64,7 +64,7 @@ func NewPrinter(writer io.Writer, jsonMode bool, isTTY bool) *Printer {
 		styles.Muted = lipgloss.NewStyle()
 		styles.Key = lipgloss.NewStyle()
 		styles.Value = lipgloss.NewStyle()
-		styles.Border = lipgloss.Color("")
+		styles.Border = lipgloss.NoColor{}
 		styles.Accent = lipgloss.NewStyle()
 	}
 

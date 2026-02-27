@@ -170,12 +170,12 @@ func doctorStyles(isTTY bool) doctorStyleSet {
 	}
 	return doctorStyleSet{
 		heading: lipgloss.NewStyle().Bold(true),
-		section: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12")),
-		pass:    lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
-		warn:    lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
-		fail:    lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
-		hint:    lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
-		dim:     lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+		section: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "12", Dark: "12"}),
+		pass:    lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "10", Dark: "10"}),
+		warn:    lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "11", Dark: "11"}),
+		fail:    lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "9", Dark: "9"}),
+		hint:    lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "8", Dark: "7"}),
+		dim:     lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "8", Dark: "7"}),
 	}
 }
 

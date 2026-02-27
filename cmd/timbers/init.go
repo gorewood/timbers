@@ -55,11 +55,11 @@ func initStyles(isTTY bool) initStyleSet {
 	}
 	return initStyleSet{
 		heading: lipgloss.NewStyle().Bold(true),
-		pass:    lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
-		skip:    lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
-		fail:    lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
-		dim:     lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
-		accent:  lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
+		pass:    lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "10", Dark: "10"}),
+		skip:    lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "8", Dark: "7"}),
+		fail:    lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "9", Dark: "9"}),
+		dim:     lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "8", Dark: "7"}),
+		accent:  lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "12", Dark: "12"}),
 	}
 }
 

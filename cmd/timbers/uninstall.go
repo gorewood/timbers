@@ -316,9 +316,9 @@ func uninstallStyles(isTTY bool) uninstallStyleSet {
 		return uninstallStyleSet{}
 	}
 	return uninstallStyleSet{
-		warning: lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
-		success: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
-		dim:     lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
-		bullet:  lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
+		warning: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "11", Dark: "11"}),
+		success: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "10", Dark: "10"}),
+		dim:     lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "8", Dark: "7"}),
+		bullet:  lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "11", Dark: "11"}),
 	}
 }
