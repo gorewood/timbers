@@ -178,8 +178,8 @@ release version:
     tag="v${ver}"
     tag_date=$(date +%Y-%m-%d)
 
-    # Check for clean working tree (allow dirty site examples — they may be pre-generated)
-    if ! git diff --quiet -- ':!site/content/examples/' || ! git diff --cached --quiet; then
+    # Check for clean working tree (allow dirty release outputs — they may be pre-generated)
+    if ! git diff --quiet -- ':!site/content/examples/' ':!CHANGELOG.md' || ! git diff --cached --quiet; then
         echo "ERROR: Working tree is dirty. Commit or stash changes first."
         exit 1
     fi
