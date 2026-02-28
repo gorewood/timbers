@@ -10,28 +10,25 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ## New Features
 
-- You can now control terminal colors with `--color` (`never`, `auto`, or `always`) — helpful if your color scheme makes text hard to read
-- `timbers log` now automatically commits the entry file, so you no longer need a separate `git add` and `git commit` step
-- `timbers doctor` checks whether you have generation tools configured (LLM API keys or a CLI like `claude`) and tells you exactly what to set
-- `timbers prime` now includes content safety reminders to help keep secrets and personal data out of your ledger entries
-- New `timbers draft standup` template for generating daily standups from your recent entries
+- You can now control terminal colors with `--color never|auto|always` — helpful if dim text was hard to read on your terminal theme
+- `timbers log` now auto-commits the entry file, so you no longer need a separate `git add` and `git commit` step
+- `timbers draft --models` shows which AI providers are available and whether their API keys are configured
+- `timbers doctor` now checks your draft generation setup — it tells you which CLI tools and API keys are ready for `timbers draft` piping
+- You can now pipe `timbers draft` output to Gemini CLI and Codex CLI in addition to Claude
 
 ## Improvements
 
-- Colors now adapt automatically to your terminal background — dark and light themes both work without configuration
-- `timbers draft pr-description` has been rewritten to focus on intent and design decisions rather than restating diffs
-- `timbers prime` now includes guidance for piping drafts through CLI tools
-- Stale anchor warnings (after squash merges or rebases) are now actionable, with clear explanation and next steps
-- Running `timbers init` on an existing installation detects and replaces outdated hooks automatically
+- The `exec-summary` template is now called `standup` — easier to remember (`timbers draft standup`)
+- The `pr-description` template focuses on intent and design decisions instead of rehashing diffs
+- Agents are now coached to keep secrets, API keys, and personal data out of ledger entries
+- Stale hooks from older versions are automatically cleaned up on upgrade
 
 ## Bug Fixes
 
-- Fixed dim and hint text being invisible on dark terminals like Solarized Dark
-- Fixed `timbers prime` crashing on stale anchors instead of showing a helpful warning
-- Fixed the post-commit reminder hook that was silently broken — it never actually detected commits
-- Fixed draft generation producing empty posts when no ledger entries exist for the time range
+- Colors now adapt to dark terminal backgrounds — dim text is no longer invisible on themes like Solarized Dark
+- `timbers prime` now handles stale anchors gracefully after squash merges, instead of showing confusing errors
+- Fixed the post-commit reminder hook, which had been silently broken since it was first created
 
 ## Breaking Changes
 
-- `timbers draft exec-summary` has been renamed to `timbers draft standup`
-- The PostToolUse hook has been removed — the Stop hook now handles pending-entry reminders at session end instead
+- The `exec-summary` template has been renamed to `standup` — update any scripts that reference the old name

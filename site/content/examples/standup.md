@@ -4,19 +4,16 @@ date = '2026-02-28'
 tags = ['example', 'standup']
 +++
 
-Generated with `timbers draft standup --last 20 | claude -p --model opus`
+Generated with `timbers draft standup --since 2026-02-13 --until 2026-02-13 | claude -p --model opus`
 
 ---
 
-**Standup — Feb 13–28**
-
-- **Stale anchor after squash merges confused real users** — shipped v0.10.2 patch with actionable warnings and coaching. Chose self-healing behavior over an explicit reset command.
-- **`PostToolUse` hook was silently broken since creation** — `$TOOL_INPUT` was always empty because Claude Code passes JSON on stdin, not env vars. Ultimately removed the hook entirely since the `Stop` hook covers the same case. Shipped in v0.10.1.
-- **Dark terminal color visibility was a recurring issue** — Color 8 (bright black) invisible on Solarized Dark. Fixed twice: first with a `--color` flag (v0.10.0), then replaced hardcoded `lipgloss.Color` with `AdaptiveColor` for automatic light/dark switching.
-- **Agent `claude -p` piping broken inside Claude Code sessions** — `CLAUDECODE` env var must be unset or the stateless pipe is treated as a nested session. Added workaround to prime coaching.
-- **Cut three releases in two weeks**: v0.9.0 (coaching rewrite informed by Opus 4.6 prompt guide), v0.10.0 (color flag, auto-commit entries, content safety), v0.10.1 + v0.10.2 (bug fixes).
-- **`timbers log` now auto-commits the entry file** — eliminates the staged-but-uncommitted gap that confused users.
-- **Revised draft templates**: renamed standup for discoverability, shifted PR template to intent/decisions (agents already review diffs), defaulted to pipe-first generation for subscription users.
-- **Added `govulncheck` to CI and auto-version updates to the landing page** — version badge had drifted two releases behind.
-- **Shipped marketing landing page** — competitive positioning against Entire.io. Polished terminal blocks and quick-start layout.
-- **Devblog now skips generation when no entries exist** — previously invoked the LLM anyway, which produced apology posts.
+- Fixed a silent bug in the PostToolUse hook — it read `$TOOL_INPUT` (always empty) instead of stdin, meaning the post-commit reminder was a **no-op since it was created**
+- Three CI fixes stacked up: stale `git-notes` fetch referencing storage timbers no longer uses, Hugo `baseURL` pointing at old org, and `GITHUB_TOKEN` pushes not triggering downstream deploys. Chained devblog→pages deploy to close the loop.
+- Two pre-existing test failures unblocked: `TestRepoRoot` broke in worktree environments, `TestCommitFiles` used live HEAD which returns empty on merge commits. Both now own their test state.
+- Released **v0.8.0** and **v0.9.0** — manual release flow required because `claude -p` can't nest inside Claude Code sessions
+- Rewrote coaching system informed by Opus 4.6 prompt guide: motivated rules (WHY behind each rule), concrete 5-point notes trigger checklist, XML tag structure. Council confirmed no model-specific variants needed — clear coaching IS Opus-optimized coaching.
+- Added `AgentEnv` interface with registry pattern so future agent environments (beyond Claude) are self-contained via `init()` registration. Refactored `init`, `doctor`, `setup`, `uninstall` to use it.
+- Shipped marketing landing page for the Hugo site — competitive positioning matters with Entire.io in the landscape. Follow-up polish pass on terminal blocks.
+- `--notes` flag was shipped in v0.8.0 but undocumented everywhere except prime coaching — backfilled across README, tutorial, spec, and agent-reference
+- Regenerated example artifacts using 55 real entries instead of 30 backfilled ones — decision-log and sprint-report output quality jumped noticeably with richer `why` and `notes` data
