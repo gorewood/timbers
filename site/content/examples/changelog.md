@@ -1,6 +1,6 @@
 +++
 title = 'Changelog'
-date = '2026-02-26'
+date = '2026-02-27'
 tags = ['example', 'changelog']
 +++
 
@@ -14,6 +14,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.11.0] - 2026-02-27
+
+### Added
+- Added `govulncheck` as a Go tool dependency with `just vulncheck` recipe for vulnerability scanning
+- Added automatic landing page version update during `just release`
+- Added generation capability check to `timbers doctor` with CLI/API key detection via `llm.APIKeyEnvVars()`
+- Added `just examples` recipe to justfile
+
+### Changed
+- Renamed `exec-summary` template to `standup` for better discoverability
+- Rewrote `pr-description` template (v4) to focus on intent and decisions rather than diff review
+- Updated prime workflow coaching to recommend pipe-first generation defaults for subscription users
+
+### Fixed
+- Fixed devblog workflow generating empty "apology" posts when no entries exist by adding entry count check before LLM invocation
+- Fixed terminal colors invisible on dark backgrounds (e.g., Solarized Dark) by replacing hardcoded `lipgloss.Color` with `AdaptiveColor` across all output formatting
+
 
 ## [0.10.2] - 2026-02-26
 
@@ -255,3 +273,4 @@ Initial public release.
 [0.7.0]: https://github.com/gorewood/timbers/releases/tag/v0.7.0
 [0.10.1]: https://github.com/gorewood/timbers/releases/tag/v0.10.1
 [0.10.2]: https://github.com/gorewood/timbers/releases/tag/v0.10.2
+[0.11.0]: https://github.com/gorewood/timbers/releases/tag/v0.11.0

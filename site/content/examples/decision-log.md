@@ -1,111 +1,135 @@
 +++
 title = 'Decision Log'
-date = '2026-02-14'
+date = '2026-02-27'
 tags = ['example', 'decision-log']
 +++
 
-Generated with `timbers draft decision-log --last 25 | claude -p --model opus`
+Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
 
 ---
 
-## ADR-1: Auto-Commit Entry Files on `timbers log`
+## ADR-1: Grep Over jq for Hook Input Parsing
 
-**Context:** After switching from git-notes to `.timbers/` directory storage, running `timbers log` would create and stage an entry file but leave it uncommitted. Users had to remember a manual `git commit` step, and the staged-but-uncommitted gap caused confusion — entry files sitting in the index could get swept into unrelated commits or lost on branch switches.
+**Context:** Claude Code hooks receive JSON on stdin. The `PostToolUse` hook needed to detect `git commit` commands to remind users about `timbers pending`. Options were full JSON parsing with `jq` to extract `tool_input.command` specifically, or grepping the raw JSON blob.
 
-The original git-notes design didn't have this problem because notes lived in a separate ref. The `.timbers/` approach introduced it but never added an automatic commit step. Two alternatives were considered: committing on the working branch (simple, filesystem-visible) or storing entries on a separate branch (like beads/entire.io, cleaner separation but invisible to `timbers prime`/`draft` without worktree indirection).
-
-**Decision:** `timbers log` auto-commits the entry file using `git commit -m ... -- <path>` with pathspec scoping. Entries stay on the working branch for filesystem visibility. The commit is scoped with `--` to prevent sweeping other staged files into the timbers commit.
+**Decision:** Grep the full JSON blob for `git commit` instead of parsing with `jq`. Simpler, no external dependency, and false positive risk is negligible — the string `git commit` appearing in unrelated JSON fields is unlikely enough to not warrant structured parsing.
 
 **Consequences:**
-- Positive: Eliminates the manual commit step and the staged-but-uncommitted gap entirely
-- Positive: Agent DX preserved — `timbers prime` and `timbers draft` can read entries without worktree indirection
-- Positive: Pathspec scoping (`--`) is a safety mechanism that prevents accidentally committing unrelated staged work
-- Negative: Every `timbers log` creates a commit on the working branch, adding noise to `git log`
-- Constraint: Entries must remain as working-branch files rather than a separate ref, which couples the ledger to the branch history
+- Positive: Zero dependencies, single-line implementation, works on any system with `grep`
+- Positive: Easier to debug — no JSON schema coupling to break
+- Negative: Theoretically matches false positives if `git commit` appears in other JSON fields
+- Negative: Can't extract specific fields if future hooks need richer input inspection
 
 ---
 
-## ADR-2: `--color` Flag Over Full Theme Configuration
+## ADR-2: `--color` Flag Over Full Theme Config
 
-**Context:** Users on Solarized Dark terminals reported that color 8 (bright black) used for dim/hint text was completely invisible. Terminals don't expose their color scheme to applications, so automatic detection isn't possible. The options ranged from a simple override flag (`--color never/auto/always`) to full theme configuration via environment variables and config files. Lipgloss v1.1.0 also offers `AdaptiveColor` and `HasDarkBackground()` that weren't yet in use.
+**Context:** Users on Solarized Dark reported Color 8 (bright black) was invisible. Terminals don't report their color scheme, so the tool can't auto-detect. Options ranged from a full theme config system (env vars, config files, multiple palettes) to a simple `--color` flag paired with `AdaptiveColor`.
 
-**Decision:** Ship a global `--color` persistent flag with `never/auto/always` values, plumbed through `ResolveColorMode` to all `NewPrinter` call sites. Defer `AdaptiveColor` and `HasDarkBackground()` to a future iteration.
+**Decision:** Ship `--color never/auto/always` as a persistent global flag combined with lipgloss `AdaptiveColor`, deferring full theme config. This covers 95% of cases without maintenance burden. Lipgloss v1.1.0's `HasDarkBackground()` was noted for future use but not adopted yet.
 
 **Consequences:**
-- Positive: Covers ~95% of terminal compatibility issues with minimal implementation surface
-- Positive: Persistent flag means users set it once, not per-command
-- Negative: Users with exotic color schemes still can't customize individual colors — only disable them entirely
-- Constraint: Full theme support deferred, creating a known gap for users who want colors but different ones
+- Positive: Immediate fix for dark terminal users with minimal API surface
+- Positive: `AdaptiveColor` handles light/dark switching automatically for most terminals
+- Negative: Users with unusual color schemes still can't fine-tune individual colors
+- Negative: Deferred `HasDarkBackground()` means some auto-detection capability is left on the table
 
 ---
 
-## ADR-3: Registry Pattern Over Switch Statement for Agent Environments
+## ADR-3: Auto-Commit Entry Files with Pathspec Scoping
 
-**Context:** Timbers needed to support multiple agent environments (Claude Code, and eventually Gemini, Codex, etc.) for `init`, `doctor`, and `uninstall` commands. Two patterns were considered: a centralized switch statement where each addition touches multiple files, or a registry pattern where each environment is self-contained in a single file and registers itself via `init()`.
+**Context:** `timbers log` created entry files in `.timbers/` but left them staged-and-uncommitted, causing user confusion. The gap likely originated from the git-notes era where entries didn't create commits on the working branch. Options: (1) auto-commit the entry file, (2) store entries on a separate branch (like beads or Entire.io), (3) leave as manual step.
 
-**Decision:** Registry pattern with an `AgentEnv` interface (`Detect`/`Install`/`Remove`/`Check` methods). `ClaudeEnv` wraps existing setup functions. New environments register via `init()` with stable ordering maintained by the registry.
+**Decision:** Auto-commit using `git commit -m ... -- <path>` with pathspec scoping. Separate branch was rejected because agent DX depends on filesystem visibility — `timbers prime` and `timbers draft` need to read entries without worktree indirection. The `--` pathspec prevents sweeping other staged files into the timbers commit.
 
 **Consequences:**
-- Positive: Adding a new agent environment (Gemini, Codex) is a single-file task — no changes to existing code
-- Positive: Interface methods map naturally to what `doctor`/`setup`/`init` already need
-- Negative: One file per environment adds slight file count overhead
-- Negative: `init()` registration makes the dependency graph implicit — you can't see what's registered without checking each file
-- Enables: `doctor` iterates `AllAgentEnvs()` for health checks; `uninstall` gathers all detected envs via `AgentEnvState` slice
+- Positive: Eliminates the staged-but-uncommitted gap entirely
+- Positive: Entries are immediately available to all timbers commands without extra steps
+- Positive: Pathspec scoping makes the auto-commit surgically safe
+- Negative: Creates additional commits on the working branch (one per `timbers log`)
+- Negative: Entries must live on the working branch, ruling out branch-based isolation patterns
 
 ---
 
-## ADR-4: Notes Field Coaches by Question, Not by Structure
+## ADR-4: Remove PostToolUse Hook Over Platform Workaround
 
-**Context:** The ledger had `what`/`why`/`how` fields but no way to capture the *journey* to a decision — the alternatives considered, surprises encountered, reasoning chains. A council deliberated the design. The key question was how to coach agents to write good notes: provide a structured template (headings like "## Alternatives", "## Decision") or use the same question-based coaching that proved effective for the `why` field.
+**Context:** Diagnostic confirmed the `PostToolUse` hook fired correctly and received valid JSON on stdin, but Claude Code didn't surface stdout — the hook's output went nowhere visible. Options: work around the platform behavior (write to a file, use notifications, etc.) or remove the hook and rely on the existing `Stop` hook.
 
-**Decision:** Notes captures deliberation as free-form "thinking out loud," coached by question ("What would help someone revisiting this decision in 6 months?") rather than by imposed structure. The `why` field holds the verdict; `notes` holds the journey. A concrete 5-point trigger checklist determines when notes are warranted: 2+ viable approaches, rejected an obvious approach, encountered surprise, creates lock-in, or non-obvious to a teammate.
+**Decision:** Remove `PostToolUse` entirely. The `Stop` hook already runs `timbers pending` at session end, covers the same use case (reminding about undocumented commits), and actually displays its output. Working around Claude Code behavior adds fragile complexity.
 
 **Consequences:**
-- Positive: Follows the proven pattern — `why` coaching by question already produced high-quality verdicts
-- Positive: Free-form notes are richer for template output — the decision-log template can extract genuine fork-in-the-road context
-- Positive: Trigger checklist prevents both over-use (form-filling on every commit) and under-use (never writing notes)
-- Negative: Free-form means inconsistent structure across entries, harder to parse programmatically
-- Constraint: `why` and `notes` must be clearly differentiated in coaching or agents will put journey content in `why`
+- Positive: Eliminates a silently broken hook that was a no-op since creation
+- Positive: Simpler hook surface — fewer events to maintain and test
+- Negative: No per-commit reminder; feedback only at session end via `Stop` hook
+- Negative: If a user makes many commits without documenting, they only find out at the end
 
 ---
 
-## ADR-5: Motivated Rules Over Imperative Density in Coaching
+## ADR-5: Warnings and Coaching Over Reset Command for Stale Anchors
 
-**Context:** The prime coaching text used 11 instances of `MUST`/`CRITICAL` to enforce rules. Analysis of the Opus 4.6 prompt guide revealed that imperative density causes overtriggering — the model treats everything as equally critical and can't prioritize. A council debated three approaches: generic clarity improvements, Opus-specific tuning, and a pragmatist middle ground. All three converged on the same conclusion.
+**Context:** After squash merges, the anchor commit disappears from history, producing confusing `timbers pending` output. Options: (1) add an explicit `timbers anchor-reset` command, (2) use actionable warnings plus coaching to guide users, relying on the anchor's self-healing behavior (it auto-corrects on the next `timbers log`).
 
-**Decision:** Replace imperative shouting with motivated rules — each rule explains *why* it exists, enabling the model to generalize correctly. Added XML section tags for structure, concrete BAD/GOOD examples, and calm framing. No model-specific coaching variants needed because good coaching IS Opus-optimized coaching.
+**Decision:** Warnings plus coaching, no reset command. The anchor self-heals on the next `timbers log`, making an explicit reset unnecessary. Messaging alone is sufficient — tell users what happened and that normal workflow will fix it.
 
 **Consequences:**
-- Positive: Models generalize better when they understand the reason behind a rule, not just the demand
-- Positive: Single coaching text works across models — no maintenance burden of model-specific variants
-- Positive: XML tags provide clear section boundaries at zero cost (coaching is a Go string consumed only by LLMs)
-- Negative: Motivated rules are longer than bare imperatives — coaching text grows
-- Constraint: BAD/GOOD examples must be maintained as the tool evolves or they become misleading
+- Positive: No new command to document, test, and maintain
+- Positive: Users learn the mental model (anchors self-heal) instead of reaching for a command
+- Negative: First encounter with stale anchor is still confusing until the user reads the warning
+- Negative: No escape hatch if self-healing doesn't cover an edge case
 
 ---
 
-## ADR-6: Stdin-Based Hook Input Over Environment Variables
+## ADR-6: Pre-Generate Check Over LLM Refusal for Empty Entries
 
-**Context:** The PostToolUse hook that reminded users to run `timbers log` after `git commit` had been silently broken since creation. It read `$TOOL_INPUT` from an environment variable, but Claude Code hooks receive JSON on stdin — `$TOOL_INPUT` was always empty. Two fix approaches: parse stdin with `jq` to extract the specific `tool_input.command` field, or grep the raw JSON blob from stdin for `git commit`.
+**Context:** The devblog workflow invoked the LLM even when no timbers entries existed for the period, causing the LLM to generate apologetic "nothing to report" posts. Options: teach the LLM to refuse gracefully when given empty input, or check entry count before invoking generation.
 
-**Decision:** Read stdin directly with `grep` rather than parsing with `jq`. Also added upgrade logic (`hasExactHookCommand` detection + `removeTimbersHooksFromEvent` cleanup) so reinstall replaces stale hooks rather than skipping them.
+**Decision:** Check entry count before generation and skip the entire pipeline when count is zero. Cheaper and cleaner than prompt-engineering the LLM to produce a useful refusal.
 
 **Consequences:**
-- Positive: No dependency on `jq` — works on any system with standard Unix tools
-- Positive: Upgrade logic prevents broken hooks from persisting forever (the old skip-if-any-exists behavior)
-- Negative: Grepping raw JSON for `git commit` is technically imprecise — could false-positive on a commit message mentioning "git commit," though the risk is negligible in practice
-- Constraint: Any future hook input format changes in Claude Code require updating the stdin reading approach
+- Positive: Eliminates wasted LLM calls and their associated cost/latency
+- Positive: No "apology posts" to detect and clean up after the fact
+- Positive: Simple boolean gate — easier to reason about than LLM behavior
+- Negative: Slightly more workflow complexity (conditional step)
+- Negative: If the check has bugs, generation silently skips when it shouldn't
 
 ---
 
-## ADR-7: GITHUB_TOKEN Workflow Chaining via `workflow_dispatch`
+## ADR-7: Govulncheck Separate from Lint Check
 
-**Context:** The devblog CI workflow commits generated blog posts and pushes them, but the subsequent GitHub Pages deployment never triggered. Root cause: pushes made with `GITHUB_TOKEN` intentionally don't fire `on: push` workflows — this is GitHub's infinite-loop prevention. The devblog posts were being committed but never published.
+**Context:** `govulncheck` isn't included in `golangci-lint` and needs to be run as a separate tool. The question was whether to add it to the `just check` gate (which must pass before every commit) or keep it as a separate recipe.
 
-**Decision:** Chain workflows explicitly using `workflow_dispatch`. The devblog workflow triggers `pages.yml` via the GitHub API after a successful push, with `actions: write` permission and a committed-gate check.
+**Decision:** Separate `just vulncheck` recipe, not part of `just check`. Stdlib vulnerability patches can flag findings that aren't actionable yet, and blocking every commit on them would be disruptive.
 
 **Consequences:**
-- Positive: Blog posts now reliably deploy after generation
-- Positive: Explicit chaining is visible and auditable — no hidden coupling via push events
-- Negative: Requires `actions: write` permission, which is broader than the workflow otherwise needs
-- Constraint: Any new workflow that depends on devblog pushes must also be explicitly chained — implicit `on: push` triggers will never fire from `GITHUB_TOKEN` commits
+- Positive: `just check` stays fast and actionable — developers aren't blocked by upstream stdlib patches
+- Positive: Vulnerability scanning is still available on demand
+- Negative: Vulncheck isn't enforced automatically — requires discipline to run periodically
+- Negative: Vulnerabilities could ship if nobody remembers to check
+
+---
+
+## ADR-8: Clean Rename Over Backward-Compat Alias Pre-GA
+
+**Context:** The `exec-summary` template was renamed to `standup` for better discoverability. Options: clean rename (breaking change) or keep `exec-summary` as an alias alongside the new name.
+
+**Decision:** Clean break, no alias. Pre-GA project with low usage means backward compatibility adds complexity for no real benefit. Aliases accumulate maintenance cost and confuse documentation.
+
+**Consequences:**
+- Positive: Single canonical name — no confusion about which to use
+- Positive: No alias resolution code to maintain
+- Negative: Anyone using `exec-summary` in scripts breaks (mitigated by low pre-GA adoption)
+- Negative: Sets precedent that names can change before GA — users may hesitate to automate
+
+---
+
+## ADR-9: PR Template Focused on Intent/Decisions Over Diff Summary
+
+**Context:** The `pr-description` template was at v3, producing summaries that largely restated the diff. Agents (and human reviewers) already read diffs directly, making diff summaries redundant. The question was what a PR description template should actually contain.
+
+**Decision:** Rewrote to v4, shifting focus to intent and design decisions. Since agents already review diffs, the template's value is in surfacing *why* changes were made and what trade-offs were considered — information not visible in the code itself.
+
+**Consequences:**
+- Positive: PR descriptions carry information that complements rather than duplicates the diff
+- Positive: Leverages timbers' unique strength — the why/notes fields that diffs don't capture
+- Negative: Requires richer ledger entries to produce good output (garbage in, garbage out)
+- Negative: Reviewers accustomed to "what changed" summaries may initially find the format unfamiliar
