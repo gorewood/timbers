@@ -139,29 +139,48 @@ examples:
     set -euo pipefail
     DATE=$(date +%Y-%m-%d)
     EXAMPLES=("standup" "pr-description" "release-notes" "sprint-report" "decision-log")
+    PIDS=()
+    NAMES=()
     for tmpl in "${EXAMPLES[@]}"; do
         FILE="site/content/examples/${tmpl}.md"
         if [ -f "$FILE" ] && ! git diff --quiet -- "$FILE" 2>/dev/null; then
             echo "Skipping $tmpl (already modified)"
             continue
         fi
-        echo "Generating $tmpl example..."
-        TITLE=$(echo "$tmpl" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
-        CONTENT=$(go run ./cmd/timbers draft "$tmpl" --last 20 | claude -p --model opus)
-        {
-            printf '+++\n'
-            echo "title = '${TITLE}'"
-            echo "date = '${DATE}'"
-            echo "tags = ['example', '$tmpl']"
-            printf '+++\n'
-            echo ""
-            echo "Generated with \`timbers draft $tmpl --last 20 | claude -p --model opus\`"
-            echo ""
-            echo "---"
-            echo ""
-            echo "$CONTENT"
-        } > "site/content/examples/${tmpl}.md"
+        echo "Generating $tmpl..."
+        (
+            TITLE=$(echo "$tmpl" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
+            CONTENT=$(go run ./cmd/timbers draft "$tmpl" --last 20 | claude -p --model opus)
+            {
+                printf '+++\n'
+                echo "title = '${TITLE}'"
+                echo "date = '${DATE}'"
+                echo "tags = ['example', '$tmpl']"
+                printf '+++\n'
+                echo ""
+                echo "Generated with \`timbers draft $tmpl --last 20 | claude -p --model opus\`"
+                echo ""
+                echo "---"
+                echo ""
+                echo "$CONTENT"
+            } > "site/content/examples/${tmpl}.md"
+            echo "Done: $tmpl"
+        ) &
+        PIDS+=($!)
+        NAMES+=("$tmpl")
     done
+    # Wait for all and report failures
+    FAILED=0
+    for i in "${!PIDS[@]}"; do
+        if ! wait "${PIDS[$i]}"; then
+            echo "FAILED: ${NAMES[$i]}"
+            FAILED=1
+        fi
+    done
+    if [ "$FAILED" -eq 1 ]; then
+        echo "Some examples failed. Re-run to retry only the failed ones."
+        exit 1
+    fi
     echo "Done. Changelog example is managed by 'just release' separately."
 
 # =============================================================================
