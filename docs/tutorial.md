@@ -317,7 +317,7 @@ Instead of piping to external tools, use `--model` for direct LLM execution:
 ```bash
 # Built-in execution (no piping needed)
 timbers draft changelog --since 7d --model local         # Local LLM
-timbers draft standup --last 10 --model haiku       # Cloud (Anthropic)
+timbers draft standup --since 1d --model haiku       # Cloud (Anthropic)
 timbers draft pr-description --range main..HEAD --model flash  # Cloud (Google)
 ```
 
@@ -340,7 +340,7 @@ timbers draft pr-description --range main..HEAD | codex exec -m gpt-5-codex-mini
 
 # Or use built-in LLM execution (requires API key, no CLI needed)
 timbers draft changelog --since 7d --model local
-timbers draft standup --last 10 --model haiku
+timbers draft standup --since 1d --model haiku
 ```
 
 **Shortcut with just:** If you're developing timbers itself, use the just recipes:

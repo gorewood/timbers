@@ -136,23 +136,21 @@ draft-model model +args:
 # Regenerate all site example pages from current ledger
 examples:
     #!/usr/bin/env bash
-    set -euo pipefail
+    set -eo pipefail
     DATE=$(date +%Y-%m-%d)
     # Dynamic examples: regenerated each release to stay fresh
-    declare -A RANGES=(
-        [release-notes]="--last 20"
-        [decision-log]="--last 20"
-    )
-    EXAMPLES=("release-notes" "decision-log")
+    TEMPLATES=("release-notes" "decision-log")
+    RANGES=("--last 20" "--last 20")
     PIDS=()
     NAMES=()
-    for tmpl in "${EXAMPLES[@]}"; do
+    for i in "${!TEMPLATES[@]}"; do
+        tmpl="${TEMPLATES[$i]}"
+        RANGE="${RANGES[$i]}"
         FILE="site/content/examples/${tmpl}.md"
         if [ -f "$FILE" ] && ! git diff --quiet -- "$FILE" 2>/dev/null; then
             echo "Skipping $tmpl (already modified)"
             continue
         fi
-        RANGE="${RANGES[$tmpl]}"
         echo "Generating $tmpl ($RANGE)..."
         (
             TITLE=$(echo "$tmpl" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
@@ -192,23 +190,21 @@ examples:
 # Regenerate static examples from a known-good date range (one-time, not per-release)
 examples-static:
     #!/usr/bin/env bash
-    set -euo pipefail
+    set -eo pipefail
     DATE=$(date +%Y-%m-%d)
     # Static examples use a fixed date range with dense, high-quality entries (Feb 10-14 2026)
-    declare -A TEMPLATES=(
-        [standup]="--since 2026-02-13 --until 2026-02-13"
-        [pr-description]="--since 2026-02-10 --until 2026-02-11"
-        [sprint-report]="--since 2026-02-10 --until 2026-02-14"
-    )
+    TEMPLATES=("standup" "pr-description" "sprint-report")
+    RANGES=("--since 2026-02-13 --until 2026-02-13" "--since 2026-02-10 --until 2026-02-11" "--since 2026-02-10 --until 2026-02-14")
     PIDS=()
     NAMES=()
-    for tmpl in "${!TEMPLATES[@]}"; do
+    for i in "${!TEMPLATES[@]}"; do
+        tmpl="${TEMPLATES[$i]}"
+        RANGE="${RANGES[$i]}"
         FILE="site/content/examples/${tmpl}.md"
         if [ -f "$FILE" ] && ! git diff --quiet -- "$FILE" 2>/dev/null; then
             echo "Skipping $tmpl (already modified)"
             continue
         fi
-        RANGE="${TEMPLATES[$tmpl]}"
         echo "Generating $tmpl ($RANGE)..."
         (
             TITLE=$(echo "$tmpl" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')

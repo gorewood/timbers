@@ -68,7 +68,7 @@ timbers draft standup --since 1d | gemini
 timbers draft pr-description --range main..HEAD | codex exec -m gpt-5-codex-mini -
 
 # Built-in LLM execution (for CI/CD or when no CLI is available)
-timbers draft standup --last 10 --model opus
+timbers draft standup --since 1d --model opus
 
 # List available templates
 timbers draft --list
