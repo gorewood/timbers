@@ -140,6 +140,11 @@ examples:
     DATE=$(date +%Y-%m-%d)
     EXAMPLES=("standup" "pr-description" "release-notes" "sprint-report" "decision-log")
     for tmpl in "${EXAMPLES[@]}"; do
+        FILE="site/content/examples/${tmpl}.md"
+        if [ -f "$FILE" ] && ! git diff --quiet -- "$FILE" 2>/dev/null; then
+            echo "Skipping $tmpl (already modified)"
+            continue
+        fi
         echo "Generating $tmpl example..."
         TITLE=$(echo "$tmpl" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
         CONTENT=$(go run ./cmd/timbers draft "$tmpl" --last 20 | claude -p --model opus)
