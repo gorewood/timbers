@@ -285,3 +285,24 @@ func APIKeyEnvVars() []string {
 	}
 	return vars
 }
+
+// ProviderInfo describes a provider's configuration for display.
+type ProviderInfo struct {
+	Name    string            // Provider name (e.g. "anthropic")
+	EnvVar  string            // Required env var ("" for local)
+	Aliases map[string]string // Short name → full model name
+}
+
+// ProviderInfos returns provider details in display order.
+func ProviderInfos() []ProviderInfo {
+	providers := []Provider{ProviderAnthropic, ProviderOpenAI, ProviderGoogle, ProviderLocal}
+	infos := make([]ProviderInfo, 0, len(providers))
+	for _, p := range providers {
+		infos = append(infos, ProviderInfo{
+			Name:    string(p),
+			EnvVar:  envVarForProvider[p],
+			Aliases: modelAliases[p],
+		})
+	}
+	return infos
+}

@@ -282,17 +282,20 @@ These flags work consistently across `draft`, `generate`, and `catchup`:
 
 ### Pattern 1: External LLM Piping
 
-Use `draft` to render templates, pipe to your preferred LLM CLI:
+Use `draft` to render templates, pipe to your preferred LLM CLI.
+This uses your subscription — no API key needed.
 
 ```bash
-# Claude Code
-timbers draft changelog --since 7d | claude -p
+# Claude Code (claude -p reads stdin, --model selects the model)
+timbers draft changelog --since 7d | claude -p --model opus
 
-# OpenAI
-timbers draft standup --last 5 | openai-cli
+# Gemini CLI (auto-detects piped input, -m selects model)
+timbers draft standup --since 1d | gemini
+timbers draft standup --since 1d | gemini -m gemini-2.5-pro
 
-# Any LLM that accepts stdin
-timbers draft pr-description --range main..HEAD | my-llm-tool
+# Codex CLI (exec - reads prompt from stdin, -m selects model)
+timbers draft pr-description --range main..HEAD | codex exec -
+timbers draft pr-description --range main..HEAD | codex -m gpt-5-codex-mini exec -
 ```
 
 ### Pattern 2: Built-in LLM Execution

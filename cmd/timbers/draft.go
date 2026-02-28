@@ -23,6 +23,7 @@ func newDraftCmd() *cobra.Command {
 	var appendFlag string
 	var listFlag bool
 	var showFlag bool
+	var modelsFlag bool
 	var modelFlag string
 	var providerFlag string
 	var withFrontmatterFlag bool
@@ -46,7 +47,7 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			flags := draftFlags{
 				last: lastFlag, since: sinceFlag, until: untilFlag, rng: rangeFlag,
-				appendText: appendFlag, list: listFlag, show: showFlag,
+				appendText: appendFlag, list: listFlag, show: showFlag, models: modelsFlag,
 				model: modelFlag, provider: providerFlag, withFrontmatter: withFrontmatterFlag,
 			}
 			return runDraft(cmd, args, flags)
@@ -59,6 +60,7 @@ Examples:
 	cmd.Flags().StringVar(&rangeFlag, "range", "", "Use entries in commit range (A..B)")
 	cmd.Flags().StringVar(&appendFlag, "append", "", "Append extra instructions to the prompt")
 	cmd.Flags().BoolVar(&listFlag, "list", false, "List available templates")
+	cmd.Flags().BoolVar(&modelsFlag, "models", false, "List providers, model aliases, and required API keys")
 	cmd.Flags().BoolVar(&showFlag, "show", false, "Show template content without rendering")
 	cmd.Flags().StringVarP(&modelFlag, "model", "m", "", "Model name for built-in LLM execution (e.g., haiku, sonnet, gemini-flash)")
 	cmd.Flags().StringVarP(&providerFlag, "provider", "p", "", "Provider (anthropic, openai, google, local) - inferred if omitted")
@@ -75,6 +77,11 @@ func runDraft(cmd *cobra.Command, args []string, flags draftFlags) error {
 	// Handle --list
 	if flags.list {
 		return runDraftList(printer)
+	}
+
+	// Handle --models
+	if flags.models {
+		return runDraftModels(printer)
 	}
 
 	// Template name required for other operations

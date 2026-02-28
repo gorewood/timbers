@@ -325,22 +325,20 @@ This is equivalent to piping but simpler for quick use.
 
 ### Generate Reports
 
-The `-p` (print) flag makes Claude output to stdout and exit, rather than opening an interactive session:
+Pipe the rendered prompt to any LLM CLI — this uses your subscription, not API tokens:
 
 ```bash
-# Generate a changelog from last week's work
+# Claude Code (-p reads stdin and exits)
 timbers draft changelog --since 7d | claude -p
-
-# PR description for current branch
-timbers draft pr-description --range main..HEAD | claude -p
-
-# Executive summary of last 10 entries
-timbers draft standup --last 10 | claude -p
-
-# Blog post with custom focus
 timbers draft devblog --last 20 --append "Focus on the new plugin system" | claude -p
 
-# Or use built-in LLM execution (simpler, no piping)
+# Gemini CLI (auto-detects piped input)
+timbers draft standup --since 1d | gemini
+
+# Codex CLI (exec - reads prompt from stdin)
+timbers draft pr-description --range main..HEAD | codex exec -
+
+# Or use built-in LLM execution (requires API key, no CLI needed)
 timbers draft changelog --since 7d --model local
 timbers draft standup --last 10 --model haiku
 ```

@@ -62,11 +62,12 @@ All commands support `--json`. Write operations support `--dry-run`.
 The `draft` command renders templates with your ledger entries, producing changelogs, reports, decision logs, and more — either by piping to an LLM CLI or with built-in LLM execution via `--model`.
 
 ```bash
-# Pipe to Claude Code CLI (recommended for local use — uses subscription, not API tokens)
+# Pipe to any LLM CLI (uses your subscription, not API tokens)
 timbers draft changelog --since 7d | claude -p --model opus
-timbers draft decision-log --last 20 | claude -p --model opus
+timbers draft standup --since 1d | gemini
+timbers draft pr-description --range main..HEAD | codex exec -
 
-# Built-in LLM execution (for CI/CD or when claude CLI isn't available)
+# Built-in LLM execution (for CI/CD or when no CLI is available)
 timbers draft standup --last 10 --model opus
 
 # List available templates
@@ -77,7 +78,7 @@ timbers draft --list
 
 The decision-log template is particularly valuable — it extracts the *why* behind each change into an architectural decision record, enriched by `--notes` when agents capture their deliberation process. No other tool produces this from structured commit data.
 
-**Model guidance:** Use `opus` for best output quality. For local generation, pipe to `claude -p` (uses your subscription instead of API tokens). For CI/CD, use `--model opus` with an API key. For high-volume batch operations (e.g., `catchup` over hundreds of commits), `haiku` or `local` models offer a lower-cost alternative.
+**Model guidance:** Use `opus` for best output quality. For local generation, pipe to your LLM CLI of choice — `claude -p`, `gemini`, or `codex exec -` — which uses your subscription instead of API tokens. For CI/CD, use `--model opus` with an API key. For high-volume batch operations (e.g., `catchup` over hundreds of commits), `haiku` or `local` models offer a lower-cost alternative.
 
 ## Configuration
 

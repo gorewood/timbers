@@ -18,6 +18,7 @@ type draftFlags struct {
 	appendText      string
 	list            bool
 	show            bool
+	models          bool
 	model           string
 	provider        string
 	withFrontmatter bool
