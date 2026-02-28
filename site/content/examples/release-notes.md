@@ -10,28 +10,24 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ## New Features
 
-- You can now control terminal colors with `--color never|auto|always` — helpful if your theme makes text hard to read
-- `timbers log` now auto-commits the entry file for you, so there's no extra `git add` and `git commit` step after recording work
-- `timbers draft --models` shows which LLM providers are available and whether your API keys are configured
-- `timbers doctor` now checks whether you have content generation set up (CLI tools or API keys) and tells you exactly what to configure
-- `timbers prime` now includes content safety reminders — entries are git-committed and potentially public, so the workflow coaching helps you avoid accidentally including secrets or personal data
-- You can now pipe `timbers draft` output to Codex and Gemini CLIs in addition to Claude — documented with verified syntax for each
+- `timbers log` now auto-commits its entry file — you no longer need a separate `git commit` after logging your work
+- You can now run `draft --models` to see which AI providers are available and what API keys to set
+- `timbers draft` output can now be piped to Codex and Gemini CLIs in addition to Claude
+- The `--color` flag (`never`/`auto`/`always`) gives you explicit control over terminal colors when auto-detection doesn't match your theme
+- `timbers doctor` now checks whether your environment is ready for content generation, showing which CLI tools and API keys are available
 
 ## Improvements
 
-- Terminal colors now adapt automatically to dark and light backgrounds, so dim text is readable on both
-- The `exec-summary` template has been renamed to `standup` for easier discovery — use `timbers draft standup`
-- The `pr-description` template now focuses on intent and decisions rather than repeating the diff
-- Example recipes work on macOS default bash (3.2) without needing bash 4+
-- Piping workflow guidance in `timbers prime` updated with clearer instructions
+- Colors automatically adapt to dark terminal backgrounds — dim text is no longer invisible on themes like Solarized Dark
+- Stale anchor warnings after squash merges now explain what happened and confirm that the issue self-heals on your next `timbers log`
+- `timbers prime` now includes content safety reminders to help keep secrets and personal data out of entries
 
 ## Bug Fixes
 
-- Fixed text being invisible on dark terminal themes like Solarized Dark
-- Fixed `timbers prime` crashing on stale anchors after squash merges — you now get a clear warning with guidance instead
+- Fixed a crash in `timbers prime` when the anchor commit no longer exists in history (e.g., after a squash merge)
+- Fixed example recipes failing on macOS with the default system bash (3.x)
 - Fixed a security vulnerability in a dependency (CVE-2026-27896)
-- Cleaned up generated changelog content that occasionally included LLM processing artifacts
 
 ## Breaking Changes
 
-- `timbers draft exec-summary` is now `timbers draft standup` — the old name no longer works
+- The `exec-summary` draft template has been renamed to `standup` — update any scripts that reference the old name

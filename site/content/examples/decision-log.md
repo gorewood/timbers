@@ -8,118 +8,113 @@ Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
 
 ---
 
-# Architectural Decision Log — Timbers (2026-02-14 to 2026-02-28)
+# Decision Log
 
-## ADR-1: Auto-Commit Entry Files with Pathspec Scoping
+## ADR-1: Auto-Commit Entries on Working Branch Over Separate Branch
 
-**Context:** After `timbers log` created an entry file in `.timbers/`, users had to manually `git add` and `git commit` it. This staged-but-uncommitted gap caused confusion — entries existed on disk but weren't part of the commit history. Three approaches were considered: auto-commit scoped to the entry file, writing entries to a separate branch (like beads and entire.io), or leaving the manual step.
+**Context:** `timbers log` created entry files in `.timbers/` but left them staged-and-uncommitted, causing user confusion. The original design likely assumed git-notes-style storage where entries don't land on the working branch. Two alternatives existed: auto-commit on the working branch (scoped to the entry file via pathspec), or store entries on a separate branch (similar to beads/entire.io).
 
-**Decision:** Auto-commit the entry file using `git commit -m ... -- <path>` with pathspec scoping. The separate-branch approach was rejected because agent DX depends on filesystem visibility — `timbers prime` and `timbers draft` need to read entries without worktree indirection. The pathspec `--` delimiter ensures only the entry file is committed, never sweeping other staged files into the timbers commit.
-
-**Consequences:**
-- Eliminates the manual commit step, reducing workflow friction
-- Entries are immediately part of commit history, visible to `git log` and push
-- Pathspec scoping prevents accidentally committing unrelated staged changes
-- Dependency injection via `GitCommitFunc` in `FileStorage` keeps the commit operation testable
-- Locks entries to the working branch — cannot use branch-based isolation patterns later without migration
-
-## ADR-2: Stop Hook Over PostToolUse for Pending Reminders
-
-**Context:** A `PostToolUse` hook was implemented to remind agents about undocumented commits after tool use. Diagnostics confirmed the hook fired correctly and received proper JSON on stdin. However, Claude Code does not surface `stdout` from `PostToolUse` hooks — the output goes nowhere visible.
-
-**Decision:** Remove the `PostToolUse` hook entirely and rely on the existing `Stop` hook, which runs `timbers pending` at session end. Rather than work around Claude Code's behavior (e.g., writing to files, using stderr), lean on the `Stop` hook which does display output and checks actual state.
+**Decision:** Auto-commit on the working branch using `git commit -m ... -- <path>` to scope the commit to the entry file only. A separate branch was rejected because agent DX depends on filesystem visibility — `timbers prime` and `timbers draft` need to read entries without worktree indirection.
 
 **Consequences:**
-- Simpler hook configuration — one fewer event to manage
-- Pending check happens once at session end rather than after every tool use (less noise)
-- Agents won't get mid-session reminders about undocumented commits
-- Added `retiredEvents` cleanup list so upgrades remove stale hook registrations
-- Dependency on Claude Code's `Stop` hook remaining reliable for output display
+- Eliminates the staged-but-uncommitted gap that confused users
+- Entries are immediately visible to all commands without branch-switching
+- Pathspec (`--`) prevents accidentally sweeping other staged files into the timbers commit
+- Entry commits interleave with work commits on the same branch, adding noise to `git log`
+- No isolation between ledger state and code state — a force-push loses both
 
-## ADR-3: Actionable Warnings Over Anchor-Reset Command for Stale Anchors
+## ADR-2: Minimal Color Flag Over Full Theme Configuration
 
-**Context:** After squash merges or rebases, the anchor commit referenced by `timbers pending` could go missing from history, producing confusing output. Two approaches: add an explicit `timbers anchor reset` command, or improve warning messages and add coaching to the prime workflow.
+**Context:** Users on dark terminals (Solarized Dark) reported invisible text — `lipgloss.Color(8)` (bright black) doesn't render on dark backgrounds. Options ranged from a simple `--color` flag with `AdaptiveColor`, to full theme configuration via env vars and config files. Lipgloss v1.1.0 also offers `HasDarkBackground()` for runtime detection.
 
-**Decision:** Warnings plus coaching, no reset command. The anchor self-heals the next time `timbers log` runs after a real commit, making an explicit reset unnecessary. Messaging alone is sufficient.
+**Decision:** Ship a global `--color` persistent flag (`never`/`auto`/`always`) paired with `AdaptiveColor` for all color values. Full theme configuration deferred — `AdaptiveColor` + `--color` covers 95% of cases without maintenance burden.
 
 **Consequences:**
-- No new command surface area to maintain or document
-- Users understand what happened and why via actionable warning text
-- Prime workflow coaching teaches agents to not re-document already-covered commits
-- Self-healing behavior means no manual intervention required in the common case
-- If a pathological case arises where self-healing isn't sufficient, there's no escape hatch — would need to add the command later
+- Immediate fix for dark terminal users with minimal surface area
+- No config file format to design or maintain
+- Users who need fine-grained control (specific palette, per-element colors) are not served
+- `HasDarkBackground()` remains unused — could enable fully automatic detection later without breaking the flag
 
-## ADR-4: Check-Before-Generate Over Teaching LLM to Refuse
+## ADR-3: Stop Hook Over PostToolUse for Pending Commit Checks
 
-**Context:** The devblog CI workflow invoked the LLM even when no timbers entries existed for the period. The LLM would generate "apology posts" explaining there was nothing to write about. Two approaches: add a precondition check for entry count > 0 before invoking the LLM, or engineer the prompt to handle empty input gracefully.
+**Context:** A `PostToolUse` hook was intended to remind users about undocumented commits after tool executions. Diagnostic testing confirmed the hook fires correctly and receives valid JSON on stdin, but Claude Code does not surface `stdout` from `PostToolUse` hooks — output goes nowhere visible.
 
-**Decision:** Check-before-generate. Gate the generate/commit/push steps on entry count > 0. This is cheaper (no LLM invocation at all) and more reliable than depending on prompt engineering to produce correct refusal behavior.
+**Decision:** Remove `PostToolUse` hook entirely and rely on the existing `Stop` hook, which runs `timbers pending` at session end. Rather than working around Claude Code's behavior, lean on the hook that actually displays output and checks real state.
+
+**Consequences:**
+- Users see pending-commit reminders at session end rather than after each tool call
+- Simpler hook configuration with fewer moving parts
+- Added `retiredEvents` cleanup list so upgrades remove stale hooks automatically
+- Mid-session reminders are lost — if a user works a long session without stopping, they won't be reminded until the end
+- Couples the design to Claude Code's current hook behavior, which may change
+
+## ADR-4: Clean Break Rename Over Backward-Compatible Alias
+
+**Context:** The `exec-summary` template was renamed to `standup` for better discoverability. The question was whether to keep `exec-summary` as an alias during the transition.
+
+**Decision:** Clean break — no alias. Pre-GA project with low usage; backward compatibility adds complexity for no real benefit.
+
+**Consequences:**
+- Zero alias-resolution code to maintain
+- Any existing scripts or muscle memory referencing `exec-summary` break immediately
+- Sets precedent that pre-GA naming changes are clean breaks, reducing future alias debt
+
+## ADR-5: PR Template Focused on Intent Over Diff Review
+
+**Context:** The `pr-description` template (v4) needed a rewrite. The previous version attempted to summarize code diffs, but agents reviewing PRs already have full diff access and don't need the template to duplicate that work.
+
+**Decision:** Shift the PR template to focus on intent and design decisions rather than diff summarization. Agents already review diffs — the template's value is in the "why" context that diffs don't convey.
+
+**Consequences:**
+- PR descriptions capture information that's genuinely additive to the diff
+- Template output is shorter and more focused
+- Reviewers who rely solely on the PR description (without reading diffs) get less mechanical detail
+- Aligns with timbers' core philosophy: capture decisions, not mechanics
+
+## ADR-6: Check-Before-Generate Over Teaching LLM to Refuse
+
+**Context:** The devblog CI workflow invoked the LLM even when no new entries existed, producing "apology posts" — content about having nothing to write about. Two fixes: add an entry-count check before generation, or improve the prompt to teach the LLM to output nothing when given empty input.
+
+**Decision:** Check-before-generate. Gate the LLM call on entry count > 0. Cheaper and more reliable than prompt engineering a refusal behavior.
 
 **Consequences:**
 - Zero LLM cost on days with no entries
-- Deterministic behavior — no risk of prompt drift producing unwanted posts
-- Required deleting 10 already-published blank/apology posts
-- Slightly more CI workflow complexity (extra step), but trivially simple logic
-- Pattern generalizes: validate inputs before LLM calls rather than relying on LLM judgment for control flow
+- Deterministic behavior — no risk of the LLM deciding to generate anyway
+- Required deleting 10 existing blank posts from the repository
+- If the check logic has bugs (e.g., timezone edge cases), entries could be silently skipped
 
-## ADR-5: Clean Break Rename Over Backward-Compatible Alias
+## ADR-7: Govulncheck Separate from Main Quality Gate
 
-**Context:** The `exec-summary` template was being renamed to `standup` for better discoverability. The question was whether to keep `exec-summary` as an alias during a transition period.
+**Context:** `govulncheck` (Go vulnerability scanning) is not included in `golangci-lint` and needs a separate invocation. The question was whether to add it to `just check` (the required pre-commit gate) or keep it as a standalone recipe.
 
-**Decision:** Clean break, no alias. The project is pre-GA with low usage — backward compatibility adds complexity for no real benefit at this stage.
-
-**Consequences:**
-- Simpler codebase — no alias resolution logic or deprecation warnings
-- Users of `exec-summary` get a clear error, not silent redirection
-- Sets precedent that pre-GA naming can change freely
-- If adoption were higher, this decision would need revisiting — it's stage-appropriate, not universally correct
-
-## ADR-6: Intent-Focused PR Template Over Diff-Centric Format
-
-**Context:** The `pr-description` draft template (v3) focused on summarizing the diff. But agents already review diffs natively — a PR description that restates the diff adds no information. The template needed a different angle.
-
-**Decision:** Rewrote `pr-description` (v4) to focus on intent and decisions: why these changes were made, what trade-offs were chosen, what the reviewer should pay attention to. Agents review diffs; humans review intent.
+**Decision:** Separate `just vulncheck` recipe, not part of `just check`. Vulnerability reports against stdlib patches would block development on issues developers can't immediately fix.
 
 **Consequences:**
-- PR descriptions complement rather than duplicate what reviewers can already see
-- Leverages timbers' unique data (why/notes fields) that isn't in the diff
-- Requires entries with good why/notes fields to produce useful output — garbage in, garbage out
-- Template is opinionated about PR review culture (intent over mechanics)
+- `just check` remains fast and actionable — every failure is fixable before commit
+- Vulnerability scanning requires explicit invocation, which means it can be forgotten
+- Stdlib false positives don't block development workflow
+- CI could run `vulncheck` separately with advisory-only status
 
-## ADR-7: AdaptiveColor Plus --color Flag Over Full Theme Configuration
+## ADR-8: Actionable Warnings Over Explicit Reset Command for Stale Anchors
 
-**Context:** User feedback reported that `lipgloss.Color(8)` (bright black) was invisible on Solarized Dark terminals. Terminals don't reliably report their color scheme. Options ranged from a full theme system (env vars, config files, multiple palettes) to a simpler flag-based approach.
+**Context:** After squash merges, timbers' anchor commit disappears from history, producing confusing `pending` output. Two approaches: add a `timbers anchor-reset` command for explicit recovery, or improve warning messages and add coaching to `prime` output so users understand the self-healing behavior.
 
-**Decision:** `AdaptiveColor` for automatic dark/light switching plus a `--color` persistent flag (`never`/`auto`/`always`) for explicit user control. Full theme configuration deferred — `AdaptiveColor` + `--color` covers 95% of cases without maintenance burden.
-
-**Consequences:**
-- Most users get correct colors automatically via `AdaptiveColor`
-- Power users can force behavior with `--color=never` for piping or `--color=always` for forced output
-- Global persistent flag plumbed through `ResolveColorMode` to all `NewPrinter` call sites — moderate touch surface
-- Lipgloss v1.1.0's `HasDarkBackground()` available but not yet used (future improvement path)
-- If users need per-element color customization, the flag approach won't scale — but that's speculative
-
-## ADR-8: Static Examples Split from Dynamic Per-Release Generation
-
-**Context:** Site examples were regenerated via LLM on every release, even when the underlying entries hadn't changed. Dense date ranges (like Feb 10-14 with many entries) produced good examples that didn't benefit from re-generation.
-
-**Decision:** Split the justfile into `examples` (dynamic, regenerated per-release) and `examples-static` (fixed date range, generated once). Static examples from known-good dense periods are cached; only dynamic examples incur LLM cost.
+**Decision:** Warnings plus coaching, no reset command. The anchor self-heals on the next `timbers log` — an explicit reset command is unnecessary machinery when messaging alone is sufficient.
 
 **Consequences:**
-- Eliminates redundant LLM calls for stable content
-- Static examples serve as a reliable baseline — known-good output that doesn't regress
+- No new command to document, test, or maintain
+- Users must understand the self-healing model to trust the warnings
+- Warning messages needed improvement across both CLI and MCP surfaces to be genuinely actionable
+- If self-healing assumptions break (e.g., orphaned repos), there's no manual escape hatch
+
+## ADR-9: Static Examples from Fixed Date Ranges Over Per-Release Regeneration
+
+**Context:** Site examples were regenerated on every release using `timbers draft`, invoking the LLM each time. Examples drawn from dense date ranges (Feb 10-14) with rich entries produced consistently good output. Regenerating the same high-quality range on every release wasted LLM calls without improving results.
+
+**Decision:** Split example generation into `examples` (dynamic, per-release) and `examples-static` (fixed Feb 10-14 range). Static examples are generated once and committed; only new templates or format changes trigger regeneration.
+
+**Consequences:**
+- Eliminates redundant LLM calls for content that doesn't change
+- Best-quality examples are preserved rather than risked on each regeneration
+- Static examples may drift from current template behavior if templates evolve significantly
 - Two generation paths to maintain instead of one
-- Static examples will eventually feel dated if the schema or template quality evolves significantly
-- Trade-off is appropriate for a small project; at scale, a proper caching layer would replace this split
-
-## ADR-9: govulncheck Separate from Lint Pipeline
-
-**Context:** `govulncheck` is not included in `golangci-lint` and needed to be added as a separate tool. The question was whether to include it in `just check` (the mandatory pre-commit gate) or keep it as a separate recipe.
-
-**Decision:** Separate `just vulncheck` recipe, not part of `just check`. Vulnerability reports against stdlib patches would block all commits even when the fix requires a Go version upgrade outside the developer's control.
-
-**Consequences:**
-- `just check` remains fast and actionable — every failure is something the developer can fix immediately
-- Vulnerability scanning is opt-in, run on-demand or in CI
-- Risk of forgetting to run it; relies on CI or developer discipline
-- Clean separation between "code quality" gates and "supply chain" checks
