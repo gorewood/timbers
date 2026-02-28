@@ -10,7 +10,7 @@ This document outlines strategies for publishing artifacts generated from your d
 |----------|----------|----------|------------------|
 | CHANGELOG.md | Contributors, users | `changelog` | Per release |
 | Release Notes | End users | `release-notes` | Per release |
-| Executive Summary | Internal stakeholders | `exec-summary` | Weekly/sprint |
+| Standup | Internal stakeholders | `standup` | Daily/weekly |
 | Sprint Report | Team | `sprint-report` | Per sprint |
 | Dev Blog | External community | `devblog` | Monthly/milestone |
 
@@ -176,8 +176,8 @@ Best for: Stakeholder updates, sprint reviews.
 ### Slack/Email via CLI
 
 ```bash
-# Weekly exec summary to clipboard (macOS)
-timbers draft exec-summary --since 7d | claude --model haiku --print | pbcopy
+# Weekly standup to clipboard (macOS)
+timbers draft standup --since 7d | claude --model haiku --print | pbcopy
 
 # Or save to shared location
 timbers draft sprint-report --since 14d | claude --model haiku --print > /shared/reports/sprint-$(date +%Y%m%d).md
@@ -187,7 +187,7 @@ timbers draft sprint-report --since 14d | claude --model haiku --print > /shared
 
 ```bash
 # crontab -e
-0 9 * * 1 cd /path/to/repo && timbers draft exec-summary --since 7d | claude --model haiku --print | mail -s "Weekly Dev Summary" team@example.com
+0 9 * * 1 cd /path/to/repo && timbers draft standup --since 7d | claude --model haiku --print | mail -s "Weekly Dev Summary" team@example.com
 ```
 
 ---

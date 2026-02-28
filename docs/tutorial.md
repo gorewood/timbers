@@ -305,7 +305,7 @@ Built-in templates:
 - `changelog` — Conventional changelog format
 - `decision-log` — ADR-style architectural decisions extracted from the *why* and *notes* fields
 - `devblog` — Developer blog post (Carmack .plan style)
-- `exec-summary` — Executive summary for stakeholders
+- `standup` — Daily standup from recent work
 - `pr-description` — Pull request description
 - `release-notes` — User-facing release notes
 - `sprint-report` — Sprint/iteration report
@@ -317,7 +317,7 @@ Instead of piping to external tools, use `--model` for direct LLM execution:
 ```bash
 # Built-in execution (no piping needed)
 timbers draft changelog --since 7d --model local         # Local LLM
-timbers draft exec-summary --last 10 --model haiku       # Cloud (Anthropic)
+timbers draft standup --last 10 --model haiku       # Cloud (Anthropic)
 timbers draft pr-description --range main..HEAD --model flash  # Cloud (Google)
 ```
 
@@ -335,14 +335,14 @@ timbers draft changelog --since 7d | claude -p
 timbers draft pr-description --range main..HEAD | claude -p
 
 # Executive summary of last 10 entries
-timbers draft exec-summary --last 10 | claude -p
+timbers draft standup --last 10 | claude -p
 
 # Blog post with custom focus
 timbers draft devblog --last 20 --append "Focus on the new plugin system" | claude -p
 
 # Or use built-in LLM execution (simpler, no piping)
 timbers draft changelog --since 7d --model local
-timbers draft exec-summary --last 10 --model haiku
+timbers draft standup --last 10 --model haiku
 ```
 
 **Shortcut with just:** If you're developing timbers itself, use the just recipes:
@@ -471,7 +471,7 @@ timbers log "Debugged flaky test in CI" \
 
 # Weekly review
 timbers query --since 7d
-timbers draft exec-summary --since 7d | claude -p
+timbers draft standup --since 7d | claude -p
 ```
 
 ---

@@ -1,10 +1,10 @@
 +++
-title = 'Executive Summary'
-date = '2026-02-14'
-tags = ['example', 'exec-summary']
+title = 'Standup'
+date = '2026-02-27'
+tags = ['example', 'standup']
 +++
 
-Generated with `timbers draft exec-summary --last 20 | claude -p --model opus`
+Generated with `timbers draft standup --last 20 | claude -p --model opus`
 
 ---
 

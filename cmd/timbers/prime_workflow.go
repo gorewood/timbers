@@ -36,6 +36,10 @@ GOOD (verdict):
   --why "Partial updates via amend avoid re-entering unchanged fields"
   --why "Chose warning over hard error for dirty-tree check to avoid blocking CI"
 
+When work is blocked, slow, or frustrating — say so in --why or --notes.
+"Spent 2h debugging flaky CI before finding the actual issue" is valuable
+standup context that --why "Fixed auth test" alone doesn't capture.
+
 Ask yourself: what's the one-sentence trade-off?
 </why-coaching>
 
@@ -101,11 +105,18 @@ Querying:
 
 Generating documents:
 - ` + "`timbers draft --list`" + ` - list available templates
-- ` + "`timbers draft release-notes --last 10`" + ` - render for piping to LLM
-- ` + "`timbers draft devblog --since 7d --model opus`" + ` - generate directly
-- When piping through ` + "`claude -p`" + ` from an agent session, prefix with
-  ` + "`CLAUDECODE=`" + ` to bypass the nested-session guard:
-  ` + "`CLAUDECODE= timbers draft release-notes --last 10 | claude -p --model opus`" + `
+- ` + "`timbers draft release-notes --last 10 | claude -p --model opus`" + ` - pipe to CLI (uses subscription)
+- ` + "`timbers draft devblog --since 7d --model opus`" + ` - direct API call (uses API key)
+- Prefer piping to CLI when available — it uses your subscription instead of API tokens.
+
+Creating pull request descriptions:
+- ` + "`timbers draft pr-description --range $(git merge-base main HEAD)..HEAD`" + `
+  ` + "`  | claude -p --model opus`" + `
+  Generates a PR body from entries on the current branch.
+
+Daily standup:
+- ` + "`timbers draft standup --since 1d | claude -p --model opus`" + `
+  (use --since 2d or 3d after weekends/gaps)
 
 Sync:
 - Entries are committed files in .timbers/ — use standard git push/pull

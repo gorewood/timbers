@@ -19,6 +19,11 @@ func loadBuiltin(name string) (*Template, error) {
 	return parseTemplate(string(data))
 }
 
+// BuiltinCount returns the number of built-in templates.
+func BuiltinCount() int {
+	return len(listBuiltins())
+}
+
 // listBuiltins returns info for all built-in templates.
 func listBuiltins() []TemplateInfo {
 	dirEntries, err := builtinFS.ReadDir("templates")

@@ -195,12 +195,12 @@ Render templates with ledger entries for LLM consumption or direct execution
 - `-m, --model <name>`: Execute with built-in LLM
 - `--json`: Structured JSON output
 
-**Templates**: `changelog`, `devblog`, `exec-summary`, `pr-description`, `release-notes`, `sprint-report`, `decision-log`
+**Templates**: `changelog`, `decision-log`, `devblog`, `pr-description`, `release-notes`, `sprint-report`, `standup`
 
 **Examples**:
 ```bash
 timbers draft changelog --since 7d | claude -p
-timbers draft exec-summary --last 10 --model haiku
+timbers draft standup --last 10 --model haiku
 timbers draft decision-log --last 20
 ```
 

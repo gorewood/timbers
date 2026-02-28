@@ -67,13 +67,13 @@ timbers draft changelog --since 7d | claude -p --model opus
 timbers draft decision-log --last 20 | claude -p --model opus
 
 # Built-in LLM execution (for CI/CD or when claude CLI isn't available)
-timbers draft exec-summary --last 10 --model opus
+timbers draft standup --last 10 --model opus
 
 # List available templates
 timbers draft --list
 ```
 
-**Built-in templates:** `changelog`, `decision-log`, `devblog`, `exec-summary`, `pr-description`, `release-notes`, `sprint-report`
+**Built-in templates:** `changelog`, `decision-log`, `devblog`, `pr-description`, `release-notes`, `sprint-report`, `standup`
 
 The decision-log template is particularly valuable — it extracts the *why* behind each change into an architectural decision record, enriched by `--notes` when agents capture their deliberation process. No other tool produces this from structured commit data.
 
@@ -176,7 +176,7 @@ Timbers' own development ledger is used to generate these examples via `timbers 
 |----------|-------------|
 | [Changelog](https://gorewood.github.io/timbers/examples/changelog/) | Keep a Changelog format, grouped by type |
 | [Decision Log](https://gorewood.github.io/timbers/examples/decision-log/) | ADR-style architectural decisions extracted from the *why* field |
-| [Executive Summary](https://gorewood.github.io/timbers/examples/exec-summary/) | 3-5 bullet standup summary |
+| [Standup](https://gorewood.github.io/timbers/examples/standup/) | Daily standup from recent work |
 | [Release Notes](https://gorewood.github.io/timbers/examples/release-notes/) | User-facing release notes |
 | [Sprint Report](https://gorewood.github.io/timbers/examples/sprint-report/) | Categorized sprint summary with scope and highlights |
 | [Dev Blog](https://gorewood.github.io/timbers/posts/) | Weekly dev blog posts (Carmack .plan style) |

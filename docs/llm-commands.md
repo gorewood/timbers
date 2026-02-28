@@ -71,7 +71,7 @@ timbers draft changelog --show
 
 # Built-in LLM execution (no piping needed)
 timbers draft changelog --since 7d --model local
-timbers draft exec-summary --last 10 --model haiku
+timbers draft standup --last 10 --model haiku
 timbers draft devblog --last 20 --model flash --append "Focus on physics"
 ```
 
@@ -95,7 +95,7 @@ Built-in templates (use `timbers draft --list` for current list):
 |----------|---------|
 | `changelog` | Generate release changelogs |
 | `devblog` | Developer blog post (Carmack .plan style) |
-| `exec-summary` | Executive summary for stakeholders |
+| `standup` | Daily standup from recent work |
 | `pr-description` | Pull request descriptions |
 | `release-notes` | User-facing release notes |
 | `sprint-report` | Sprint/iteration summaries |
@@ -289,7 +289,7 @@ Use `draft` to render templates, pipe to your preferred LLM CLI:
 timbers draft changelog --since 7d | claude -p
 
 # OpenAI
-timbers draft exec-summary --last 5 | openai-cli
+timbers draft standup --last 5 | openai-cli
 
 # Any LLM that accepts stdin
 timbers draft pr-description --range main..HEAD | my-llm-tool
@@ -302,7 +302,7 @@ Use `--model` for simpler one-liner execution:
 ```bash
 # Direct execution (recommended for most use cases)
 timbers draft changelog --since 7d --model local
-timbers draft exec-summary --last 5 --model haiku
+timbers draft standup --last 5 --model haiku
 timbers draft pr-description --range main..HEAD --model flash
 ```
 

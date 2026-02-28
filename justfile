@@ -124,7 +124,7 @@ watch:
 # Generate a report using timbers draft piped to claude
 # This uses `claude -p` which is cheaper than API token calls.
 # Usage: just draft changelog --since 7d
-#        just draft exec-summary --last 10
+#        just draft standup --last 10
 draft +args:
     @go run ./cmd/timbers draft {{args}} | claude -p --model opus
 
@@ -132,6 +132,32 @@ draft +args:
 # Usage: just draft-model sonnet devblog --last 20
 draft-model model +args:
     @go run ./cmd/timbers draft {{args}} | claude -p --model {{model}}
+
+# Regenerate all site example pages from current ledger
+examples:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    DATE=$(date +%Y-%m-%d)
+    EXAMPLES=("standup" "pr-description" "release-notes" "sprint-report" "decision-log")
+    for tmpl in "${EXAMPLES[@]}"; do
+        echo "Generating $tmpl example..."
+        TITLE=$(echo "$tmpl" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
+        CONTENT=$(go run ./cmd/timbers draft "$tmpl" --last 20 | claude -p --model opus)
+        {
+            printf '+++\n'
+            echo "title = '${TITLE}'"
+            echo "date = '${DATE}'"
+            echo "tags = ['example', '$tmpl']"
+            printf '+++\n'
+            echo ""
+            echo "Generated with \`timbers draft $tmpl --last 20 | claude -p --model opus\`"
+            echo ""
+            echo "---"
+            echo ""
+            echo "$CONTENT"
+        } > "site/content/examples/${tmpl}.md"
+    done
+    echo "Done. Changelog example is managed by 'just release' separately."
 
 # =============================================================================
 # RELEASE (goreleaser)
@@ -211,11 +237,14 @@ release version:
         cat CHANGELOG.md
     } > site/content/examples/changelog.md
 
+    # Regenerate other site examples
+    just examples
+
     # Update landing page version badge
     sed -i '' "s/v[0-9]*\.[0-9]*\.[0-9]* \&middot; Open Source/v${ver} \&middot; Open Source/" site/layouts/index.html
 
     # Commit, tag, push
-    git add CHANGELOG.md site/content/examples/changelog.md site/layouts/index.html
+    git add CHANGELOG.md site/content/examples/ site/layouts/index.html
     git commit -m "chore: changelog for $tag"
     git tag "$tag"
     git push origin main "$tag"

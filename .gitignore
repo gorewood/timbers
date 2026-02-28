@@ -41,6 +41,9 @@ Desktop.ini
 !go.sum
 !go.mod
 
+# Embedded template files (used by go:embed)
+!internal/draft/templates/*.md
+
 # Documentation
 !README.md
 !LICENSE

@@ -267,6 +267,80 @@ func TestDoctorQuietMode(t *testing.T) {
 	})
 }
 
+func TestCheckGeneration(t *testing.T) {
+	// Clear all API key env vars for a clean baseline
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("GOOGLE_API_KEY", "")
+
+	// Cases with a key set must always pass (key alone is sufficient)
+	keyTests := []struct {
+		name      string
+		envVars   map[string]string
+		wantInMsg []string
+	}{
+		{
+			name:      "anthropic key shows env var name",
+			envVars:   map[string]string{"ANTHROPIC_API_KEY": "sk-test"},
+			wantInMsg: []string{"ANTHROPIC_API_KEY"},
+		},
+		{
+			name:      "openai key shows env var name",
+			envVars:   map[string]string{"OPENAI_API_KEY": "sk-test"},
+			wantInMsg: []string{"OPENAI_API_KEY"},
+		},
+		{
+			name:      "google key shows env var name",
+			envVars:   map[string]string{"GOOGLE_API_KEY": "test"},
+			wantInMsg: []string{"GOOGLE_API_KEY"},
+		},
+		{
+			name:      "multiple keys shows all",
+			envVars:   map[string]string{"ANTHROPIC_API_KEY": "sk-test", "GOOGLE_API_KEY": "test"},
+			wantInMsg: []string{"ANTHROPIC_API_KEY", "GOOGLE_API_KEY"},
+		},
+	}
+
+	for _, tt := range keyTests {
+		t.Run(tt.name, func(t *testing.T) {
+			for k, v := range tt.envVars {
+				t.Setenv(k, v)
+			}
+
+			result := checkGeneration()
+
+			if result.Name != "Generation" {
+				t.Errorf("Name = %q, want %q", result.Name, "Generation")
+			}
+			if result.Status != checkPass {
+				t.Errorf("Status = %q, want %q (key present)", result.Status, checkPass)
+			}
+			for _, want := range tt.wantInMsg {
+				if !strings.Contains(result.Message, want) {
+					t.Errorf("Message = %q, want to contain %q", result.Message, want)
+				}
+			}
+		})
+	}
+
+	// No keys: status depends on whether CLIs are in PATH
+	t.Run("no keys reports no API key", func(t *testing.T) {
+		result := checkGeneration()
+
+		if !strings.Contains(result.Message, "no API key") {
+			t.Errorf("Message = %q, want to contain %q", result.Message, "no API key")
+		}
+
+		hasCLI := len(findCLIs()) > 0
+		if hasCLI && result.Status != checkPass {
+			t.Errorf("Status = %q, want %q (CLI available)", result.Status, checkPass)
+		}
+		if !hasCLI && result.Status != checkWarn {
+			t.Errorf("Status = %q, want %q (no CLI or key)", result.Status, checkWarn)
+		}
+	})
+}
+
 func TestDoctorFixClaudeIntegration(t *testing.T) {
 	tempDir := t.TempDir()
 

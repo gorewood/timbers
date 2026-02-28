@@ -874,7 +874,7 @@ Use this checklist when designing agent-oriented CLIs:
 - `timbers prime --verbose` — Design decision history (why/how in recent entries)
 - `timbers pending` — Clear next action
 - `timbers log "what" --why "why" --how "how"` — Single command capture
-- `timbers draft <template>` — Template-based document generation (changelog, release-notes, devblog, decision-log, adr, exec-summary, standup)
+- `timbers draft <template>` — Template-based document generation (changelog, decision-log, devblog, pr-description, release-notes, sprint-report, standup)
 - `timbers draft --list` — Discover available templates
 - `timbers draft release-notes --last 10 --model opus` — Generate with built-in LLM
 - `timbers export --json | claude "..."` — Unix composability

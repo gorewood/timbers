@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/gorewood/timbers/internal/config"
+	"github.com/gorewood/timbers/internal/draft"
+	"github.com/gorewood/timbers/internal/llm"
 )
 
 // checkVersion compares installed version against latest GitHub release.
@@ -85,11 +88,87 @@ func fetchLatestVersion() (string, error) {
 
 // runConfigChecks performs configuration-related checks.
 func runConfigChecks(flags *doctorFlags) []checkResult {
-	checks := make([]checkResult, 0, 3)
+	checks := make([]checkResult, 0, 4)
 	checks = append(checks, checkConfigDir(flags))
 	checks = append(checks, checkEnvFiles())
 	checks = append(checks, checkTemplates())
+	checks = append(checks, checkGeneration())
 	return checks
+}
+
+// pipeCLIs are LLM CLIs that accept stdin for pipe-based generation.
+var pipeCLIs = []string{"claude", "codex", "gemini"}
+
+// findCLIs returns the names of LLM CLIs found in PATH.
+func findCLIs() []string {
+	var found []string
+	for _, name := range pipeCLIs {
+		if _, err := exec.LookPath(name); err == nil {
+			found = append(found, name)
+		}
+	}
+	return found
+}
+
+// findAPIKeys returns the env var names of set API keys.
+func findAPIKeys() []string {
+	var found []string
+	for _, envVar := range llm.APIKeyEnvVars() {
+		if os.Getenv(envVar) != "" {
+			found = append(found, envVar)
+		}
+	}
+	return found
+}
+
+// generationHint builds the hint for when no generation method is available.
+func generationHint() string {
+	var b strings.Builder
+	b.WriteString("Set an API key for 'timbers draft --model':")
+	for _, envVar := range llm.APIKeyEnvVars() {
+		b.WriteString("\n      ")
+		b.WriteString(envVar)
+	}
+	if os.Getenv("CI") == "" {
+		b.WriteString("\n      Or install an LLM CLI: ")
+		b.WriteString(strings.Join(pipeCLIs, ", "))
+	}
+	return b.String()
+}
+
+// checkGeneration reports whether draft generation methods are available.
+func checkGeneration() checkResult {
+	foundCLIs := findCLIs()
+	foundKeys := findAPIKeys()
+
+	var parts []string
+	if len(foundCLIs) > 0 {
+		parts = append(parts, "pipe: "+strings.Join(foundCLIs, ", "))
+	} else {
+		parts = append(parts, "pipe: no CLI found")
+	}
+	if len(foundKeys) > 0 {
+		parts = append(parts, "direct: "+strings.Join(foundKeys, ", "))
+	} else {
+		parts = append(parts, "direct: no API key")
+	}
+
+	msg := strings.Join(parts, " | ")
+
+	if len(foundCLIs) == 0 && len(foundKeys) == 0 {
+		return checkResult{
+			Name:    "Generation",
+			Status:  checkWarn,
+			Message: msg,
+			Hint:    generationHint(),
+		}
+	}
+
+	return checkResult{
+		Name:    "Generation",
+		Status:  checkPass,
+		Message: msg,
+	}
 }
 
 // checkConfigDir reports the resolved configuration directory.
@@ -154,18 +233,10 @@ func checkEnvFiles() checkResult {
 	}
 
 	// Check which API keys are available (from any source)
-	type apiKey struct {
-		env   string
-		label string
-	}
-	keyNames := []apiKey{
-		{"ANTHROPIC_API_KEY", "anthropic"},
-		{"OPENAI_API_KEY", "openai"},
-		{"GOOGLE_API_KEY", "google"},
-	}
-	for _, k := range keyNames {
-		if os.Getenv(k.env) != "" {
-			keys = append(keys, k.label)
+	for _, envVar := range llm.APIKeyEnvVars() {
+		if os.Getenv(envVar) != "" {
+			// Derive display label: "ANTHROPIC_API_KEY" -> "anthropic"
+			keys = append(keys, strings.ToLower(strings.TrimSuffix(envVar, "_API_KEY")))
 		}
 	}
 
@@ -216,7 +287,7 @@ func checkTemplates() checkResult {
 		return checkResult{
 			Name:    "Custom Templates",
 			Status:  checkPass,
-			Message: "none (7 built-in available)",
+			Message: fmt.Sprintf("none (%d built-in available)", draft.BuiltinCount()),
 			Hint:    "Run 'timbers draft --list' to see built-in templates",
 		}
 	}
@@ -224,7 +295,7 @@ func checkTemplates() checkResult {
 	return checkResult{
 		Name:    "Custom Templates",
 		Status:  checkPass,
-		Message: strings.Join(parts, ", ") + " + 7 built-in",
+		Message: fmt.Sprintf("%s + %d built-in", strings.Join(parts, ", "), draft.BuiltinCount()),
 	}
 }
 

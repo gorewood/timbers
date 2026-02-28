@@ -270,3 +270,18 @@ func (c *Client) doRequest(ctx context.Context, url string, body any, headers ma
 func SupportedProviders() []string {
 	return []string{string(ProviderAnthropic), string(ProviderOpenAI), string(ProviderGoogle), string(ProviderLocal)}
 }
+
+// cloudProviders lists providers that require API keys, in display order.
+// Update this when adding a new cloud provider to envVarForProvider.
+var cloudProviders = []Provider{ProviderAnthropic, ProviderOpenAI, ProviderGoogle}
+
+// APIKeyEnvVars returns the environment variable names for cloud provider API keys.
+func APIKeyEnvVars() []string {
+	var vars []string
+	for _, p := range cloudProviders {
+		if v := envVarForProvider[p]; v != "" {
+			vars = append(vars, v)
+		}
+	}
+	return vars
+}

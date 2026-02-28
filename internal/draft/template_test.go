@@ -210,7 +210,7 @@ func TestListBuiltins(t *testing.T) {
 	}
 
 	// Check that expected templates are present
-	expectedNames := []string{"changelog", "exec-summary", "sprint-report", "pr-description", "release-notes"}
+	expectedNames := []string{"changelog", "standup", "sprint-report", "pr-description", "release-notes"}
 	found := make(map[string]bool)
 	for _, tmpl := range templates {
 		found[tmpl.Name] = true
