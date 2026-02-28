@@ -37,6 +37,12 @@ Generate a standup update from these development log entries.
 - Don't add context, metrics, or implications not present.
 - Fewer bullets is fine if entries are sparse.
 
+**Output discipline**:
+- Output the standup ONLY. No preamble, commentary, acknowledgment, or meta-discussion.
+- Do not begin with "Here is..." or "I'll generate..." or any thinking-out-loud.
+- Do not end with "Let me know..." or any sign-off.
+- The first line of your response must be part of the document itself.
+
 ## Entries ({{entry_count}})
 
 {{entries_summary}}

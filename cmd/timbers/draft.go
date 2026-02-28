@@ -210,18 +210,21 @@ func runDraftWithLLM(
 			"prompt":         rendered,
 			"entry_count":    len(entries),
 			"model":          resp.Model,
-			"response":       resp.Content,
+			"response":       draft.SanitizeLLMOutput(resp.Content),
 			"generated_with": metadata,
 		}
 		return printer.Success(result)
 	}
+
+	// Sanitize LLM output to strip preamble/signoff leakage
+	content := draft.SanitizeLLMOutput(resp.Content)
 
 	// With frontmatter: output TOML frontmatter before content
 	if withFrontmatter {
 		printer.Print("%s\n", formatTOMLFrontmatter(metadata))
 	}
 
-	printer.Print("%s\n", resp.Content)
+	printer.Print("%s\n", content)
 	return nil
 }
 

@@ -56,6 +56,12 @@ If entries don't hint at testing, use "See test files" or similar.]
   than filling it with generic content.
 - The "Design Decisions" section is the highest-value section — prioritize it.
 
+**Output discipline**:
+- Output the PR description ONLY. No preamble, commentary, acknowledgment, or meta-discussion.
+- Do not begin with "Here is..." or "I'll generate..." or any thinking-out-loud.
+- Do not end with "Let me know..." or any sign-off.
+- The first line of your response must be part of the document itself.
+
 ## Entries ({{entry_count}}) | Branch: {{branch}}
 
 {{entries_json}}

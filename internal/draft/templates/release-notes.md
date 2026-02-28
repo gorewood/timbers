@@ -28,6 +28,12 @@ Generate user-facing release notes from these development log entries.
 - Don't invent user-facing benefits not implied by the changes.
 - Skip sections with no relevant entries.
 
+**Output discipline**:
+- Output the release notes ONLY. No preamble, commentary, acknowledgment, or meta-discussion.
+- Do not begin with "Here is..." or "I'll generate..." or any thinking-out-loud.
+- Do not end with "Let me know..." or any sign-off.
+- The first line of your response must be part of the document itself.
+
 ## Entries ({{entry_count}}) | {{date_range}}
 
 {{entries_json}}

@@ -51,6 +51,12 @@ Write a short developer blog post from these development log entries.
 - Do not reference technologies, patterns, or concepts not mentioned in the entries.
 - If the entries are thin, write a shorter post. Omission over fabrication.
 
+**Output discipline**:
+- Output the blog post ONLY. No preamble, commentary, acknowledgment, or meta-discussion.
+- Do not begin with "Here is..." or "I'll generate..." or any thinking-out-loud.
+- Do not end with "Let me know..." or any sign-off.
+- The first line of your response must be part of the blog post itself.
+
 **Length**: 300-600 words. Shorter is better if the entries are sparse.
 
 **Footer**: End with a brief, minimal transparency note (one line, no specific model names).

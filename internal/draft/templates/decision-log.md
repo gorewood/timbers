@@ -42,6 +42,12 @@ Extract architectural decisions from these development log entries and format th
 - Consequences may go slightly beyond what's stated if they're logical implications, but don't speculate wildly.
 - If no entries contain genuine design decisions, say so plainly.
 
+**Output discipline**:
+- Output the decision log ONLY. No preamble, commentary, acknowledgment, or meta-discussion.
+- Do not begin with "Here is..." or "I'll generate..." or any thinking-out-loud.
+- Do not end with "Let me know..." or any sign-off.
+- The first line of your response must be part of the document itself.
+
 ## Entries ({{entry_count}}) | {{date_range}}
 
 {{entries_json}}

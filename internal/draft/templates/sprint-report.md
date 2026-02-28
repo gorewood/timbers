@@ -27,6 +27,12 @@ Generate a sprint report from these development log entries.
 - Skip Highlights section if nothing particularly notable.
 - If entries lack tags, group by apparent type or list chronologically.
 
+**Output discipline**:
+- Output the sprint report ONLY. No preamble, commentary, acknowledgment, or meta-discussion.
+- Do not begin with "Here is..." or "I'll generate..." or any thinking-out-loud.
+- Do not end with "Let me know..." or any sign-off.
+- The first line of your response must be part of the document itself.
+
 ## Entries ({{entry_count}}) | {{date_range}}
 
 {{entries_json}}

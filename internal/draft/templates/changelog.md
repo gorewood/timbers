@@ -55,6 +55,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - If an entry doesn't clearly fit a category, use your best judgment or skip it.
 - Always include the Keep a Changelog header—this is non-negotiable.
 
+**Output discipline**:
+- Output the document ONLY. No preamble, commentary, acknowledgment, or meta-discussion.
+- Do not begin with "Here is..." or "I'll generate..." or any thinking-out-loud.
+- Do not end with "Let me know..." or any sign-off.
+- The first line of your response must be part of the document itself.
+
 ## Entries ({{entry_count}})
 
 {{entries_json}}
