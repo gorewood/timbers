@@ -12,10 +12,10 @@ Timbers is a development ledger that captures what/why/how as structured JSON fi
 
 ```bash
 # Record work (agents or humans)
-timbers log "Fixed auth bypass" \
-  --why "Chose validation over rate limiting — catches root cause" \
-  --how "Added validation middleware before auth handler" \
-  --notes "Debated rate limiting vs input validation. Rate limiting masks the problem."
+timbers log "Switched to cursor-based pagination" \
+  --why "Offset pagination skips rows when items are inserted between pages" \
+  --how "Opaque cursor tokens encoding created_at + id" \
+  --notes "Offset was simpler but users reported duplicate items in feeds. Cursors are stable under concurrent writes."
 
 # Generate artifacts from your ledger
 timbers draft decision-log --last 20 --model opus
@@ -139,10 +139,10 @@ timbers prime
 
 # After work: agent documents it
 timbers pending
-timbers log "Implemented rate limiting" \
-  --why "Token bucket chosen over sliding window for simplicity" \
-  --how "Token bucket with Redis backend" \
-  --notes "Considered sliding window but token bucket covers our load patterns"
+timbers log "Added write-through caching to product queries" \
+  --why "Read-aside cache served stale data after writes — write-through keeps it consistent" \
+  --how "Cache update in same transaction as DB write, TTL fallback" \
+  --notes "Write-behind was faster but risks data loss on crash. Consistency wins over throughput here."
 ```
 
 Agent-friendly features: `--json` everywhere, `prime` for context injection, `pending` for clear signals, `--notes` for capturing deliberation, structured errors with recovery hints.

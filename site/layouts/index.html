@@ -232,7 +232,7 @@
                     <svg class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"/></svg>
                 </div>
                 <h3 class="text-lg font-semibold text-white mb-3">Commit messages lie</h3>
-                <p class="text-zinc-400 leading-relaxed"><code class="text-zinc-500 text-sm">fix: update auth</code> tells you nothing about which approach was chosen or what was rejected.</p>
+                <p class="text-zinc-400 leading-relaxed"><code class="text-zinc-500 text-sm">fix: update pagination</code> tells you nothing about which approach was chosen or what was rejected.</p>
             </div>
 
             <!-- Card 3 -->
@@ -271,11 +271,11 @@
                     <span class="terminal-dot bg-[#febc2e]"></span>
                     <span class="terminal-dot bg-[#28c840]"></span>
                 </div>
-                <div class="terminal-body"><span class="prompt">$</span> <span class="cmd">timbers</span> <span class="sub">log</span> <span class="str">"Fixed auth bypass vulnerability"</span> <span class="cont">\</span>
-<span class="cmd">    </span><span class="flag">--why</span> <span class="str">"Input validation over rate limiting &mdash; catches root cause"</span> <span class="cont">\</span>
-<span class="cmd">    </span><span class="flag">--how</span> <span class="str">"Added validation middleware before auth handler"</span> <span class="cont">\</span>
-<span class="cmd">    </span><span class="flag">--notes</span> <span class="str">"Considered rate limiting but it masks the problem.
-<span class="cmd">             </span>Validation is cheaper and catches the issue at the boundary."</span>
+                <div class="terminal-body"><span class="prompt">$</span> <span class="cmd">timbers</span> <span class="sub">log</span> <span class="str">"Switched to cursor-based pagination"</span> <span class="cont">\</span>
+<span class="cmd">    </span><span class="flag">--why</span> <span class="str">"Offset pagination skips rows when items are inserted between pages"</span> <span class="cont">\</span>
+<span class="cmd">    </span><span class="flag">--how</span> <span class="str">"Opaque cursor tokens encoding created_at + id"</span> <span class="cont">\</span>
+<span class="cmd">    </span><span class="flag">--notes</span> <span class="str">"Offset was simpler but users reported duplicate items in feeds.
+<span class="cmd">             </span>Cursors are stable under concurrent writes."</span>
 
 <span class="cmt"># Entry stored in .timbers/ &mdash; committed with your code, queryable by any tool.</span></div>
             </div>
@@ -328,12 +328,12 @@
                 </div>
                 <div class="px-6 pb-6">
                     <div class="rounded-lg bg-zinc-950/60 border border-zinc-800/50 p-4 text-xs font-mono leading-relaxed text-zinc-500">
-                        <p class="text-amber-400/80">## ADR-003: Auth Validation Strategy</p>
+                        <p class="text-amber-400/80">## ADR-003: Cursor-Based Pagination</p>
                         <p class="mt-2"><span class="text-zinc-400">Status:</span> Accepted</p>
-                        <p><span class="text-zinc-400">Context:</span> Auth bypass in API layer</p>
-                        <p><span class="text-zinc-400">Decision:</span> Input validation over rate limiting</p>
-                        <p><span class="text-zinc-400">Consequences:</span> Higher upfront cost,</p>
-                        <p class="text-zinc-600">&nbsp; catches root cause...</p>
+                        <p><span class="text-zinc-400">Context:</span> Duplicate items in paginated feeds</p>
+                        <p><span class="text-zinc-400">Decision:</span> Cursor tokens over offset/limit</p>
+                        <p><span class="text-zinc-400">Consequences:</span> Stable pages under</p>
+                        <p class="text-zinc-600">&nbsp; concurrent writes...</p>
                     </div>
                 </div>
             </div>
