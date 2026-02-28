@@ -126,17 +126,18 @@ watch:
 # Usage: just draft changelog --since 7d
 #        just draft standup --last 10
 draft +args:
-    @go run ./cmd/timbers draft {{args}} | claude -p --model opus
+    @CLAUDECODE= go run ./cmd/timbers draft {{args}} | claude -p --model opus
 
 # Generate a report with specific model
 # Usage: just draft-model sonnet devblog --last 20
 draft-model model +args:
-    @go run ./cmd/timbers draft {{args}} | claude -p --model {{model}}
+    @CLAUDECODE= go run ./cmd/timbers draft {{args}} | claude -p --model {{model}}
 
 # Regenerate all site example pages from current ledger
 examples:
     #!/usr/bin/env bash
     set -eo pipefail
+    unset CLAUDECODE  # Allow claude -p inside Claude Code sessions
     DATE=$(date +%Y-%m-%d)
     # Dynamic examples: regenerated each release to stay fresh
     TEMPLATES=("release-notes" "decision-log")
@@ -249,6 +250,7 @@ examples-static:
 release version:
     #!/usr/bin/env bash
     set -euo pipefail
+    unset CLAUDECODE  # Allow claude -p inside Claude Code sessions
     ver="{{version}}"
     ver="${ver#v}"
     tag="v${ver}"
@@ -351,6 +353,7 @@ release-build:
 blog:
     #!/usr/bin/env bash
     set -euo pipefail
+    unset CLAUDECODE  # Allow claude -p inside Claude Code sessions
     DATE=$(date +%Y-%m-%d)
     WEEK=$(date +%Y)-week-$(date +%V)
     FILE="site/content/posts/${DATE}-${WEEK}.md"
@@ -375,6 +378,7 @@ blog-serve:
 changelog version="":
     #!/usr/bin/env bash
     set -euo pipefail
+    unset CLAUDECODE  # Allow claude -p inside Claude Code sessions
     PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
     APPEND=""
     if [ -n "{{version}}" ]; then

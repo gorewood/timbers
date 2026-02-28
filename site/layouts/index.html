@@ -272,10 +272,10 @@
                     <span class="terminal-dot bg-[#28c840]"></span>
                 </div>
                 <div class="terminal-body"><span class="prompt">$</span> <span class="cmd">timbers</span> <span class="sub">log</span> <span class="str">"Switched to cursor-based pagination"</span> <span class="cont">\</span>
-<span class="cmd">    </span><span class="flag">--why</span> <span class="str">"Offset pagination skips rows when items are inserted between pages"</span> <span class="cont">\</span>
-<span class="cmd">    </span><span class="flag">--how</span> <span class="str">"Opaque cursor tokens encoding created_at + id"</span> <span class="cont">\</span>
-<span class="cmd">    </span><span class="flag">--notes</span> <span class="str">"Offset was simpler but users reported duplicate items in feeds.
-<span class="cmd">             </span>Cursors are stable under concurrent writes."</span>
+<span class="cmd">        </span><span class="flag">--why</span> <span class="str">"Offset pagination skips rows when items are inserted between pages"</span> <span class="cont">\</span>
+<span class="cmd">        </span><span class="flag">--how</span> <span class="str">"Opaque cursor tokens encoding created_at + id"</span> <span class="cont">\</span>
+<span class="cmd">        </span><span class="flag">--notes</span> <span class="str">"Offset was simpler but users reported duplicate items in feeds.
+<span class="cmd">                 </span>Cursors are stable under concurrent writes."</span>
 
 <span class="cmt"># Entry stored in .timbers/ &mdash; committed with your code, queryable by any tool.</span></div>
             </div>
@@ -551,8 +551,8 @@ for undocumented commits, then:
                     <div class="terminal">
                         <div class="terminal-body py-3"><span class="cmt"># Your agent captures decisions as it works:</span>
 <span class="prompt">$</span> <span class="cmd">timbers</span> <span class="sub">log</span> <span class="str">"Pivoted storage from git notes to file-per-entry"</span> <span class="cont">\</span>
-<span class="cmd">    </span><span class="flag">--why</span> <span class="str">"Files enable atomic writes and eliminate merge conflicts in concurrent worktrees"</span> <span class="cont">\</span>
-<span class="cmd">    </span><span class="flag">--how</span> <span class="str">"JSON files in .timbers/ with temp+rename atomicity"</span></div>
+<span class="cmd">        </span><span class="flag">--why</span> <span class="str">"Files enable atomic writes and eliminate merge conflicts in concurrent worktrees"</span> <span class="cont">\</span>
+<span class="cmd">        </span><span class="flag">--how</span> <span class="str">"JSON files in .timbers/ with temp+rename atomicity"</span></div>
                     </div>
                 </div>
             </div>
