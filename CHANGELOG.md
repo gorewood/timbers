@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+Now I have enough context to generate the changelog.
+
+## [0.12.0] - 2026-02-28
+
+### Added
+- Added `--models` flag to `timbers draft` to list supported LLM providers, model aliases, and required API keys
+- Added `--json` support for `timbers draft --models` for agent consumption
+- Added `internal/llm` package with provider metadata and alias resolution
+
+### Changed
+- Updated README, tutorial, and `docs/llm-commands.md` with verified piping syntax for all three supported LLM CLIs (`claude`, `gemini`, `codex`)
+
+### Fixed
+- Fixed Codex CLI flag placement in docs — `-m` belongs to `codex exec`, not the root `codex` command
+- Fixed release dirty-tree check to exclude `CHANGELOG.md` and `site/content/examples/` (outputs of the release process)
+- Fixed release recipe to skip already-modified site examples, avoiding redundant LLM calls on partial reruns
+- Fixed defensive alias copy in `ProviderInfos()` using `maps.Copy` to prevent callers from mutating package state
+
+
+Only 3 code-relevant commits since v0.11.0 (the blog post isn't user-facing). Here's the changelog:
+
+## [0.12.0] - 2026-02-28
+
+### Added
+- Added `timbers draft --models` flag to list supported LLM providers, model aliases, and required API keys
+- Added `--json` support for `draft --models` output for agent consumption
+
+### Changed
+- Updated documentation with correct piping syntax for all three supported LLM CLIs (`claude`, `gemini`, `codex`)
+
+### Fixed
+- Fixed `codex` CLI flag placement in docs — `-m` flag belongs to `codex exec`, not the root command
+- Fixed defensive alias map copy in `ProviderInfos()` using `maps.Copy` to prevent callers from mutating package state
+
+
 ## [0.11.0] - 2026-02-27
 
 ### Added
@@ -264,3 +299,4 @@ Initial public release.
 [0.10.1]: https://github.com/gorewood/timbers/releases/tag/v0.10.1
 [0.10.2]: https://github.com/gorewood/timbers/releases/tag/v0.10.2
 [0.11.0]: https://github.com/gorewood/timbers/releases/tag/v0.11.0
+[0.12.0]: https://github.com/gorewood/timbers/releases/tag/v0.12.0

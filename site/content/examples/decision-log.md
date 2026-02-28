@@ -1,6 +1,6 @@
 +++
 title = 'Decision Log'
-date = '2026-02-27'
+date = '2026-02-28'
 tags = ['example', 'decision-log']
 +++
 
@@ -8,128 +8,117 @@ Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
 
 ---
 
-## ADR-1: Grep Over jq for Hook Input Parsing
+## ADR-1: Auto-Commit Entry Files on Working Branch
 
-**Context:** Claude Code hooks receive JSON on stdin. The `PostToolUse` hook needed to detect `git commit` commands to remind users about `timbers pending`. Options were full JSON parsing with `jq` to extract `tool_input.command` specifically, or grepping the raw JSON blob.
+**Context:** When `timbers log` creates an entry file in `.timbers/`, the file was staged but not committed, leaving a gap where users had to manually `git commit`. The original design likely assumed git-notes storage where entries didn't create commits on the working branch. An alternative was committing entries on a separate branch (like beads/entire.io use), which would keep the working branch clean.
 
-**Decision:** Grep the full JSON blob for `git commit` instead of parsing with `jq`. Simpler, no external dependency, and false positive risk is negligible — the string `git commit` appearing in unrelated JSON fields is unlikely enough to not warrant structured parsing.
+**Decision:** Auto-commit the entry file directly on the working branch using `git commit -m ... -- <path>` (pathspec-scoped). A separate branch was rejected because agent DX depends on filesystem visibility — `timbers prime` and `timbers draft` need to read entries without worktree indirection.
 
 **Consequences:**
-- Positive: Zero dependencies, single-line implementation, works on any system with `grep`
-- Positive: Easier to debug — no JSON schema coupling to break
-- Negative: Theoretically matches false positives if `git commit` appears in other JSON fields
-- Negative: Can't extract specific fields if future hooks need richer input inspection
+- Eliminates the staged-but-uncommitted confusion that caused user friction
+- Pathspec (`--`) prevents sweeping other staged files into the timbers commit — safe by construction
+- Entry files are immediately visible to all tools without branch switching
+- Adds commits to the working branch that are tooling artifacts, not code changes
+- Requires `GitCommitFunc` injection in `FileStorage` for testability
 
 ---
 
-## ADR-2: `--color` Flag Over Full Theme Config
+## ADR-2: `--color` Flag Over Full Theme Configuration
 
-**Context:** Users on Solarized Dark reported Color 8 (bright black) was invisible. Terminals don't report their color scheme, so the tool can't auto-detect. Options ranged from a full theme config system (env vars, config files, multiple palettes) to a simple `--color` flag paired with `AdaptiveColor`.
+**Context:** Color 8 (bright black) was invisible on Solarized Dark terminals. Users reported dim/hint text was unreadable. Options ranged from a full theme system (env vars, config files, multiple palettes) to lipgloss `AdaptiveColor` with a simple override flag. Lipgloss v1.1.0 has `HasDarkBackground()` but it wasn't yet integrated.
 
-**Decision:** Ship `--color never/auto/always` as a persistent global flag combined with lipgloss `AdaptiveColor`, deferring full theme config. This covers 95% of cases without maintenance burden. Lipgloss v1.1.0's `HasDarkBackground()` was noted for future use but not adopted yet.
+**Decision:** Ship a global `--color` persistent flag (`never`/`auto`/`always`) plumbed through `ResolveColorMode`, combined with `AdaptiveColor` for automatic light/dark switching. Deferred full theme configuration.
 
 **Consequences:**
-- Positive: Immediate fix for dark terminal users with minimal API surface
-- Positive: `AdaptiveColor` handles light/dark switching automatically for most terminals
-- Negative: Users with unusual color schemes still can't fine-tune individual colors
-- Negative: Deferred `HasDarkBackground()` means some auto-detection capability is left on the table
+- Covers ~95% of terminal color compatibility cases without maintenance burden
+- `AdaptiveColor` provides sensible defaults without user intervention for most terminals
+- Users with non-standard schemes have an escape hatch via `--color`
+- Defers `HasDarkBackground()` integration and per-element theme control to a future iteration
+- Every `NewPrinter` call site must thread the color mode through
 
 ---
 
-## ADR-3: Auto-Commit Entry Files with Pathspec Scoping
+## ADR-3: Warnings and Coaching Over Reset Command for Stale Anchors
 
-**Context:** `timbers log` created entry files in `.timbers/` but left them staged-and-uncommitted, causing user confusion. The gap likely originated from the git-notes era where entries didn't create commits on the working branch. Options: (1) auto-commit the entry file, (2) store entries on a separate branch (like beads or Entire.io), (3) leave as manual step.
+**Context:** After squash merges or rebases, the anchor commit in a timbers entry can go missing from history. This caused confusing behavior for users. Two approaches: build an explicit `timbers anchor-reset` command, or rely on actionable warnings plus coaching documentation to guide users through self-healing.
 
-**Decision:** Auto-commit using `git commit -m ... -- <path>` with pathspec scoping. Separate branch was rejected because agent DX depends on filesystem visibility — `timbers prime` and `timbers draft` need to read entries without worktree indirection. The `--` pathspec prevents sweeping other staged files into the timbers commit.
+**Decision:** Warnings plus coaching, no reset command. The anchor self-heals the next time `timbers log` runs after a real commit, making an explicit reset unnecessary.
 
 **Consequences:**
-- Positive: Eliminates the staged-but-uncommitted gap entirely
-- Positive: Entries are immediately available to all timbers commands without extra steps
-- Positive: Pathspec scoping makes the auto-commit surgically safe
-- Negative: Creates additional commits on the working branch (one per `timbers log`)
-- Negative: Entries must live on the working branch, ruling out branch-based isolation patterns
+- No new command to maintain, test, or document
+- Users get clear guidance in the moment (warning messages) and in context (coaching section in `prime` output)
+- Self-healing means no permanent state corruption from squash merges
+- `timbers pending` may show already-documented commits during the stale window, which could confuse users who don't read the warning
+- If the self-healing assumption breaks in edge cases, there's no manual override available
 
 ---
 
-## ADR-4: Remove PostToolUse Hook Over Platform Workaround
+## ADR-4: Remove PostToolUse Hook in Favor of Stop Hook
 
-**Context:** Diagnostic confirmed the `PostToolUse` hook fired correctly and received valid JSON on stdin, but Claude Code didn't surface stdout — the hook's output went nowhere visible. Options: work around the platform behavior (write to a file, use notifications, etc.) or remove the hook and rely on the existing `Stop` hook.
+**Context:** A `PostToolUse` hook was intended to remind agents to run `timbers log` after `git commit`. Diagnostic testing confirmed the hook fired correctly and received valid JSON on stdin. However, Claude Code doesn't surface hook stdout to the user or agent — the output went nowhere visible, making the post-commit reminder a silent no-op since it was created.
 
-**Decision:** Remove `PostToolUse` entirely. The `Stop` hook already runs `timbers pending` at session end, covers the same use case (reminding about undocumented commits), and actually displays its output. Working around Claude Code behavior adds fragile complexity.
+**Decision:** Remove `PostToolUse` entirely. The existing `Stop` hook already runs `timbers pending` at session end, which covers the same case by checking actual state rather than intercepting tool calls.
 
 **Consequences:**
-- Positive: Eliminates a silently broken hook that was a no-op since creation
-- Positive: Simpler hook surface — fewer events to maintain and test
-- Negative: No per-commit reminder; feedback only at session end via `Stop` hook
-- Negative: If a user makes many commits without documenting, they only find out at the end
+- Eliminates dead code that appeared to work but had no observable effect
+- `Stop` hook checks real state (`timbers pending`) rather than inferring intent from tool calls — more reliable
+- Reminder shifts from per-commit to session-end, which means agents may accumulate undocumented commits during a session
+- Added `retiredEvents` cleanup list so upgrades remove stale hooks automatically
 
 ---
 
-## ADR-5: Warnings and Coaching Over Reset Command for Stale Anchors
+## ADR-5: Pre-Check Over LLM Refusal for Empty Inputs
 
-**Context:** After squash merges, the anchor commit disappears from history, producing confusing `timbers pending` output. Options: (1) add an explicit `timbers anchor-reset` command, (2) use actionable warnings plus coaching to guide users, relying on the anchor's self-healing behavior (it auto-corrects on the next `timbers log`).
+**Context:** The devblog generation workflow invoked the LLM even when no timbers entries existed for the period. The LLM responded by generating apologetic "nothing happened" posts. Two approaches: teach the LLM to refuse gracefully when given empty input, or check entry count before invoking the LLM at all.
 
-**Decision:** Warnings plus coaching, no reset command. The anchor self-heals on the next `timbers log`, making an explicit reset unnecessary. Messaging alone is sufficient — tell users what happened and that normal workflow will fix it.
+**Decision:** Check entry count before generation. Gate the generate/commit/push steps on count > 0.
 
 **Consequences:**
-- Positive: No new command to document, test, and maintain
-- Positive: Users learn the mental model (anchors self-heal) instead of reaching for a command
-- Negative: First encounter with stale anchor is still confusing until the user reads the warning
-- Negative: No escape hatch if self-healing doesn't cover an edge case
+- Cheaper — avoids an LLM API call entirely when there's nothing to generate
+- Deterministic — no risk of the LLM deciding to generate something anyway
+- Simpler — a count check is a shell conditional, not prompt engineering
+- Doesn't generalize to cases where the LLM should make nuanced judgments about input sufficiency
+- Required deleting 10 blank posts that had already been published
 
 ---
 
-## ADR-6: Pre-Generate Check Over LLM Refusal for Empty Entries
+## ADR-6: PR Template Focused on Intent/Decisions, Not Diff Summaries
 
-**Context:** The devblog workflow invoked the LLM even when no timbers entries existed for the period, causing the LLM to generate apologetic "nothing to report" posts. Options: teach the LLM to refuse gracefully when given empty input, or check entry count before invoking generation.
+**Context:** The `pr-description` template (v3) summarized code diffs. But agents reviewing PRs already read the diff themselves — a template that restates the diff adds no value. The template needed to provide what agents *can't* infer from code alone.
 
-**Decision:** Check entry count before generation and skip the entire pipeline when count is zero. Cheaper and cleaner than prompt-engineering the LLM to produce a useful refusal.
+**Decision:** Rewrote `pr-description` to v4, shifting focus to intent and design decisions. The template now extracts *why* choices were made and what trade-offs were considered, using the ledger's `why` and `notes` fields as primary sources.
 
 **Consequences:**
-- Positive: Eliminates wasted LLM calls and their associated cost/latency
-- Positive: No "apology posts" to detect and clean up after the fact
-- Positive: Simple boolean gate — easier to reason about than LLM behavior
-- Negative: Slightly more workflow complexity (conditional step)
-- Negative: If the check has bugs, generation silently skips when it shouldn't
+- PR descriptions complement rather than duplicate what reviewers already see in the diff
+- Leverages timbers' unique data (design decisions) rather than competing with tools that summarize code changes
+- Requires entries to have substantive `why` fields — thin entries produce thin PR descriptions
+- Agents reviewing PRs get the context they actually need to evaluate whether changes are appropriate
 
 ---
 
-## ADR-7: Govulncheck Separate from Lint Check
+## ADR-7: Grep Over jq for Hook Stdin JSON Parsing
 
-**Context:** `govulncheck` isn't included in `golangci-lint` and needs to be run as a separate tool. The question was whether to add it to the `just check` gate (which must pass before every commit) or keep it as a separate recipe.
+**Context:** Claude Code hooks receive JSON on stdin containing tool call details. The `PostToolUse` hook (before removal) needed to detect `git commit` invocations. Options: parse the JSON properly with `jq` to extract `tool_input.command`, or grep the raw JSON blob for the string `git commit`.
 
-**Decision:** Separate `just vulncheck` recipe, not part of `just check`. Stdlib vulnerability patches can flag findings that aren't actionable yet, and blocking every commit on them would be disruptive.
+**Decision:** Grep the full JSON blob directly. No `jq` dependency, simpler implementation, and the false positive risk of matching `git commit` anywhere in the JSON is negligible in practice.
 
 **Consequences:**
-- Positive: `just check` stays fast and actionable — developers aren't blocked by upstream stdlib patches
-- Positive: Vulnerability scanning is still available on demand
-- Negative: Vulncheck isn't enforced automatically — requires discipline to run periodically
-- Negative: Vulnerabilities could ship if nobody remembers to check
+- Zero external dependencies — works on any system with grep
+- Simpler hook script (one pipeline vs JSON extraction)
+- Theoretically could match `git commit` in unrelated JSON fields, but practically this never happens in Claude Code's hook payload
+- If JSON structure changes or payloads grow more complex, grep becomes less reliable than structured parsing
 
 ---
 
-## ADR-8: Clean Rename Over Backward-Compat Alias Pre-GA
+## ADR-8: Intentional Documentation Over Automatic Session Capture
 
-**Context:** The `exec-summary` template was renamed to `standup` for better discoverability. Options: clean rename (breaking change) or keep `exec-summary` as an alias alongside the new name.
+**Context:** Entire.io launched with automatic session capture — recording everything an agent does. Timbers needed to define its positioning in this emerging space. The fork: capture everything automatically, or require intentional documentation of design decisions.
 
-**Decision:** Clean break, no alias. Pre-GA project with low usage means backward compatibility adds complexity for no real benefit. Aliases accumulate maintenance cost and confuse documentation.
-
-**Consequences:**
-- Positive: Single canonical name — no confusion about which to use
-- Positive: No alias resolution code to maintain
-- Negative: Anyone using `exec-summary` in scripts breaks (mitigated by low pre-GA adoption)
-- Negative: Sets precedent that names can change before GA — users may hesitate to automate
-
----
-
-## ADR-9: PR Template Focused on Intent/Decisions Over Diff Summary
-
-**Context:** The `pr-description` template was at v3, producing summaries that largely restated the diff. Agents (and human reviewers) already read diffs directly, making diff summaries redundant. The question was what a PR description template should actually contain.
-
-**Decision:** Rewrote to v4, shifting focus to intent and design decisions. Since agents already review diffs, the template's value is in surfacing *why* changes were made and what trade-offs were considered — information not visible in the code itself.
+**Decision:** Positioned Timbers as intentional documentation — structured `what/why/how` records written deliberately, not automatic session transcripts. The landing page and messaging emphasize this contrast.
 
 **Consequences:**
-- Positive: PR descriptions carry information that complements rather than duplicates the diff
-- Positive: Leverages timbers' unique strength — the why/notes fields that diffs don't capture
-- Negative: Requires richer ledger entries to produce good output (garbage in, garbage out)
-- Negative: Reviewers accustomed to "what changed" summaries may initially find the format unfamiliar
+- Entries contain curated design decisions rather than raw session noise
+- Requires user/agent effort to write entries — adoption depends on the value being worth the friction
+- Produces higher signal-to-noise for downstream consumers (changelogs, ADRs, standups)
+- Cannot capture decisions that users forget to document — no safety net of automatic recording
+- Competitive differentiation is clear but requires ongoing messaging to maintain

@@ -1,6 +1,6 @@
 +++
 title = 'Pr Description'
-date = '2026-02-27'
+date = '2026-02-28'
 tags = ['example', 'pr-description']
 +++
 
@@ -10,36 +10,35 @@ Generated with `timbers draft pr-description --last 20 | claude -p --model opus`
 
 ## Why
 
-Polish pass from v0.9.0 through v0.10.2+: fix dark terminal visibility, eliminate broken hooks, close workflow gaps (auto-commit entries, stale anchor handling), and harden the generation pipeline. The common thread is removing friction — invisible text, manual steps, silent failures, and confusing edge cases that accumulated as features shipped.
+This batch covers v0.9.0 through v0.11.0-dev: terminal color visibility fixes, hook reliability rework, auto-commit for `timbers log`, template improvements, and a marketing landing page. The thread connecting most changes is reducing friction in the agent workflow — invisible colors, broken hooks, and manual commit steps were all silent failures that eroded trust in the tool.
 
 ## Design Decisions
 
-- **PostToolUse hook removed rather than fixed.** Diagnosed that `$TOOL_INPUT` is always empty (stdin, not env vars). Fixed stdin reading first, then removed PostToolUse entirely — Claude Code doesn't surface hook stdout, and the existing `Stop` hook covers the same case via `timbers pending` at session end.
-- **Actionable warnings over anchor-reset command for stale anchors.** After squash merges, the anchor self-heals on next `timbers log`. Messaging alone is sufficient; an explicit reset command would add surface area for a transient problem.
-- **`exec-summary` renamed to `standup` with no alias.** Pre-GA project with low usage — backward compat adds complexity for no real benefit. Clean break.
-- **PR description template rewritten for agent-era review.** Agents already read diffs; the template now focuses on intent, trade-offs, and reviewer attention — questions diffs don't answer.
-- **Auto-commit scoped via pathspec (`-- <path>`).** The staged-but-uncommitted gap confused users, but sweeping other staged files into a timbers commit would be dangerous. Pathspec commit eliminates the manual step safely.
-- **`AdaptiveColor` + `--color` flag over full theme config.** Color 8 (bright black) invisible on Solarized Dark. Considered env vars and config files but deferred — `AdaptiveColor` + explicit flag covers 95% of cases without maintenance burden.
-- **Check-before-generate for devblog CI.** Empty entry sets invoked the LLM, which generated apology posts. Gating on entry count is cheaper and cleaner than teaching the LLM to refuse.
-- **`govulncheck` kept separate from `just check`.** Not in golangci-lint, needs its own tool dep. Separate recipe avoids blocking CI on stdlib patches.
-- **Doctor generation check shows env var names, not provider labels.** Users need to know exactly what to set. CI hint omits CLI suggestion since CI uses API keys.
-- **Pipe-first generation defaults** (`timbers draft ... | claude -p --model opus`) match subscription users and avoid API token costs.
+- **Actionable warnings over anchor-reset command** for stale anchors after squash merges. The anchor self-heals on next `timbers log`, so messaging alone is sufficient — an explicit reset command would add surface area for a transient problem.
+- **Removed `PostToolUse` hook entirely** rather than fixing it. Hook fires correctly and reads stdin, but Claude Code doesn't surface stdout from PostToolUse. The existing `Stop` hook already covers the same case (`timbers pending` at session end) with visible output.
+- **Pathspec-scoped auto-commit** (`git commit -- <path>`) in `timbers log` to close the staged-but-uncommitted gap. Considered a separate branch (like beads/entire.io) but entries must be filesystem-visible for `timbers prime`/`draft` without worktree indirection.
+- **`exec-summary` renamed to `standup`** with no backward-compat alias — pre-GA project with low usage, alias complexity isn't worth it.
+- **PR description template rewritten around intent/decisions** rather than diff summaries, since agents already review diffs. Reviewers need the "why" that code doesn't carry.
+- **`AdaptiveColor` + `--color` flag** over full theme config (env vars, config files). Covers 95% of terminal compatibility cases without maintenance burden. Lipgloss `HasDarkBackground()` deferred to a future pass.
+- **Check-before-generate** for empty devblog entries rather than teaching the LLM to refuse — cheaper and deterministic vs. probabilistic refusal.
+- **`grep` on raw stdin JSON** for hook commit detection rather than `jq`-based parsing. Simpler, no dependencies, negligible false-positive risk for matching `git commit`.
+- **Pipe-first generation defaults** (`timbers draft <template> | claude -p --model opus`) match subscription users. Doctor generation check shows env var names, not provider labels, so users know exactly what to set.
 
 ## Risk & Reviewer Attention
 
-- **Hook upgrade logic** in `claude_parse.go`: `hasExactHookCommand` detects stale vs current hooks, `removeTimbersHooksFromEvent` cleans before re-adding. Old skip-if-any-exists behavior left broken hooks in place forever — verify the replacement path handles partial states.
-- **`GitCommitFunc` injection** in `FileStorage` for auto-commit: confirm pathspec scoping prevents accidental inclusion of unrelated staged files.
-- **`retiredEvents` cleanup**: retired hooks are removed on upgrade. Verify this doesn't break users who haven't upgraded yet or who have custom hooks on the same events.
-- **`ResolveColorMode`** plumbed through all `NewPrinter` call sites — any missed call site would ignore `--color`.
+- **`GitCommitFunc` injection in `FileStorage`** (`internal/ledger/storage.go`) — the auto-commit scopes to the entry file via pathspec (`--`), but verify it can't sweep other staged files into the timbers commit.
+- **Retired event cleanup** in hook setup — `retiredEvents` list removes `PostToolUse` on upgrade. Confirm the removal logic (`removeTimbersHooksFromEvent`) doesn't affect other plugins sharing the same hook event.
+- **`hasExactHookCommand` upgrade detection** — replaces the old skip-if-any-exists behavior that left broken hooks in place. Edge case: users who manually edited hook commands may get unexpected replacements.
+- **Landing page uses Tailwind Play CDN and GSAP ScrollTrigger** — fine for a project site but these are runtime dependencies loaded from CDN on every page view.
 
 ## Scope
 
-Touches CLI commands (`log`, `prime`, `doctor`), output/color layer, hook management (`setup/`), draft templates, CI workflows (`devblog.yml`), the Hugo landing page, and site content. Core ledger storage and entry schema unchanged. Template engine unchanged — only template content revised.
+Broad cross-cutting change touching CLI commands (`--color` flag plumbed through all `NewPrinter` call sites), hook setup/teardown, ledger storage (auto-commit), draft templates, prime workflow coaching, CI workflows, and the Hugo site (landing page, examples, terminal block fixes). Core query/export/show paths are untouched.
 
 ## Test Plan
 
-- `just check` (lint + test) must pass — covers auto-commit injection, hook detection, color resolution, and entry validation.
-- Integration tests in `internal/integration/` exercise the log-pending cycle with auto-commit.
-- Verify `timbers doctor` output in both terminal and `--json` modes for generation check.
-- Manual: run `timbers prime` after a squash merge to confirm stale anchor warning renders correctly.
-- Manual: `timbers log` on a dark terminal with `--color=auto` to confirm `AdaptiveColor` picks visible colors.
+- `just check` — lint and test suite covers `GitCommitFunc` injection, hook detection/upgrade logic, and color mode resolution.
+- Verify `timbers log` auto-commits entry file without sweeping staged changes.
+- Test `--color never/auto/always` on both light and dark terminals.
+- Run `timbers doctor` to confirm generation check detects CLI vs API key availability.
+- `timbers prime` in a repo with a stale anchor (post-squash-merge) should warn, not error.

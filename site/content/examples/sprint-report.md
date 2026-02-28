@@ -1,6 +1,6 @@
 +++
 title = 'Sprint Report'
-date = '2026-02-27'
+date = '2026-02-28'
 tags = ['example', 'sprint-report']
 +++
 
@@ -8,52 +8,48 @@ Generated with `timbers draft sprint-report --last 20 | claude -p --model opus`
 
 ---
 
-## Sprint Report: Feb 13–28, 2026
+## Sprint Report: Feb 13–28
 
 ### Summary
 
-Three releases shipped (v0.10.0, v0.10.1, v0.10.2) on top of the v0.9.0 coaching rewrite, delivering terminal color compatibility, auto-commit for `timbers log`, and a marketing landing page. The hook system saw a fix-then-remove cycle after discovering Claude Code doesn't surface `PostToolUse` stdout. Late-sprint work revised draft templates and added a `doctor` generation check.
+Three releases shipped (v0.10.0, v0.10.1, v0.10.2) on top of the v0.9.0 coaching rewrite, delivering terminal color compatibility, auto-commit for entry files, and stale anchor handling. Substantial work went into a marketing landing page and site refresh. The PostToolUse hook was fixed, then removed entirely after discovering Claude Code doesn't surface its stdout.
 
 ### By Category
 
-**CLI Features**
-- `--color` flag (`never/auto/always`) plumbed through all `NewPrinter` call sites for terminals that don't report color schemes
-- `timbers log` now auto-commits the entry file via pathspec-scoped `git commit`, eliminating the staged-but-uncommitted gap
-- `doctor` gained a generation readiness check — detects `claude` CLI and LLM API keys, shows env var names (not provider labels)
-- Renamed `exec-summary` template to `standup`; rewrote `pr-description` to focus on intent/decisions over diff rehash
-- Added pipe-first generation defaults and `CLAUDECODE=` workaround for nested session guards
+**Terminal & Color**
+- Added global `--color` flag (`never/auto/always`) plumbed through all `NewPrinter` call sites — Solarized Dark users couldn't read dim text
+- Replaced hardcoded `lipgloss.Color` with `AdaptiveColor` across `output.go`, `doctor.go`, `init.go`, `uninstall.go`
 
-**Terminal Compatibility**
-- Replaced all hardcoded `lipgloss.Color(8)` with `AdaptiveColor` — bright black was invisible on Solarized Dark
-- `--color` flag gives users explicit override since terminals don't reliably report dark/light
+**Workflow & Core**
+- Auto-commit entry files in `timbers log` via pathspec-scoped `git commit` — eliminated the staged-but-uncommitted gap that confused users
+- Added PII/content safety coaching to `prime` workflow output
+- Renamed `exec-summary` template to `standup`, rewrote `pr-description` to focus on intent/decisions, added `checkGeneration` to `doctor`
 
 **Hook System**
 - Fixed `PostToolUse` hook to read stdin instead of empty `$TOOL_INPUT` env var (broken since creation)
-- Then removed `PostToolUse` entirely — Claude Code doesn't surface hook stdout, so `Stop` hook covers the same check
-- Added retired event cleanup so upgrades remove stale hooks automatically
+- Then removed `PostToolUse` entirely — Claude Code doesn't surface hook stdout, so the `Stop` hook covers the same case
+- Added retired event cleanup logic for upgrades
 
 **Stale Anchor Handling**
-- Fixed `ErrStaleAnchor` handling in `prime` that produced confusing output after squash merges
-- Added actionable warnings and coaching section — self-healing behavior makes an explicit reset command unnecessary
+- Fixed `ErrStaleAnchor` handling in `prime`, improved warning messages, added coaching section — chose actionable warnings over an explicit reset command since anchors self-heal
+
+**CI & Automation**
+- Gated devblog generation on entry count > 0 — empty entries were producing LLM "apology posts"
+- Added `govulncheck` as separate `just vulncheck` recipe; automated landing page version updates in `just release`
+- Documented `CLAUDECODE=` workaround for piping through `claude -p` from agent sessions
 
 **Site & Marketing**
-- Built marketing landing page: dark theme, GSAP animations, terminal-styled code blocks (positioned against Entire.io)
-- Polished terminal blocks — left-aligned bodies, continuation indent, wider quick start container
-- Updated landing page to v0.10.0; added auto-version-bump in `just release`
-- Regenerated all four site examples from a 69-entry ledger
-
-**CI & Tooling**
-- `govulncheck` added as separate recipe (not gating `just check` to avoid blocking on stdlib patches)
-- Devblog workflow now skips generation when no entries exist — previously invoked the LLM which produced apology posts
-- Deleted 10 blank posts from that bug
+- Built marketing landing page: dark theme, Tailwind + GSAP animations, terminal-styled code blocks
+- Polished terminal block alignment, widened quick start container, swapped in real entry example
+- Updated landing page to v0.10.0, regenerated all four site examples from 69-entry ledger
 
 **Releases**
-- **v0.9.0**: Coaching rewrite (motivated rules, concrete notes triggers, XML structure)
-- **v0.10.0**: `--color` flag, auto-commit, content safety coaching, hook fix, landing page
-- **v0.10.1**: `PostToolUse` removal, site refresh
-- **v0.10.2**: Stale anchor fix
+- v0.9.0 — coaching rewrite (motivated rules, concrete notes triggers, XML structure)
+- v0.10.0 — `--color` flag, auto-commit, content safety, hook fix
+- v0.10.1 — PostToolUse removal, site refresh
+- v0.10.2 — stale anchor fix
 
 ### Highlights
 
-- **The `PostToolUse` arc** is a good case study: the hook was silently broken from day one (`$TOOL_INPUT` always empty), got properly fixed to read stdin, then got removed entirely two days later when it turned out Claude Code swallows hook stdout anyway. The `Stop` hook already covered the use case.
-- **Landing page launch** — first public-facing marketing surface beyond the README, deliberately positioned opposite Entire.io's automatic capture approach.
+- **The PostToolUse arc**: fixed a hook that had been silently broken since creation, then removed it entirely one session later when the underlying platform limitation made it pointless. Good example of investigating before piling on workarounds.
+- **Landing page launch**: first public-facing marketing surface beyond the README, positioned against Entire.io's automatic capture with timbers' intentional documentation angle.
