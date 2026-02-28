@@ -65,7 +65,7 @@ The `draft` command renders templates with your ledger entries, producing change
 # Pipe to any LLM CLI (uses your subscription, not API tokens)
 timbers draft changelog --since 7d | claude -p --model opus
 timbers draft standup --since 1d | gemini
-timbers draft pr-description --range main..HEAD | codex exec -
+timbers draft pr-description --range main..HEAD | codex exec -m gpt-5-codex-mini -
 
 # Built-in LLM execution (for CI/CD or when no CLI is available)
 timbers draft standup --last 10 --model opus
@@ -78,7 +78,7 @@ timbers draft --list
 
 The decision-log template is particularly valuable — it extracts the *why* behind each change into an architectural decision record, enriched by `--notes` when agents capture their deliberation process. No other tool produces this from structured commit data.
 
-**Model guidance:** Use `opus` for best output quality. For local generation, pipe to your LLM CLI of choice — `claude -p`, `gemini`, or `codex exec -` — which uses your subscription instead of API tokens. For CI/CD, use `--model opus` with an API key. For high-volume batch operations (e.g., `catchup` over hundreds of commits), `haiku` or `local` models offer a lower-cost alternative.
+**Model guidance:** Use `opus` for best output quality. For local generation, pipe to your LLM CLI of choice (`claude -p`, `gemini`, `codex exec`) — this uses your subscription instead of API tokens. For CI/CD, use `--model opus` with an API key. For high-volume batch operations (e.g., `catchup` over hundreds of commits), `haiku` or `local` models offer a lower-cost alternative.
 
 ## Configuration
 

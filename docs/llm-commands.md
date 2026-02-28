@@ -295,7 +295,7 @@ timbers draft standup --since 1d | gemini -m gemini-2.5-pro
 
 # Codex CLI (exec - reads prompt from stdin, -m selects model)
 timbers draft pr-description --range main..HEAD | codex exec -
-timbers draft pr-description --range main..HEAD | codex -m gpt-5-codex-mini exec -
+timbers draft pr-description --range main..HEAD | codex exec -m gpt-5-codex-mini -
 ```
 
 ### Pattern 2: Built-in LLM Execution

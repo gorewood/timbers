@@ -336,7 +336,7 @@ timbers draft devblog --last 20 --append "Focus on the new plugin system" | clau
 timbers draft standup --since 1d | gemini
 
 # Codex CLI (exec - reads prompt from stdin)
-timbers draft pr-description --range main..HEAD | codex exec -
+timbers draft pr-description --range main..HEAD | codex exec -m gpt-5-codex-mini -
 
 # Or use built-in LLM execution (requires API key, no CLI needed)
 timbers draft changelog --since 7d --model local
