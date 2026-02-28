@@ -15,6 +15,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+
+## [0.12.1] - 2026-02-28
+
+### Added
+- Added `draft --models` flag for self-service LLM provider and API key discovery
+- Added multi-CLI piping documentation for Codex and Gemini alongside Claude
+- Added `notes` field to site landing page marketing content
+- Added static example generation for dense date ranges to avoid redundant LLM calls
+
+### Changed
+- Split site example generation into dynamic (per-release) and static (fixed date range) justfile recipes
+- Replaced `declare -A` with parallel arrays in example recipes for macOS bash 3.2 compatibility
+- Updated standup examples to use `--since 1d`
+- Bumped `go-sdk` to v1.3.1 for CVE-2026-27896 (case-insensitive JSON parsing)
+
+### Fixed
+- Fixed mutable map exposure in `ProviderInfos()` via `maps.Copy`
+- Removed leaked LLM commentary and duplicate sections from `CHANGELOG.md` and site examples
+
+
 ## [0.12.0] - 2026-02-28
 
 ### Added
@@ -292,3 +313,4 @@ Initial public release.
 [0.10.2]: https://github.com/gorewood/timbers/releases/tag/v0.10.2
 [0.11.0]: https://github.com/gorewood/timbers/releases/tag/v0.11.0
 [0.12.0]: https://github.com/gorewood/timbers/releases/tag/v0.12.0
+[0.12.1]: https://github.com/gorewood/timbers/releases/tag/v0.12.1

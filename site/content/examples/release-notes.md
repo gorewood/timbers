@@ -10,25 +10,28 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ## New Features
 
-- You can now control terminal colors with `--color never|auto|always` — helpful if dim text was hard to read on your terminal theme
-- `timbers log` now auto-commits the entry file, so you no longer need a separate `git add` and `git commit` step
-- `timbers draft --models` shows which AI providers are available and whether their API keys are configured
-- `timbers doctor` now checks your draft generation setup — it tells you which CLI tools and API keys are ready for `timbers draft` piping
-- You can now pipe `timbers draft` output to Gemini CLI and Codex CLI in addition to Claude
+- You can now control terminal colors with `--color never|auto|always` — helpful if your theme makes text hard to read
+- `timbers log` now auto-commits the entry file for you, so there's no extra `git add` and `git commit` step after recording work
+- `timbers draft --models` shows which LLM providers are available and whether your API keys are configured
+- `timbers doctor` now checks whether you have content generation set up (CLI tools or API keys) and tells you exactly what to configure
+- `timbers prime` now includes content safety reminders — entries are git-committed and potentially public, so the workflow coaching helps you avoid accidentally including secrets or personal data
+- You can now pipe `timbers draft` output to Codex and Gemini CLIs in addition to Claude — documented with verified syntax for each
 
 ## Improvements
 
-- The `exec-summary` template is now called `standup` — easier to remember (`timbers draft standup`)
-- The `pr-description` template focuses on intent and design decisions instead of rehashing diffs
-- Agents are now coached to keep secrets, API keys, and personal data out of ledger entries
-- Stale hooks from older versions are automatically cleaned up on upgrade
+- Terminal colors now adapt automatically to dark and light backgrounds, so dim text is readable on both
+- The `exec-summary` template has been renamed to `standup` for easier discovery — use `timbers draft standup`
+- The `pr-description` template now focuses on intent and decisions rather than repeating the diff
+- Example recipes work on macOS default bash (3.2) without needing bash 4+
+- Piping workflow guidance in `timbers prime` updated with clearer instructions
 
 ## Bug Fixes
 
-- Colors now adapt to dark terminal backgrounds — dim text is no longer invisible on themes like Solarized Dark
-- `timbers prime` now handles stale anchors gracefully after squash merges, instead of showing confusing errors
-- Fixed the post-commit reminder hook, which had been silently broken since it was first created
+- Fixed text being invisible on dark terminal themes like Solarized Dark
+- Fixed `timbers prime` crashing on stale anchors after squash merges — you now get a clear warning with guidance instead
+- Fixed a security vulnerability in a dependency (CVE-2026-27896)
+- Cleaned up generated changelog content that occasionally included LLM processing artifacts
 
 ## Breaking Changes
 
-- The `exec-summary` template has been renamed to `standup` — update any scripts that reference the old name
+- `timbers draft exec-summary` is now `timbers draft standup` — the old name no longer works
