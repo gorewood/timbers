@@ -21,7 +21,7 @@ timbers log "Fixed auth bypass" \
 timbers draft decision-log --last 20 --model opus
 ```
 
-**[Website](https://gorewood.github.io/timbers/)** · **[Dev Blog](https://gorewood.github.io/timbers/posts/)**
+**[Website](https://gorewood.github.io/timbers/)** · **[Tutorial](docs/tutorial.md)** · **[Examples](https://gorewood.github.io/timbers/examples/)** · **[Dev Blog](https://gorewood.github.io/timbers/posts/)**
 
 ## Installation
 

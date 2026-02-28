@@ -138,7 +138,12 @@ examples:
     #!/usr/bin/env bash
     set -euo pipefail
     DATE=$(date +%Y-%m-%d)
-    EXAMPLES=("standup" "pr-description" "release-notes" "sprint-report" "decision-log")
+    # Dynamic examples: regenerated each release to stay fresh
+    declare -A RANGES=(
+        [release-notes]="--last 20"
+        [decision-log]="--last 20"
+    )
+    EXAMPLES=("release-notes" "decision-log")
     PIDS=()
     NAMES=()
     for tmpl in "${EXAMPLES[@]}"; do
@@ -147,10 +152,11 @@ examples:
             echo "Skipping $tmpl (already modified)"
             continue
         fi
-        echo "Generating $tmpl..."
+        RANGE="${RANGES[$tmpl]}"
+        echo "Generating $tmpl ($RANGE)..."
         (
             TITLE=$(echo "$tmpl" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
-            CONTENT=$(go run ./cmd/timbers draft "$tmpl" --last 20 | claude -p --model opus)
+            CONTENT=$(go run ./cmd/timbers draft "$tmpl" $RANGE | claude -p --model opus)
             {
                 printf '+++\n'
                 echo "title = '${TITLE}'"
@@ -158,7 +164,7 @@ examples:
                 echo "tags = ['example', '$tmpl']"
                 printf '+++\n'
                 echo ""
-                echo "Generated with \`timbers draft $tmpl --last 20 | claude -p --model opus\`"
+                echo "Generated with \`timbers draft $tmpl $RANGE | claude -p --model opus\`"
                 echo ""
                 echo "---"
                 echo ""
@@ -181,7 +187,62 @@ examples:
         echo "Some examples failed. Re-run to retry only the failed ones."
         exit 1
     fi
-    echo "Done. Changelog example is managed by 'just release' separately."
+    echo "Done. Static examples (standup, pr-description, sprint-report) are managed by 'just examples-static'."
+
+# Regenerate static examples from a known-good date range (one-time, not per-release)
+examples-static:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    DATE=$(date +%Y-%m-%d)
+    # Static examples use a fixed date range with dense, high-quality entries (Feb 10-14 2026)
+    declare -A TEMPLATES=(
+        [standup]="--since 2026-02-13 --until 2026-02-13"
+        [pr-description]="--since 2026-02-10 --until 2026-02-11"
+        [sprint-report]="--since 2026-02-10 --until 2026-02-14"
+    )
+    PIDS=()
+    NAMES=()
+    for tmpl in "${!TEMPLATES[@]}"; do
+        FILE="site/content/examples/${tmpl}.md"
+        if [ -f "$FILE" ] && ! git diff --quiet -- "$FILE" 2>/dev/null; then
+            echo "Skipping $tmpl (already modified)"
+            continue
+        fi
+        RANGE="${TEMPLATES[$tmpl]}"
+        echo "Generating $tmpl ($RANGE)..."
+        (
+            TITLE=$(echo "$tmpl" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
+            CONTENT=$(go run ./cmd/timbers draft "$tmpl" $RANGE | claude -p --model opus)
+            {
+                printf '+++\n'
+                echo "title = '${TITLE}'"
+                echo "date = '${DATE}'"
+                echo "tags = ['example', '$tmpl']"
+                printf '+++\n'
+                echo ""
+                echo "Generated with \`timbers draft $tmpl $RANGE | claude -p --model opus\`"
+                echo ""
+                echo "---"
+                echo ""
+                echo "$CONTENT"
+            } > "site/content/examples/${tmpl}.md"
+            echo "Done: $tmpl"
+        ) &
+        PIDS+=($!)
+        NAMES+=("$tmpl")
+    done
+    FAILED=0
+    for i in "${!PIDS[@]}"; do
+        if ! wait "${PIDS[$i]}"; then
+            echo "FAILED: ${NAMES[$i]}"
+            FAILED=1
+        fi
+    done
+    if [ "$FAILED" -eq 1 ]; then
+        echo "Some examples failed. Re-run to retry only the failed ones."
+        exit 1
+    fi
+    echo "Done. Run 'just examples' for dynamic examples (release-notes, decision-log)."
 
 # =============================================================================
 # RELEASE (goreleaser)
