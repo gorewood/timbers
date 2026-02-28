@@ -2,6 +2,7 @@ package main
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/gorewood/timbers/internal/llm"
 	"github.com/gorewood/timbers/internal/output"
@@ -55,13 +56,7 @@ func sortedAliases(aliases map[string]string) [][2]string {
 		pairs = append(pairs, [2]string{alias, model})
 	}
 	slices.SortFunc(pairs, func(a, b [2]string) int {
-		if a[0] < b[0] {
-			return -1
-		}
-		if a[0] > b[0] {
-			return 1
-		}
-		return 0
+		return strings.Compare(a[0], b[0])
 	})
 	return pairs
 }

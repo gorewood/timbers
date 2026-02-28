@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"strings"
@@ -297,11 +298,13 @@ type ProviderInfo struct {
 func ProviderInfos() []ProviderInfo {
 	providers := []Provider{ProviderAnthropic, ProviderOpenAI, ProviderGoogle, ProviderLocal}
 	infos := make([]ProviderInfo, 0, len(providers))
-	for _, p := range providers {
+	for _, provider := range providers {
+		aliases := make(map[string]string, len(modelAliases[provider]))
+		maps.Copy(aliases, modelAliases[provider])
 		infos = append(infos, ProviderInfo{
-			Name:    string(p),
-			EnvVar:  envVarForProvider[p],
-			Aliases: modelAliases[p],
+			Name:    string(provider),
+			EnvVar:  envVarForProvider[provider],
+			Aliases: aliases,
 		})
 	}
 	return infos
