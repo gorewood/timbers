@@ -97,12 +97,12 @@ Group commits that represent coherent pieces of work—a feature, a refactor, a 
 
 ```bash
 # Example: Document a feature that spans commits abc123 to def456
-timbers log "Added user authentication system" \
-  --why "Users needed secure login before accessing paid features" \
-  --how "JWT tokens with refresh flow, bcrypt password hashing, middleware guard" \
+timbers log "Switched to cursor-based pagination" \
+  --why "Offset pagination skips rows when items are inserted between pages" \
+  --how "Opaque cursor tokens encoding created_at + id" \
   --anchor def456 \
   --range abc123..def456 \
-  --tag auth --tag security
+  --tag api --tag performance
 ```
 
 **Step 4: Repeat for each logical phase**

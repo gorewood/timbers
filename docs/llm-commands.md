@@ -71,7 +71,7 @@ timbers draft changelog --show
 
 # Built-in LLM execution (no piping needed)
 timbers draft changelog --since 7d --model local
-timbers draft standup --last 10 --model haiku
+timbers draft standup --since 1d --model haiku
 timbers draft devblog --last 20 --model flash --append "Focus on physics"
 ```
 

@@ -77,10 +77,10 @@ Record work as a ledger entry
 
 **Examples**:
 ```bash
-timbers log "Added auth" --why "JWT chosen over session cookies for stateless scaling" --how "JWT with refresh flow"
+timbers log "Switched to cursor pagination" --why "Offset skips rows on concurrent inserts" --how "Cursor tokens with created_at + id"
 timbers log "Fix" --why "Race condition in cache" --how "Added mutex" --tag bugfix
-timbers log "Refactored auth" --why "Middleware over decorator for route coverage" --how "Extracted to middleware" \
-  --notes "Decorator approach missed 3 routes. Middleware catches all by default."
+timbers log "Added write-through caching" --why "Read-aside served stale data after writes" --how "Cache update in same transaction" \
+  --notes "Write-behind was faster but risks data loss on crash. Consistency wins."
 ```
 
 ### pending
@@ -200,7 +200,7 @@ Render templates with ledger entries for LLM consumption or direct execution
 **Examples**:
 ```bash
 timbers draft changelog --since 7d | claude -p
-timbers draft standup --last 10 --model haiku
+timbers draft standup --since 1d --model haiku
 timbers draft decision-log --last 20
 ```
 
