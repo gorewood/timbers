@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+
+## [0.12.2] - 2026-03-02
+
+### Fixed
+
+- Fixed `timbers pending` treating all pre-timbers commit history as undocumented work in new installations
+- Fixed `timbers doctor` reporting false warnings about pending commits when no ledger entries exist yet
+
+### Changed
+
+- `timbers pending` and `timbers doctor` now detect first-use state (no entries) at the display layer and show a friendly onboarding message instead of listing every historical commit
+- Added `status` field to `timbers pending --json` output to distinguish `pending`, `clean`, and `no_entries` states
+- `timbers init` now suggests running `timbers log --batch` to document recent work as a catchup tip
+
+
 ## [0.12.1] - 2026-02-28
 
 ### Added
@@ -302,3 +318,4 @@ Initial public release.
 [0.11.0]: https://github.com/gorewood/timbers/releases/tag/v0.11.0
 [0.12.0]: https://github.com/gorewood/timbers/releases/tag/v0.12.0
 [0.12.1]: https://github.com/gorewood/timbers/releases/tag/v0.12.1
+[0.12.2]: https://github.com/gorewood/timbers/releases/tag/v0.12.2
