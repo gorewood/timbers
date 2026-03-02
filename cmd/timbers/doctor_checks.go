@@ -96,12 +96,23 @@ func checkPendingCommits() checkResult {
 			Message: "could not check: " + storageErr.Error(),
 		}
 	}
-	commits, _, err := storage.GetPendingCommits()
+	commits, latest, err := storage.GetPendingCommits()
 	if err != nil {
 		return checkResult{
 			Name:    "Pending Commits",
 			Status:  checkWarn,
 			Message: "could not check pending commits: " + err.Error(),
+		}
+	}
+
+	// No entries yet — fresh install, not a problem
+	if latest == nil {
+		return checkResult{
+			Name:    "Pending Commits",
+			Status:  checkPass,
+			Message: "tracking starts with your first timbers log",
+			Hint: "Have existing history? 'timbers catchup' can backfill, " +
+				"but entries from commits alone are shallow. Most teams skip it.",
 		}
 	}
 
@@ -146,9 +157,8 @@ func checkRecentEntries() checkResult {
 	if count == 0 {
 		return checkResult{
 			Name:    "Recent Entries",
-			Status:  checkWarn,
-			Message: "no ledger entries found",
-			Hint:    "Run 'timbers log' to create your first entry",
+			Status:  checkPass,
+			Message: "no entries yet — tracking starts with your first timbers log",
 		}
 	}
 

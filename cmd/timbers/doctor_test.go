@@ -341,6 +341,75 @@ func TestCheckGeneration(t *testing.T) {
 	})
 }
 
+func TestDoctorNoEntriesShowsPass(t *testing.T) {
+	tempDir := t.TempDir()
+
+	runGit(t, tempDir, "init")
+	runGit(t, tempDir, "config", "user.email", "test@test.com")
+	runGit(t, tempDir, "config", "user.name", "Test User")
+
+	testFile := filepath.Join(tempDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test content"), 0o600); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	runGit(t, tempDir, "add", "test.txt")
+	runGit(t, tempDir, "commit", "-m", "Initial commit")
+
+	// Create .timbers dir so storage works, but no entries
+	timbersDir := filepath.Join(tempDir, ".timbers")
+	if err := os.MkdirAll(timbersDir, 0o755); err != nil {
+		t.Fatalf("failed to create .timbers dir: %v", err)
+	}
+
+	runInDir(t, tempDir, func() {
+		var buf bytes.Buffer
+
+		cmd := newTestRootCmdWithDoctor()
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"doctor", "--json"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command failed: %v", err)
+		}
+
+		var result map[string]any
+		if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+			t.Fatalf("failed to parse JSON: %v\nOutput: %s", err, buf.String())
+		}
+
+		// Check workflow checks
+		workflow, ok := result["workflow"].([]any)
+		if !ok {
+			t.Fatalf("workflow is not an array: %T", result["workflow"])
+		}
+
+		for _, item := range workflow {
+			check, checkOK := item.(map[string]any)
+			if !checkOK {
+				continue
+			}
+			name, _ := check["name"].(string)
+			status, _ := check["status"].(string)
+
+			switch name {
+			case "Pending Commits":
+				if status != "pass" {
+					t.Errorf("Pending Commits status = %q, want 'pass' (no entries yet)", status)
+				}
+				msg, _ := check["message"].(string)
+				if !strings.Contains(msg, "tracking starts") {
+					t.Errorf("Pending Commits message = %q, want to contain 'tracking starts'", msg)
+				}
+			case "Recent Entries":
+				if status != "pass" {
+					t.Errorf("Recent Entries status = %q, want 'pass' (no entries yet)", status)
+				}
+			}
+		}
+	})
+}
+
 func TestDoctorFixClaudeIntegration(t *testing.T) {
 	tempDir := t.TempDir()
 

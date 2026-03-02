@@ -40,6 +40,10 @@ func printNextSteps(printer *output.Printer, styles initStyleSet) {
 	printer.Println()
 	printer.Print("  3. %s\n", styles.dim.Render("Verify setup:"))
 	printer.Print("     %s\n", styles.accent.Render("timbers doctor"))
+	printer.Println()
+	printer.Print("Tip: %s\n", styles.dim.Render(
+		"Have existing history? Run 'timbers catchup' to backfill (optional)."),
+	)
 }
 
 // printStepResult prints a single step result in human format.

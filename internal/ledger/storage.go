@@ -182,7 +182,9 @@ func (s *Storage) GetLastNEntries(count int) ([]*Entry, error) {
 //   - latest: the latest entry by created_at (nil if no entries exist)
 //   - err: any error that occurred
 //
-// If no entries exist, returns all commits reachable from HEAD.
+// If no entries exist, returns all commits reachable from HEAD (latest will be nil).
+// Callers that display pending counts should check latest == nil to distinguish
+// "no entries yet" from "all caught up" and show appropriate messaging.
 func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 	head, err := s.git.HEAD()
 	if err != nil {
@@ -194,7 +196,8 @@ func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 		return nil, nil, latestErr
 	}
 
-	// If no entries exist, return all commits reachable from HEAD
+	// No entries yet — return all reachable commits with nil latest.
+	// Display callers (pending, doctor) check latest == nil to show friendly messaging.
 	if errors.Is(latestErr, ErrNoEntries) {
 		commits, reachErr := s.git.CommitsReachableFrom(head)
 		if reachErr != nil {

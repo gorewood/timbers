@@ -101,7 +101,7 @@ func TestPendingCommand(t *testing.T) {
 		wantNotContain []string
 	}{
 		{
-			name: "no entries - shows all reachable commits",
+			name: "no entries - shows friendly message instead of commit list",
 			mock: &mockGitOpsForPending{
 				head: "abc123def456",
 				reachableResult: []git.Commit{
@@ -110,9 +110,10 @@ func TestPendingCommand(t *testing.T) {
 					{SHA: "789012345678", Short: "7890123", Subject: "First commit"},
 				},
 			},
-			files:        nil,
-			wantCount:    3,
-			wantContains: []string{"Pending Commits", "Count: 3", "abc123d", "Third commit"},
+			files:          nil,
+			wantCount:      3,
+			wantContains:   []string{"No entries yet", "tracking starts with your first timbers log"},
+			wantNotContain: []string{"Pending Commits", "all work is documented", "abc123d"},
 		},
 		{
 			name: "has entry - shows commits since anchor",
@@ -145,12 +146,14 @@ func TestPendingCommand(t *testing.T) {
 			name: "count flag - shows count only",
 			mock: &mockGitOpsForPending{
 				head: "abc123def456",
-				reachableResult: []git.Commit{
+				commits: []git.Commit{
 					{SHA: "abc123def456", Short: "abc123d", Subject: "Third commit"},
 					{SHA: "def456789012", Short: "def4567", Subject: "Second commit"},
 				},
 			},
-			files:          nil,
+			files: func(t *testing.T) *ledger.FileStorage {
+				return writeEntries(t, makeEntry("oldanchor1234", time.Now().Add(-1*time.Hour)))
+			},
 			countOnly:      true,
 			wantCount:      2,
 			wantContains:   []string{"2"},
@@ -183,6 +186,19 @@ func TestPendingCommand(t *testing.T) {
 			jsonOutput:   true,
 			wantCount:    0,
 			wantContains: []string{`"count": 0`},
+		},
+		{
+			name: "json output - no entries includes status field",
+			mock: &mockGitOpsForPending{
+				head: "abc123def456",
+				reachableResult: []git.Commit{
+					{SHA: "abc123def456", Short: "abc123d", Subject: "Commit"},
+				},
+			},
+			files:        nil,
+			jsonOutput:   true,
+			wantCount:    0,
+			wantContains: []string{`"count": 0`, `"status": "no_entries"`},
 		},
 		{
 			name: "stale anchor - falls back with warning",

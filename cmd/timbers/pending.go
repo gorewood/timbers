@@ -140,14 +140,20 @@ func buildPendingResult(commits []git.Commit, latest *ledger.Entry) *pendingResu
 
 // outputPendingJSON outputs the result as JSON.
 func outputPendingJSON(printer *output.Printer, result *pendingResult) error {
+	// No entries yet — report clean state so agents detect fresh install.
+	if result.LastEntry == nil {
+		return printer.Success(map[string]any{
+			"count":   0,
+			"status":  "no_entries",
+			"commits": []commitSummary{},
+		})
+	}
+
 	data := map[string]any{
 		"count":   result.Count,
 		"commits": result.Commits,
 	}
-
-	if result.LastEntry != nil {
-		data["last_entry"] = result.LastEntry
-	}
+	data["last_entry"] = result.LastEntry
 
 	// Add suggested commands based on state
 	if result.Count > 0 {
@@ -161,7 +167,15 @@ func outputPendingJSON(printer *output.Printer, result *pendingResult) error {
 
 // outputPendingHuman outputs the result in human-readable format.
 func outputPendingHuman(printer *output.Printer, result *pendingResult, countOnly bool) {
-	// Handle no pending commits
+	// No entries yet — fresh install, show friendly message instead of
+	// dumping the entire pre-timbers history as "pending" work.
+	if result.LastEntry == nil {
+		printer.Println("No entries yet — tracking starts with your first timbers log.")
+		printer.Println("Tip: Run 'timbers catchup' to backfill existing history (optional).")
+		return
+	}
+
+	// Handle no pending commits (all caught up)
 	if result.Count == 0 {
 		printer.Println("No pending commits - all work is documented")
 		return
