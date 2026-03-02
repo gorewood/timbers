@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.13.0] - 2026-03-02
+
+### Added
+
+- Added `timbers hook run post-commit` command that prints a one-line reminder to run `timbers log` after commits
+- Added `timbers init --hooks` flag to install the post-commit git hook
+- Added `timbers doctor` check for post-commit hook presence, with `--fix` to auto-install it
+
+### Fixed
+
+- Fixed slice capacity mismatch (5→6) in post-commit hook setup
+- Added missing `IsRepo` guard to prevent hook operations outside git repositories
+
+### Technical
+
+- Added unit tests for hook `Generate`, `Check`, and `Install` functions
+- Added integration tests for `init --hooks` post-commit workflow
+
+
+
+
 ## [0.12.2] - 2026-03-02
 
 ### Fixed
@@ -319,3 +340,4 @@ Initial public release.
 [0.12.0]: https://github.com/gorewood/timbers/releases/tag/v0.12.0
 [0.12.1]: https://github.com/gorewood/timbers/releases/tag/v0.12.1
 [0.12.2]: https://github.com/gorewood/timbers/releases/tag/v0.12.2
+[0.13.0]: https://github.com/gorewood/timbers/releases/tag/v0.13.0
