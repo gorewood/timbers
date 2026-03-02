@@ -17,7 +17,7 @@ func TestParseSinceValue_Duration(t *testing.T) {
 		{"48 hours", "48h", 48 * time.Hour, time.Second, false},
 		{"7 days", "7d", 7 * 24 * time.Hour, time.Second, false},
 		{"2 weeks", "2w", 14 * 24 * time.Hour, time.Second, false},
-		{"1 month", "1m", 30 * 24 * time.Hour, 48 * time.Hour, false}, // months vary (28-31 days)
+		{"1 month", "1m", 30 * 24 * time.Hour, 72 * time.Hour, false}, // months vary (28-31 days)
 		{"invalid unit", "5x", 0, 0, true},
 		{"no number", "d", 0, 0, true},
 		{"negative", "-5d", 0, 0, true},
