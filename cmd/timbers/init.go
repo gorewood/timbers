@@ -36,6 +36,7 @@ type initState struct {
 	gitattributesHasEntry bool
 	hooksInstalled        bool
 	postRewriteInstalled  bool
+	postCommitInstalled   bool
 	agentEnvInstalled     bool // true if any agent env integration is present
 }
 
@@ -155,6 +156,9 @@ func gatherInitState() *initState {
 
 		postRewritePath := filepath.Join(hooksDir, "post-rewrite")
 		state.postRewriteInstalled = checkPostRewriteHook(postRewritePath)
+
+		postCommitPath := filepath.Join(hooksDir, "post-commit")
+		state.postCommitInstalled = setup.CheckPostCommitHookStatus(postCommitPath).Installed
 	}
 
 	state.agentEnvInstalled = len(setup.DetectedAgentEnvs()) > 0
@@ -273,7 +277,7 @@ func handleAlreadyInitialized(printer *output.Printer, styles initStyleSet, repo
 func isAlreadyInitialized(state *initState, flags *initFlags) bool {
 	return state.timbersDirExists &&
 		state.gitattributesHasEntry &&
-		(!flags.hooks || (state.hooksInstalled && state.postRewriteInstalled)) &&
+		(!flags.hooks || (state.hooksInstalled && state.postRewriteInstalled && state.postCommitInstalled)) &&
 		(flags.noAgent || state.agentEnvInstalled)
 }
 

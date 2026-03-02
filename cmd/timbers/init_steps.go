@@ -16,11 +16,12 @@ import (
 
 // buildDryRunSteps constructs the list of dry-run step results.
 func buildDryRunSteps(state *initState, flags *initFlags) []initStepResult {
-	steps := make([]initStepResult, 0, 5)
+	steps := make([]initStepResult, 0, 6)
 	steps = append(steps, buildTimbersDirStep(state))
 	steps = append(steps, buildGitattributesStep(state))
 	steps = append(steps, buildHooksStep(state, flags))
 	steps = append(steps, buildPostRewriteStep(state, flags))
+	steps = append(steps, buildPostCommitStep(state, flags))
 	steps = append(steps, buildAgentEnvStep(state, flags))
 	return steps
 }
@@ -65,6 +66,18 @@ func buildPostRewriteStep(state *initState, flags *initFlags) initStepResult {
 	}
 }
 
+// buildPostCommitStep creates the dry-run step for the post-commit hook.
+func buildPostCommitStep(state *initState, flags *initFlags) initStepResult {
+	switch {
+	case !flags.hooks:
+		return initStepResult{Name: "post_commit", Status: "skipped", Message: "not requested (use --hooks)"}
+	case state.postCommitInstalled:
+		return initStepResult{Name: "post_commit", Status: "skipped", Message: "already installed"}
+	default:
+		return initStepResult{Name: "post_commit", Status: "dry_run", Message: "would install post-commit hook"}
+	}
+}
+
 // buildAgentEnvStep creates the dry-run step for agent environment integration.
 func buildAgentEnvStep(state *initState, flags *initFlags) initStepResult {
 	switch {
@@ -91,6 +104,7 @@ func executeInitSteps(
 		func() initStepResult { return performGitattributesInit(state) },
 		func() initStepResult { return executeHooksStep(state, flags) },
 		func() initStepResult { return executePostRewriteStep(state, flags) },
+		func() initStepResult { return executePostCommitStep(state, flags) },
 		func() initStepResult { return executeAgentEnvStep(cmd, printer, styles, state, flags) },
 	} {
 		step := stepFn()
@@ -109,55 +123,6 @@ func executeHooksStep(state *initState, flags *initFlags) initStepResult {
 		return initStepResult{Name: "hooks", Status: "skipped", Message: "not requested (use --hooks)"}
 	}
 	return performHooksInstall(state)
-}
-
-// executePostRewriteStep runs the post-rewrite hook installation step.
-func executePostRewriteStep(state *initState, flags *initFlags) initStepResult {
-	if !flags.hooks {
-		return initStepResult{Name: "post_rewrite", Status: "skipped", Message: "not requested (use --hooks)"}
-	}
-	return performPostRewriteInstall(state)
-}
-
-// performPostRewriteInstall installs the post-rewrite hook for SHA remapping after rebase.
-func performPostRewriteInstall(state *initState) initStepResult {
-	if state.postRewriteInstalled {
-		return initStepResult{Name: "post_rewrite", Status: "skipped", Message: "already installed"}
-	}
-
-	hooksDir, err := setup.GetHooksDir()
-	if err != nil {
-		return initStepResult{Name: "post_rewrite", Status: "failed", Message: err.Error()}
-	}
-
-	hookPath := filepath.Join(hooksDir, "post-rewrite")
-	hookContent := generatePostRewriteHook()
-
-	existingHook := setup.HookExists(hookPath)
-	if existingHook {
-		// Read existing hook and append timbers section
-		existing, readErr := os.ReadFile(hookPath)
-		if readErr != nil {
-			return initStepResult{Name: "post_rewrite", Status: "failed", Message: readErr.Error()}
-		}
-		content := string(existing)
-		if !strings.HasSuffix(content, "\n") {
-			content += "\n"
-		}
-		content += "\n" + postRewriteTimbersSection()
-		// #nosec G306 -- hook needs execute permission
-		if err := os.WriteFile(hookPath, []byte(content), 0o755); err != nil {
-			return initStepResult{Name: "post_rewrite", Status: "failed", Message: err.Error()}
-		}
-		return initStepResult{Name: "post_rewrite", Status: "ok", Message: "installed (chained)"}
-	}
-
-	// #nosec G306 -- hook needs execute permission
-	if err := os.WriteFile(hookPath, []byte(hookContent), 0o755); err != nil {
-		return initStepResult{Name: "post_rewrite", Status: "failed", Message: err.Error()}
-	}
-
-	return initStepResult{Name: "post_rewrite", Status: "ok", Message: "installed"}
 }
 
 // executeAgentEnvStep runs the agent environment integration step.

@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,6 +71,75 @@ fi
 	}
 
 	return script
+}
+
+// GeneratePostCommitHook generates the post-commit hook script content.
+// The hook reminds users/agents to document their work after each commit.
+func GeneratePostCommitHook() string {
+	return `#!/bin/sh
+# timbers post-commit hook
+# Reminds you to document commits (non-blocking)
+
+if command -v timbers >/dev/null 2>&1; then
+  timbers hook run post-commit "$@"
+fi
+`
+}
+
+// CheckPostCommitHookStatus checks if a post-commit hook contains timbers integration.
+func CheckPostCommitHookStatus(hookPath string) HookStatus {
+	status := HookStatus{}
+
+	content, err := os.ReadFile(hookPath)
+	if err != nil {
+		return status
+	}
+
+	contentStr := string(content)
+	if strings.Contains(contentStr, "timbers hook run post-commit") {
+		status.Installed = true
+	}
+
+	return status
+}
+
+// InstallPostCommitHook installs the post-commit hook at the given path.
+// If a hook already exists, appends the timbers section. Returns nil on success.
+func InstallPostCommitHook(hookPath string) error {
+	if HookExists(hookPath) {
+		existing, err := os.ReadFile(hookPath)
+		if err != nil {
+			return fmt.Errorf("reading post-commit hook: %w", err)
+		}
+		content := string(existing)
+		if strings.Contains(content, "timbers hook run post-commit") {
+			return nil // already installed
+		}
+		if !strings.HasSuffix(content, "\n") {
+			content += "\n"
+		}
+		content += postCommitSection()
+		// #nosec G306 -- hook needs execute permission
+		if err := os.WriteFile(hookPath, []byte(content), 0o755); err != nil {
+			return fmt.Errorf("writing post-commit hook: %w", err)
+		}
+		return nil
+	}
+	// #nosec G306 -- hook needs execute permission
+	if err := os.WriteFile(hookPath, []byte(GeneratePostCommitHook()), 0o755); err != nil {
+		return fmt.Errorf("writing post-commit hook: %w", err)
+	}
+	return nil
+}
+
+// postCommitSection returns the timbers section to append to an existing hook.
+func postCommitSection() string {
+	return `
+# timbers post-commit hook
+if command -v timbers >/dev/null 2>&1; then
+  timbers hook run post-commit "$@"
+fi
+`
 }
 
 // BackupExistingHook moves an existing hook to a .backup location.

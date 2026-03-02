@@ -40,6 +40,8 @@ func runHookRun(cmd *cobra.Command, args []string) error {
 	switch hookName {
 	case "pre-commit":
 		return runPreCommitHook(cmd)
+	case "post-commit":
+		return runPostCommitHook(cmd)
 	default:
 		// Unknown hook - silently succeed to not block operations
 		return nil
@@ -83,5 +85,20 @@ func runPreCommitHook(cmd *cobra.Command) error {
 	printer.Println()
 
 	// Always succeed - this is a warning, not a blocker
+	return nil
+}
+
+// runPostCommitHook executes the post-commit hook logic.
+// It reminds users/agents to document the commit with timbers log.
+// This is non-blocking - it never returns an error.
+func runPostCommitHook(cmd *cobra.Command) error {
+	printer := output.NewPrinter(cmd.OutOrStdout(), false, useColor(cmd))
+
+	printer.Println(
+		"[timbers] document this commit — " +
+			"timbers log \"what\" --why \"why\" --how \"how\"",
+	)
+
+	// Always succeed - this is a nudge, not a blocker
 	return nil
 }
