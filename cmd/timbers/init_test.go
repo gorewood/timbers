@@ -687,6 +687,94 @@ func TestInitPostRewriteChainsExistingHook(t *testing.T) {
 	})
 }
 
+func TestInitPostCommitHook(t *testing.T) {
+	tempDir := t.TempDir()
+
+	runGit(t, tempDir, "init")
+	runGit(t, tempDir, "config", "user.email", "test@test.com")
+	runGit(t, tempDir, "config", "user.name", "Test User")
+
+	testFile := filepath.Join(tempDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test content"), 0o600); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	runGit(t, tempDir, "add", "test.txt")
+	runGit(t, tempDir, "commit", "-m", "Initial commit")
+
+	runInDir(t, tempDir, func() {
+		var buf bytes.Buffer
+
+		cmd := newTestRootCmdWithInit()
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"init", "--yes", "--hooks", "--no-claude", "--json"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command failed: %v\nOutput: %s", err, buf.String())
+		}
+
+		// Verify post-commit hook was created
+		hookPath := filepath.Join(tempDir, ".git", "hooks", "post-commit")
+		content, err := os.ReadFile(hookPath)
+		if err != nil {
+			t.Fatalf("post-commit hook not created: %v", err)
+		}
+		if !strings.Contains(string(content), "timbers hook run post-commit") {
+			t.Error("post-commit hook missing timbers command")
+		}
+	})
+}
+
+func TestInitPostCommitChainsExistingHook(t *testing.T) {
+	tempDir := t.TempDir()
+
+	runGit(t, tempDir, "init")
+	runGit(t, tempDir, "config", "user.email", "test@test.com")
+	runGit(t, tempDir, "config", "user.name", "Test User")
+
+	testFile := filepath.Join(tempDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test content"), 0o600); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	runGit(t, tempDir, "add", "test.txt")
+	runGit(t, tempDir, "commit", "-m", "Initial commit")
+
+	// Create an existing post-commit hook
+	hooksDir := filepath.Join(tempDir, ".git", "hooks")
+	hookPath := filepath.Join(hooksDir, "post-commit")
+	existingContent := "#!/bin/sh\necho 'existing post-commit'\n"
+	// #nosec G306 -- test hook needs execute permission
+	if err := os.WriteFile(hookPath, []byte(existingContent), 0o755); err != nil {
+		t.Fatalf("failed to create existing hook: %v", err)
+	}
+
+	runInDir(t, tempDir, func() {
+		var buf bytes.Buffer
+
+		cmd := newTestRootCmdWithInit()
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"init", "--yes", "--hooks", "--no-claude", "--json"})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command failed: %v\nOutput: %s", err, buf.String())
+		}
+
+		// Verify hook was chained (existing + timbers)
+		content, err := os.ReadFile(hookPath)
+		if err != nil {
+			t.Fatalf("failed to read hook: %v", err)
+		}
+		contentStr := string(content)
+		if !strings.Contains(contentStr, "existing post-commit") {
+			t.Error("existing hook content was lost")
+		}
+		if !strings.Contains(contentStr, "timbers hook run post-commit") {
+			t.Error("timbers section not appended")
+		}
+	})
+}
+
 func TestInitDryRunJSONSteps(t *testing.T) {
 	tempDir := t.TempDir()
 

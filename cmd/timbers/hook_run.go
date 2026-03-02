@@ -92,6 +92,10 @@ func runPreCommitHook(cmd *cobra.Command) error {
 // It reminds users/agents to document the commit with timbers log.
 // This is non-blocking - it never returns an error.
 func runPostCommitHook(cmd *cobra.Command) error {
+	if !git.IsRepo() {
+		return nil
+	}
+
 	printer := output.NewPrinter(cmd.OutOrStdout(), false, useColor(cmd))
 
 	printer.Println(

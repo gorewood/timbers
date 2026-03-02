@@ -97,7 +97,7 @@ func executeInitSteps(
 	cmd *cobra.Command, printer *output.Printer, styles initStyleSet,
 	state *initState, flags *initFlags,
 ) []initStepResult {
-	steps := make([]initStepResult, 0, 5)
+	steps := make([]initStepResult, 0, 6)
 
 	for _, stepFn := range []func() initStepResult{
 		func() initStepResult { return performTimbersDirInit(state) },

@@ -142,6 +142,131 @@ func TestCheckHookStatus(t *testing.T) {
 	})
 }
 
+func TestGeneratePostCommitHook(t *testing.T) {
+	got := GeneratePostCommitHook()
+	if !strings.HasPrefix(got, "#!/bin/sh") {
+		t.Error("expected shebang")
+	}
+	if !strings.Contains(got, "timbers hook run post-commit") {
+		t.Error("expected timbers hook command")
+	}
+}
+
+func TestCheckPostCommitHookStatus(t *testing.T) {
+	dir := t.TempDir()
+
+	t.Run("no file", func(t *testing.T) {
+		status := CheckPostCommitHookStatus(filepath.Join(dir, "missing"))
+		if status.Installed {
+			t.Error("expected not installed for nonexistent file")
+		}
+	})
+
+	t.Run("non-timbers hook", func(t *testing.T) {
+		path := filepath.Join(dir, "other-post-commit")
+		writeTestFile(t, path, "#!/bin/sh\necho done\n")
+		status := CheckPostCommitHookStatus(path)
+		if status.Installed {
+			t.Error("expected not installed for non-timbers hook")
+		}
+	})
+
+	t.Run("timbers hook", func(t *testing.T) {
+		path := filepath.Join(dir, "timbers-post-commit")
+		writeTestFile(t, path, "#!/bin/sh\ntimbers hook run post-commit\n")
+		status := CheckPostCommitHookStatus(path)
+		if !status.Installed {
+			t.Error("expected installed")
+		}
+	})
+}
+
+func TestInstallPostCommitHook(t *testing.T) {
+	t.Run("fresh install", func(t *testing.T) {
+		dir := t.TempDir()
+		hookPath := filepath.Join(dir, "post-commit")
+
+		if err := InstallPostCommitHook(hookPath); err != nil {
+			t.Fatalf("InstallPostCommitHook() error: %v", err)
+		}
+
+		content, err := os.ReadFile(hookPath)
+		if err != nil {
+			t.Fatalf("failed to read hook: %v", err)
+		}
+		if !strings.HasPrefix(string(content), "#!/bin/sh") {
+			t.Error("expected shebang")
+		}
+		if !strings.Contains(string(content), "timbers hook run post-commit") {
+			t.Error("expected timbers hook command")
+		}
+	})
+
+	t.Run("idempotent when already installed", func(t *testing.T) {
+		dir := t.TempDir()
+		hookPath := filepath.Join(dir, "post-commit")
+		writeTestFile(t, hookPath, GeneratePostCommitHook())
+
+		if err := InstallPostCommitHook(hookPath); err != nil {
+			t.Fatalf("InstallPostCommitHook() error: %v", err)
+		}
+
+		content, err := os.ReadFile(hookPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Should not duplicate the timbers section
+		count := strings.Count(string(content), "timbers hook run post-commit")
+		if count != 1 {
+			t.Errorf("expected 1 timbers section, got %d", count)
+		}
+	})
+
+	t.Run("appends to existing non-timbers hook", func(t *testing.T) {
+		dir := t.TempDir()
+		hookPath := filepath.Join(dir, "post-commit")
+		existing := "#!/bin/sh\necho 'existing hook'\n"
+		writeTestFile(t, hookPath, existing)
+
+		if err := InstallPostCommitHook(hookPath); err != nil {
+			t.Fatalf("InstallPostCommitHook() error: %v", err)
+		}
+
+		content, err := os.ReadFile(hookPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		contentStr := string(content)
+		if !strings.Contains(contentStr, "existing hook") {
+			t.Error("existing hook content was lost")
+		}
+		if !strings.Contains(contentStr, "timbers hook run post-commit") {
+			t.Error("timbers section not appended")
+		}
+	})
+
+	t.Run("appends newline if missing", func(t *testing.T) {
+		dir := t.TempDir()
+		hookPath := filepath.Join(dir, "post-commit")
+		writeTestFile(t, hookPath, "#!/bin/sh\necho done") // no trailing newline
+
+		if err := InstallPostCommitHook(hookPath); err != nil {
+			t.Fatalf("InstallPostCommitHook() error: %v", err)
+		}
+
+		content, err := os.ReadFile(hookPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Should have a newline before the timbers section
+		if strings.Contains(string(content), "echo done\n# timbers") {
+			// Good — newline was added
+		} else if strings.Contains(string(content), "echo done# timbers") {
+			t.Error("missing newline before timbers section")
+		}
+	})
+}
+
 func TestBackupExistingHook(t *testing.T) {
 	dir := t.TempDir()
 	hookPath := filepath.Join(dir, "pre-commit")
