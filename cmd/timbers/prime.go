@@ -18,14 +18,15 @@ var errNotInitialized = errors.New("timbers not initialized")
 
 // primeResult holds the data for prime output.
 type primeResult struct {
-	Repo          string       `json:"repo"`
-	Branch        string       `json:"branch"`
-	Head          string       `json:"head"`
-	TimbersDir    string       `json:"timbers_dir"`
-	EntryCount    int          `json:"entry_count"`
-	Pending       primePending `json:"pending"`
-	RecentEntries []primeEntry `json:"recent_entries"`
-	Workflow      string       `json:"workflow"`
+	Repo          string            `json:"repo"`
+	Branch        string            `json:"branch"`
+	Head          string            `json:"head"`
+	TimbersDir    string            `json:"timbers_dir"`
+	EntryCount    int               `json:"entry_count"`
+	Pending       primePending      `json:"pending"`
+	RecentEntries []primeEntry      `json:"recent_entries"`
+	Health        []primeHealthItem `json:"health,omitempty"`
+	Workflow      string            `json:"workflow"`
 }
 
 // primePending holds pending commit information.
@@ -179,6 +180,7 @@ func gatherPrimeContext(storage *ledger.Storage, lastN int, verbose bool) (*prim
 	}
 
 	workflow := loadWorkflowContent(root)
+	health := runQuickHealthCheck()
 
 	return &primeResult{
 		Repo:          repoName,
@@ -188,6 +190,7 @@ func gatherPrimeContext(storage *ledger.Storage, lastN int, verbose bool) (*prim
 		EntryCount:    len(allEntries),
 		Pending:       buildPrimePending(pendingCommits),
 		RecentEntries: buildPrimeEntries(recentEntries, verbose),
+		Health:        health,
 		Workflow:      workflow,
 	}, nil
 }
@@ -277,6 +280,7 @@ func outputPrimeHuman(printer *output.Printer, result *primeResult) {
 	printer.Println()
 
 	outputPrimeRecentWork(printer, result.RecentEntries)
+	outputPrimeHealth(printer, result.Health)
 	printer.Println(result.Workflow)
 }
 
