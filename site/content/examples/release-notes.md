@@ -10,27 +10,23 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ## New Features
 
-- You can now get a quick health check every time you start a session — `timbers prime` surfaces missing hooks and integrations with a hint to run `timbers doctor --fix`
-- After each commit, a post-commit hook gently reminds you to run `timbers log` — set it up with `timbers init --hooks` or let `timbers doctor --fix` install it for you
-- You can now check which LLM providers are available with `timbers draft --models`, including API key status
-- You can now pipe `timbers draft` output to Gemini CLI and Codex CLI in addition to Claude
+- You can now get a health check right at session start — `timbers prime` flags missing hooks and integrations with a fix hint so you catch setup issues before you start working
+- After each commit, a gentle reminder nudges you to run `timbers log` — set up automatically with `timbers init --hooks` or `timbers doctor --fix`
+- `timbers draft --models` shows which LLM providers and API keys are available, so you can pick the right CLI for piping without guessing
+- You can now pipe drafts through Codex and Gemini CLIs in addition to Claude — see `timbers draft --models` for verified syntax
 
 ## Improvements
 
-- Fresh installs no longer show your entire pre-timbers git history as "pending" — `timbers pending` starts clean from your first logged entry
-- `timbers doctor` now checks whether content generation is set up (CLI tools and API keys) and tells you exactly what to configure
-- The `exec-summary` template is now called `standup` — easier to discover and matches how people actually use it (`timbers draft standup`)
-- The `pr-description` template now focuses on intent and decisions rather than rehashing diffs
-- Colors now adapt to your terminal background — no more invisible text on dark themes like Solarized Dark
+- Adopting timbers in an existing repo no longer floods you with "pending" commits — pre-timbers history is recognized and skipped
+- The `exec-summary` template is now called `standup` — easier to find and remember
+- `timbers doctor` checks whether you have a generation CLI or API key configured and tells you exactly what to set
+- Terminal output is now readable on dark backgrounds (Solarized Dark, etc.)
+- Stale anchor warnings now explain what happened and what to do, instead of leaving you guessing after a squash merge
 
 ## Bug Fixes
 
-- Fixed confusing warnings after squash merges — `timbers prime` now explains what happened and self-heals on your next `timbers log`
-- Fixed example recipes failing on macOS default bash (3.x compatibility)
+- `timbers log` no longer hard-errors after a squash merge — stale anchors are handled gracefully and self-heal on the next entry
+- `timbers prime` no longer crashes when encountering a stale anchor
+- Example recipes now work on macOS default bash (3.x compatibility)
 - Fixed a security vulnerability in a dependency (CVE-2026-27896)
-- Fixed stray LLM commentary leaking into the published changelog
-
-## Breaking Changes
-
-- The `exec-summary` draft template has been renamed to `standup` — update any scripts that reference the old name
-- The PostToolUse hook has been removed — session-end pending checks via the Stop hook now cover the same case more reliably
+- Removed the PostToolUse hook that fired but never displayed output — the Stop hook now reliably checks for pending work at session end
