@@ -2,6 +2,7 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -158,10 +159,14 @@ func prepareLogContext(
 		return nil, err
 	}
 
-	commits, fromRef, err := getLogCommits(storage, flags)
+	commits, fromRef, staleAnchor, err := getLogCommits(storage, flags)
 	if err != nil {
 		printer.Error(err)
 		return nil, err
+	}
+	if staleAnchor {
+		printer.Warn("stale anchor (likely squash merge); " +
+			"self-heals with this entry")
 	}
 
 	if len(commits) == 0 {
@@ -211,21 +216,23 @@ func executeLogWrite(
 }
 
 // getLogCommits retrieves the commits to include in the entry.
-func getLogCommits(storage *ledger.Storage, flags logFlags) ([]git.Commit, string, error) {
+// Returns staleAnchor=true when the latest entry's anchor is missing from history.
+func getLogCommits(storage *ledger.Storage, flags logFlags) ([]git.Commit, string, bool, error) {
 	if flags.rangeStr != "" {
 		parts := strings.SplitN(flags.rangeStr, "..", 2)
 		fromRef := parts[0]
 		toRef := parts[1]
 		commits, err := storage.LogRange(fromRef, toRef)
 		if err != nil {
-			return nil, "", err
+			return nil, "", false, err
 		}
-		return commits, fromRef, nil
+		return commits, fromRef, false, nil
 	}
 
 	commits, _, err := storage.GetPendingCommits()
-	if err != nil {
-		return nil, "", err
+	stale := errors.Is(err, ledger.ErrStaleAnchor)
+	if err != nil && !stale {
+		return nil, "", false, err
 	}
 
 	fromRef := ""
@@ -233,7 +240,7 @@ func getLogCommits(storage *ledger.Storage, flags logFlags) ([]git.Commit, strin
 		fromRef = commits[len(commits)-1].SHA + "^"
 	}
 
-	return commits, fromRef, nil
+	return commits, fromRef, stale, nil
 }
 
 // determineAnchor determines the anchor commit for the entry.

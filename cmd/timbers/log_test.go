@@ -4,10 +4,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -998,5 +1000,60 @@ func TestLogWriteError(t *testing.T) {
 	err := cmd.Execute()
 	if err == nil {
 		t.Error("expected error when git add fails")
+	}
+}
+
+func TestLogStaleAnchorSucceeds(t *testing.T) {
+	mock := newMockGitOpsForLog()
+	mock.head = "abc123def456789"
+	mock.commitsErr = errors.New("bad object oldanchor")
+	mock.reachableResult = []git.Commit{
+		{SHA: "abc123def456789", Short: "abc123d", Subject: "New commit"},
+	}
+	mock.diffstat = git.Diffstat{Files: 2, Insertions: 10, Deletions: 3}
+
+	storage, dir := newLogTestStorage(t, mock)
+
+	// Write a pre-existing entry so GetPendingCommits hits the stale anchor path
+	now := time.Now().UTC()
+	entry := &ledger.Entry{
+		Schema:    ledger.SchemaVersion,
+		Kind:      ledger.KindEntry,
+		ID:        ledger.GenerateID("oldanchor1234567890", now),
+		CreatedAt: now,
+		UpdatedAt: now,
+		Workset:   ledger.Workset{AnchorCommit: "oldanchor1234567890", Commits: []string{"oldanchor1234567890"}},
+		Summary:   ledger.Summary{What: "Old work", Why: "Old", How: "Old"},
+	}
+	data, err := entry.ToJSON()
+	if err != nil {
+		t.Fatalf("failed to serialize entry: %v", err)
+	}
+	entryDir := filepath.Join(dir, ledger.EntryDateDir(entry.ID))
+	if err := os.MkdirAll(entryDir, 0o755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(entryDir, entry.ID+".json"), data, 0o600); err != nil {
+		t.Fatalf("failed to write entry: %v", err)
+	}
+
+	cmd := newLogCmdWithStorage(storage)
+	cmd.SetArgs([]string{"Work after squash merge", "--why", "Reason", "--how", "Method"})
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	execErr := cmd.Execute()
+	if execErr != nil {
+		t.Fatalf("expected log to succeed with stale anchor, got: %v", execErr)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Created entry") {
+		t.Error("expected entry to be created")
+	}
+	if !strings.Contains(out, "stale anchor") {
+		t.Error("expected stale anchor warning")
 	}
 }

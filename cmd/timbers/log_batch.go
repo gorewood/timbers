@@ -2,6 +2,7 @@
 package main
 
 import (
+	"errors"
 	"regexp"
 	"sort"
 	"strings"
@@ -75,7 +76,10 @@ func getBatchCommits(storage *ledger.Storage, flags logFlags) ([]git.Commit, err
 	}
 
 	commits, _, err := storage.GetPendingCommits()
-	return commits, err
+	if err != nil && !errors.Is(err, ledger.ErrStaleAnchor) {
+		return nil, err
+	}
+	return commits, nil
 }
 
 // GroupStrategy defines how commits are grouped: auto, day, or work-item.
@@ -336,15 +340,4 @@ func outputBatchResult(printer *output.Printer, entries []batchEntryRef, isDryRu
 	}
 
 	return nil
-}
-
-// truncateString truncates a string to maxLen, adding "..." if truncated.
-func truncateString(text string, maxLen int) string {
-	if len(text) <= maxLen {
-		return text
-	}
-	if maxLen <= 3 {
-		return text[:maxLen]
-	}
-	return text[:maxLen-3] + "..."
 }
