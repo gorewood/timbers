@@ -8,113 +8,100 @@ Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
 
 ---
 
-## ADR-1: Stop Hook Over PostToolUse for Pending Reminders
+## ADR-1: Git Hooks Over PostToolUse for Agent Compliance Nudging
 
-**Context:** Timbers used a Claude Code `PostToolUse` hook to remind agents about undocumented commits after each tool call. Diagnostics confirmed the hook fired correctly and received valid JSON on stdin, but Claude Code did not surface the hook's stdout to the agent — the reminder went nowhere visible.
+**Context:** Timbers needed a mechanism to remind agents to run `timbers log` after commits. Two options existed: Claude Code's `PostToolUse` hook system (fires after tool invocations) or a standard git `post-commit` hook. Diagnostic testing confirmed `PostToolUse` hooks fire correctly and receive valid JSON on stdin, but Claude Code does not surface their stdout to the agent — output goes nowhere visible.
 
-**Decision:** Remove the `PostToolUse` hook entirely and rely on the existing `Stop` hook, which runs `timbers pending` at session end. The `Stop` hook's output *is* displayed, and checking actual pending state once at session end covers the same compliance goal.
-
-**Consequences:**
-- Agents no longer receive per-commit nudges — only a single end-of-session reminder
-- Eliminates a hook that executed on every tool call with zero visible effect (wasted cycles)
-- Simpler hook configuration with one fewer event to maintain
-- Depends on Claude Code continuing to surface `Stop` hook output — same platform coupling, just on a hook that works
-- Added `retiredEvents` cleanup list so upgrades automatically remove the dead hook
-
----
-
-## ADR-2: Pre-Generate Entry Count Check Over Teaching the LLM to Handle Empty Input
-
-**Context:** The devblog CI workflow invoked an LLM to generate blog posts from timbers entries. When no entries existed for the period, the LLM received empty input and generated "apology posts" — content about having nothing to write about.
-
-**Decision:** Add an entry count check step *before* LLM invocation, gating the entire generate/commit/push pipeline on count > 0. Checking preconditions is cheaper and more reliable than prompt-engineering the LLM to gracefully refuse.
+**Decision:** Use git `post-commit` hooks instead of `PostToolUse` hooks. Git hook stdout is visible to agents, making it the reliable nudge mechanism. The existing `Stop` hook (which runs `timbers pending` at session end) was retained as a fallback. `PostToolUse` was removed entirely rather than worked around, and a `retiredEvents` cleanup mechanism was added so upgrades remove stale hook registrations.
 
 **Consequences:**
-- Zero wasted LLM API calls on empty input — cost savings on every no-op run
-- Deterministic behavior: empty input always produces no output, no prompt sensitivity
-- Required deleting 10 previously generated blank posts
-- Pattern generalizes: validate inputs before LLM calls rather than relying on the model to detect degenerate cases
+- Agents see the reminder immediately after each commit, at the point of highest relevance
+- No dependency on Claude Code's hook output behavior, which could change without notice
+- Requires git hook installation (`timbers init --hooks`), adding a setup step users might skip
+- The `Stop` hook still catches missed logging at session end, providing defense in depth
+- Future Claude Code fixes to `PostToolUse` stdout won't retroactively change the approach — git hooks are the primary mechanism now
 
----
+## ADR-2: Display-Layer Pending Fix Over Storage-Layer Change
+
+**Context:** Fresh repositories with no timbers entries showed all historical commits as "pending," which was confusing for new users. The initial plan changed `GetPendingCommits` in the storage layer to return empty when no entries existed. This broke `timbers log`, `timbers log --batch`, and the MCP log handler — all three need commits from `GetPendingCommits` to create the very first entry.
+
+**Decision:** Fix at the display layer, not the storage layer. `pending.go` and `doctor_checks.go` check `latest == nil` and show a friendly onboarding message instead of a wall of "pending" commits. Storage behavior is unchanged — `GetPendingCommits` still returns all commits when no entries exist.
+
+**Consequences:**
+- All callers that need commits for entry creation (`log`, `batch`, MCP) continue working unmodified
+- The fix is localized to two display-layer files rather than requiring every storage consumer to handle a new edge case
+- New JSON `status` field distinguishes "no entries yet" from "all caught up" for machine consumers
+- Storage layer remains a faithful representation of git state, with interpretation pushed to the edges
 
 ## ADR-3: Actionable Warnings Over Anchor-Reset Command for Stale Anchors
 
-**Context:** After squash merges, timbers' anchor commit (the last-documented commit SHA) disappears from history, causing confusing pending output. Two approaches were considered: (1) add a `timbers anchor reset` command for explicit repair, or (2) improve warning messages and add coaching documentation.
+**Context:** After squash merges or rebases, a timbers entry's anchor commit can disappear from history, causing confusing behavior. Two approaches were considered: add a `timbers anchor reset` command for explicit recovery, or improve warning messages with coaching and let the anchor self-heal on the next `timbers log`.
 
-**Decision:** Warnings plus coaching, no new command. The anchor self-heals the next time `timbers log` runs after a real commit, making explicit reset unnecessary. Messaging alone is sufficient to bridge the gap.
-
-**Consequences:**
-- No new command to document, test, or maintain
-- Users seeing the warning get actionable guidance without needing to learn a repair workflow
-- Coaching section added to `prime` workflow output so agents handle it automatically
-- If self-healing assumptions break (e.g., orphan branches with no new commits), there's no manual escape hatch — would need to revisit
-
----
-
-## ADR-4: Clean Rename Over Backward-Compatible Alias for exec-summary Template
-
-**Context:** The `exec-summary` draft template was being renamed to `standup` for better discoverability. The question was whether to keep `exec-summary` as an alias for backward compatibility.
-
-**Decision:** Clean break — rename without alias. Pre-GA project with low usage means backward compatibility adds complexity for no real benefit.
+**Decision:** Actionable warnings plus coaching, no reset command. The anchor self-heals naturally when the user runs `timbers log` after their next real commit. Warning messages were improved across CLI and MCP to explain the situation and what to do (or not do). A `stale-anchor` coaching section was added to the prime workflow output.
 
 **Consequences:**
-- Simpler template registry with no alias resolution logic
-- Anyone using `exec-summary` in scripts gets a clear error rather than silent redirect
-- Sets precedent: pre-GA naming changes are clean breaks, not aliased migrations
-- Would not apply post-GA where users have automation depending on template names
+- Zero new commands to maintain, document, or teach
+- Users don't need to understand anchor internals — they just keep working normally
+- Self-healing behavior means the problem resolves without intervention in every case
+- If self-healing ever proves insufficient for some edge case, a reset command can still be added later
+- Relies on users reading warnings, which agents do reliably but humans may not
 
----
+## ADR-4: Check-Before-Generate Over LLM Refusal for Empty Entry Sets
 
-## ADR-5: PR Template Focused on Intent and Decisions Over Diff Summary
+**Context:** The automated devblog generation workflow invoked the LLM even when no timbers entries existed in the date range. The LLM, having no entries to summarize, generated apologetic placeholder posts ("Sorry, no development activity to report"). Two fixes were possible: teach the LLM prompt to output nothing when given empty input, or check entry count before invoking the LLM at all.
 
-**Context:** The `pr-description` draft template (v3) summarized code diffs. Since agents reviewing PRs already have full diff access, the generated description duplicated information the reviewer could see directly.
-
-**Decision:** Rewrite the PR template (v4) to focus on *intent* and *design decisions* — the things not visible in the diff. Agents already review diffs; the template should add context they can't infer from code alone.
+**Decision:** Add an entry count check in the CI workflow before the LLM generation step. Gate the generate/commit/push steps on count > 0.
 
 **Consequences:**
-- PR descriptions complement rather than duplicate the diff view
-- Leverages timbers' unique data (why/how fields, notes) that no diff tool captures
-- Requires entries with substantive why fields — thin entries produce thin PR descriptions
+- Saves LLM API costs on days with no development activity
+- Deterministic behavior — empty input always means no output, no prompt engineering required
+- Eliminated 10 existing blank/apology posts that had been published
+- The pattern generalizes: any draft template pipeline should check inputs before invoking LLM generation
+
+## ADR-5: Health Check in Prime Over Doctor-Only Diagnostics
+
+**Context:** `timbers doctor` performs comprehensive health checks, but agents only run it when something is already broken. Missing hooks or integrations could go undetected for entire sessions because `doctor` isn't part of the standard workflow. `timbers prime` is the session entry point — every agent session starts with it.
+
+**Decision:** Add a quick health check to `timbers prime` output that surfaces missing post-commit hooks and agent environment issues. When problems are found, a Health section appears with a `timbers doctor --fix` hint. The check is lightweight — a subset of what `doctor` does, focused on the most impactful issues.
+
+**Consequences:**
+- Agents see configuration problems before starting work, not after wasting a session
+- Quick check adds minimal latency to `prime` (two fast filesystem checks vs. `doctor`'s full suite)
+- Creates a layered diagnostic approach: `prime` catches common issues proactively, `doctor` handles deep investigation
+- `prime` output grows slightly, though the Health section only appears when issues exist
+
+## ADR-6: Rename exec-summary to standup, Clean Break Without Aliases
+
+**Context:** The `exec-summary` template name was not discoverable — users didn't think to ask for an "executive summary" of their daily work. `standup` better matches the use case (daily status updates). The question was whether to keep `exec-summary` as a backward-compatible alias.
+
+**Decision:** Clean rename to `standup` with no alias. Pre-GA project with low usage means backward compatibility adds complexity for no real benefit.
+
+**Consequences:**
+- Template name now matches the mental model users have for the task ("what did I do today")
+- No alias maintenance, no dual-name documentation, no "which name do I use" confusion
+- Any existing scripts using `exec-summary` break — acceptable given pre-GA status
+- Sets precedent: pre-GA is the time to make breaking naming changes freely
+
+## ADR-7: PR Template Focused on Intent and Decisions Over Diff Summary
+
+**Context:** The `pr-description` template (v3) summarized code changes from the diff. But agents reviewing PRs already have full diff access — a template that restates the diff adds no information. Timbers entries capture intent (`why`) and deliberation (`notes`) that diffs don't show.
+
+**Decision:** Rewrote `pr-description` (v4) to focus on intent, design decisions, and trade-offs extracted from timbers entries rather than summarizing what changed in the code.
+
+**Consequences:**
+- PR descriptions now contain information reviewers can't get from the diff alone
+- Reviewers understand *why* changes were made, enabling better review feedback
+- Depends on entry quality — thin `why` fields produce thin PR descriptions
 - Template is more opinionated about what a good PR description contains
 
----
+## ADR-8: Self-Service Provider Discovery via `--models` Flag
 
-## ADR-6: Display-Layer Handling of Pre-Timbers History Over Storage-Layer Filtering
+**Context:** Users on non-Claude CLIs (Codex, Gemini) had no documentation for piping `timbers draft` output through their preferred LLM. Agents needed to discover which providers and API keys were available without external documentation.
 
-**Context:** New users installing timbers on existing repos saw every prior commit listed as "pending" — potentially hundreds of commits they never intended to document. The initial fix changed `GetPendingCommits` in the storage layer to return empty when no entries existed, but this broke `timbers log`, `batch log`, and MCP log, which all need those commits to create the first entry.
-
-**Decision:** Handle the no-entries state at the display layer. `pending.go` and `doctor_checks.go` check `latest==nil` and show a friendly message instead of a commit list. Storage behavior remains unchanged, preserving all callers that need commit data.
+**Decision:** Added `draft --models` flag backed by a `ProviderInfos()` export in `llm.go`. Agents can query available providers and their required environment variables at runtime. Documentation was updated with verified piping syntax for each CLI.
 
 **Consequences:**
-- `timbers log` continues to work for creating the first entry from pre-existing commits
-- New users see a welcome message with a `--catchup` tip instead of an overwhelming pending list
-- Fix is localized to two display callsites rather than a storage behavior change affecting all consumers
-- Any new command that displays pending state needs to remember the `latest==nil` guard
-
----
-
-## ADR-7: Git Hook Over Claude Code Hook for Agent Log Compliance
-
-**Context:** After removing the `PostToolUse` hook (ADR-1), agents had no mid-session reminder to run `timbers log`. Two mechanisms were considered: another Claude Code hook event, or a native git `post-commit` hook. Claude Code hooks had proven unreliable for surfacing stdout to agents.
-
-**Decision:** Use a git `post-commit` hook. Git hook stdout is visible to agents (it appears in the `git commit` tool output), making it the reliable nudge mechanism. Implemented as `timbers hook run post-commit` printing a one-line reminder.
-
-**Consequences:**
-- Works with any agent framework that shells out to git, not just Claude Code
-- `timbers init --hooks` installs the hook; `doctor` checks and `--fix` auto-installs — full lifecycle management
-- Occupies the `post-commit` hook slot — users with existing post-commit hooks need to chain them
-- Couples reminder visibility to git's hook stdout forwarding behavior, which is well-established and unlikely to change
-
----
-
-## ADR-8: Static Examples from Dense Date Ranges Over Per-Release Regeneration
-
-**Context:** Site examples (changelog, decision-log, etc.) were regenerated on every release via LLM calls. This was expensive and produced inconsistent output across runs, since the LLM might rephrase the same entries differently each time.
-
-**Decision:** Split example generation into static (fixed date range with dense, high-quality entries) and dynamic (per-release). Static examples use a curated Feb 10-14 range that showcases rich entries; only release-specific content regenerates.
-
-**Consequences:**
-- Eliminates redundant LLM calls for showcase content that doesn't need to change
-- Curated date range guarantees examples always demonstrate the tool's best output
-- Static examples may drift from current template behavior over time — requires occasional manual refresh
-- Dynamic examples still regenerate per-release, keeping release-specific content current
+- Agents can self-serve provider discovery without hardcoded knowledge of API key names
+- `ProviderInfos()` returns a copy via `maps.Copy` to prevent callers from mutating the provider registry (caught in review)
+- Each CLI's piping syntax was locally verified — Gemini auto-detects piped stdin (no `-p` needed), Codex `-m` flag belongs on the `exec` subcommand
+- Provider list requires manual updates when new CLIs emerge, but the discovery mechanism itself is stable
