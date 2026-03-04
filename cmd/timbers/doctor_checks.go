@@ -96,23 +96,34 @@ func checkPendingCommits() checkResult {
 			Message: "could not check: " + storageErr.Error(),
 		}
 	}
-	commits, latest, err := storage.GetPendingCommits()
-	if err != nil {
+
+	// Fast path: check for entries before expensive GetPendingCommits.
+	// In repos with no entries, GetPendingCommits would fetch and filter
+	// the entire commit history only for us to ignore the result.
+	entries, listErr := storage.ListEntries()
+	if listErr != nil {
 		return checkResult{
 			Name:    "Pending Commits",
 			Status:  checkWarn,
-			Message: "could not check pending commits: " + err.Error(),
+			Message: "could not check: " + listErr.Error(),
 		}
 	}
-
-	// No entries yet — fresh install, not a problem
-	if latest == nil {
+	if len(entries) == 0 {
 		return checkResult{
 			Name:    "Pending Commits",
 			Status:  checkPass,
 			Message: "tracking starts with your first timbers log",
 			Hint: "Have existing history? 'timbers catchup' can backfill, " +
 				"but entries from commits alone are shallow. Most teams skip it.",
+		}
+	}
+
+	commits, _, err := storage.GetPendingCommits()
+	if err != nil {
+		return checkResult{
+			Name:    "Pending Commits",
+			Status:  checkWarn,
+			Message: "could not check pending commits: " + err.Error(),
 		}
 	}
 

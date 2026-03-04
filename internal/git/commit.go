@@ -2,6 +2,9 @@
 package git
 
 import (
+	"bytes"
+	"context"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -215,6 +218,57 @@ func CommitFiles(sha string) ([]string, error) {
 		}
 	}
 	return files, nil
+}
+
+// CommitFilesMulti returns the files changed by each commit using a single git process.
+// Uses git diff-tree --stdin for batch processing instead of one subprocess per commit.
+// Returns a map from full SHA to file list. Commits with no changed files get a nil slice.
+func CommitFilesMulti(shas []string) (map[string][]string, error) {
+	if len(shas) == 0 {
+		return make(map[string][]string), nil
+	}
+
+	input := strings.Join(shas, "\n") + "\n"
+	cmd := exec.CommandContext(context.Background(), "git", "diff-tree", "-r", "--name-only", "--stdin")
+	cmd.Stdin = strings.NewReader(input)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg == "" {
+			errMsg = err.Error()
+		}
+		return nil, output.NewSystemErrorWithCause("git diff-tree --stdin failed: "+errMsg, err)
+	}
+
+	// Build lookup set for input SHAs
+	shaSet := make(map[string]bool, len(shas))
+	for _, sha := range shas {
+		shaSet[sha] = true
+	}
+
+	// Parse output: each commit SHA appears on its own line, followed by changed files.
+	result := make(map[string][]string, len(shas))
+	var current string
+	for line := range strings.SplitSeq(strings.TrimSpace(stdout.String()), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if shaSet[line] {
+			current = line
+			if _, ok := result[current]; !ok {
+				result[current] = nil
+			}
+		} else if current != "" {
+			result[current] = append(result[current], line)
+		}
+	}
+
+	return result, nil
 }
 
 // extractDiffstatFromSummary parses the diffstat summary line using regex.

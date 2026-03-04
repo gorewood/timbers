@@ -39,6 +39,9 @@ func (m *mockGitOpsForAmend) GetDiffstat(_, _ string) (git.Diffstat, error) {
 }
 
 func (m *mockGitOpsForAmend) CommitFiles(sha string) ([]string, error) { return nil, nil }
+func (m *mockGitOpsForAmend) CommitFilesMulti(shas []string) (map[string][]string, error) {
+	return make(map[string][]string), nil
+}
 
 // setupAmendTestStorage creates a temp dir, writes the entry file if non-nil,
 // and returns the storage and dir path. The gitAdd function is a no-op by default.

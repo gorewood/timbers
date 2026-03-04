@@ -42,6 +42,9 @@ func (m *mockGitOpsForPrime) GetDiffstat(fromRef, toRef string) (git.Diffstat, e
 }
 
 func (m *mockGitOpsForPrime) CommitFiles(sha string) ([]string, error) { return nil, nil }
+func (m *mockGitOpsForPrime) CommitFilesMulti(shas []string) (map[string][]string, error) {
+	return make(map[string][]string), nil
+}
 
 func TestPrimeCommand(t *testing.T) {
 	now := time.Now()

@@ -45,6 +45,15 @@ func (m *mockGitOps) CommitFiles(sha string) ([]string, error) {
 	return m.commitFiles[sha], nil
 }
 
+func (m *mockGitOps) CommitFilesMulti(shas []string) (map[string][]string, error) {
+	result := make(map[string][]string, len(shas))
+	for _, sha := range shas {
+		files, _ := m.CommitFiles(sha)
+		result[sha] = files
+	}
+	return result, nil
+}
+
 // --- Test helpers ---
 
 func makeTestStorage(t *testing.T, gitOps *mockGitOps, entries []*ledger.Entry) *ledger.Storage {

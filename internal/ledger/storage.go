@@ -38,6 +38,7 @@ type GitOps interface {
 	CommitsReachableFrom(sha string) ([]git.Commit, error)
 	GetDiffstat(fromRef, toRef string) (git.Diffstat, error)
 	CommitFiles(sha string) ([]string, error)
+	CommitFilesMulti(shas []string) (map[string][]string, error)
 }
 
 // realGitOps implements GitOps using the actual git package functions.
@@ -61,6 +62,10 @@ func (realGitOps) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
 
 func (realGitOps) CommitFiles(sha string) ([]string, error) {
 	return git.CommitFiles(sha)
+}
+
+func (realGitOps) CommitFilesMulti(shas []string) (map[string][]string, error) {
+	return git.CommitFilesMulti(shas)
 }
 
 // Storage provides read/write access to ledger entries stored as files in .timbers/.
@@ -237,12 +242,26 @@ func isLedgerOnlyCommit(files []string) bool {
 }
 
 // filterLedgerOnlyCommits removes commits that only touch .timbers/ files.
-// On CommitFiles error, the commit is kept (safe default).
+// Uses batch file lookup (single git process) instead of one subprocess per commit.
+// On error, returns all commits unfiltered (safe default).
 func (s *Storage) filterLedgerOnlyCommits(commits []git.Commit) []git.Commit {
+	if len(commits) == 0 {
+		return commits
+	}
+
+	shas := make([]string, len(commits))
+	for i, c := range commits {
+		shas[i] = c.SHA
+	}
+
+	fileMap, err := s.git.CommitFilesMulti(shas)
+	if err != nil {
+		return commits
+	}
+
 	filtered := make([]git.Commit, 0, len(commits))
 	for _, c := range commits {
-		files, err := s.git.CommitFiles(c.SHA)
-		if err != nil || !isLedgerOnlyCommit(files) {
+		if !isLedgerOnlyCommit(fileMap[c.SHA]) {
 			filtered = append(filtered, c)
 		}
 	}

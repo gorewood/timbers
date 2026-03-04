@@ -62,6 +62,18 @@ func (m *mockGitOps) CommitFiles(sha string) ([]string, error) {
 	return files, nil
 }
 
+func (m *mockGitOps) CommitFilesMulti(shas []string) (map[string][]string, error) {
+	result := make(map[string][]string, len(shas))
+	for _, sha := range shas {
+		files, err := m.CommitFiles(sha)
+		if err != nil {
+			return nil, err
+		}
+		result[sha] = files
+	}
+	return result, nil
+}
+
 // makeTestEntry creates a valid entry for testing.
 func makeTestEntry(anchor string, createdAt time.Time) *Entry {
 	return &Entry{

@@ -305,6 +305,81 @@ func TestCommitFiles(t *testing.T) {
 	})
 }
 
+func TestCommitFilesMulti(t *testing.T) {
+	t.Run("batch matches individual calls", func(t *testing.T) {
+		dir := t.TempDir()
+		origDir, _ := os.Getwd()
+		defer func() { _ = os.Chdir(origDir) }()
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("chdir: %v", err)
+		}
+
+		run := func(args ...string) {
+			t.Helper()
+			out, err := Run(args...)
+			if err != nil {
+				t.Fatalf("git %v failed: %v (output: %s)", args, err, out)
+			}
+		}
+
+		run("init")
+		run("config", "user.email", "test@test.com")
+		run("config", "user.name", "Test")
+
+		if err := os.WriteFile("a.txt", []byte("a"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		run("add", "a.txt")
+		run("commit", "-m", "first")
+		sha1, _ := Run("rev-parse", "HEAD")
+
+		if err := os.WriteFile("b.txt", []byte("b"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		run("add", "b.txt")
+		run("commit", "-m", "second")
+		sha2, _ := Run("rev-parse", "HEAD")
+
+		if err := os.WriteFile("c.txt", []byte("c"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		run("add", "c.txt")
+		run("commit", "-m", "third")
+		sha3, _ := Run("rev-parse", "HEAD")
+
+		// Batch call
+		result, err := CommitFilesMulti([]string{sha2, sha3})
+		if err != nil {
+			t.Fatalf("CommitFilesMulti error: %v", err)
+		}
+
+		// sha2 should have b.txt
+		if files, ok := result[sha2]; !ok || len(files) != 1 || files[0] != "b.txt" {
+			t.Errorf("sha2 files = %v, want [b.txt]", result[sha2])
+		}
+
+		// sha3 should have c.txt
+		if files, ok := result[sha3]; !ok || len(files) != 1 || files[0] != "c.txt" {
+			t.Errorf("sha3 files = %v, want [c.txt]", result[sha3])
+		}
+
+		// sha1 not requested, should not be in result
+		if _, ok := result[sha1]; ok {
+			t.Errorf("sha1 should not be in result, got %v", result[sha1])
+		}
+	})
+
+	t.Run("empty input", func(t *testing.T) {
+		result, err := CommitFilesMulti(nil)
+		if err != nil {
+			t.Fatalf("CommitFilesMulti(nil) error: %v", err)
+		}
+		if len(result) != 0 {
+			t.Errorf("expected empty map, got %v", result)
+		}
+	})
+}
+
 func TestGetDiffstatRootCommit(t *testing.T) {
 	chdirToRepoRoot(t)
 

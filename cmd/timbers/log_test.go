@@ -74,6 +74,9 @@ func (m *mockGitOpsForLog) GetDiffstat(_, _ string) (git.Diffstat, error) {
 }
 
 func (m *mockGitOpsForLog) CommitFiles(sha string) ([]string, error) { return nil, nil }
+func (m *mockGitOpsForLog) CommitFilesMulti(shas []string) (map[string][]string, error) {
+	return make(map[string][]string), nil
+}
 
 // newLogTestStorage creates a Storage with a temp dir for writing entries.
 func newLogTestStorage(t *testing.T, mock *mockGitOpsForLog) (*ledger.Storage, string) {
