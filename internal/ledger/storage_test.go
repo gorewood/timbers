@@ -178,6 +178,77 @@ func TestGetLatestEntry(t *testing.T) {
 	}
 }
 
+// --- HasPendingCommits Tests ---
+
+func TestHasPendingCommits(t *testing.T) {
+	tests := []struct {
+		name      string
+		entries   []*Entry
+		setupMock func(*mockGitOps)
+		want      bool
+		wantErr   bool
+	}{
+		{
+			name: "HEAD equals anchor - no pending",
+			entries: []*Entry{
+				makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "anchorsha12"
+			},
+			want: false,
+		},
+		{
+			name: "HEAD differs from anchor - pending",
+			entries: []*Entry{
+				makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "newheadsha1"
+			},
+			want: true,
+		},
+		{
+			name:    "no entries - not pending",
+			entries: nil,
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "anysha12345"
+			},
+			want: false,
+		},
+		{
+			name:    "HEAD error - returns error",
+			entries: []*Entry{makeTestEntry("anchor12345", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))},
+			setupMock: func(mock *mockGitOps) {
+				mock.headErr = output.NewSystemError("git failed")
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := newMockGitOps()
+			tt.setupMock(mock)
+			store := newTestStorage(t, mock, tt.entries...)
+
+			got, err := store.HasPendingCommits()
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("HasPendingCommits() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // --- GetPendingCommits Tests ---
 
 func TestGetPendingCommits(t *testing.T) {

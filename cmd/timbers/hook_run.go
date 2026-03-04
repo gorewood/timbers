@@ -42,6 +42,10 @@ func runHookRun(cmd *cobra.Command, args []string) error {
 		return runPreCommitHook(cmd)
 	case "post-commit":
 		return runPostCommitHook(cmd)
+	case "claude-pre-tool-use":
+		return runClaudePreToolUse(cmd)
+	case "claude-stop":
+		return runClaudeStop(cmd)
 	default:
 		// Unknown hook - silently succeed to not block operations
 		return nil
