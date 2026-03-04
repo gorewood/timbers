@@ -22,7 +22,8 @@ func newHooksInstallCmd() *cobra.Command {
 		Short: "Install timbers git hooks",
 		Long: `Install timbers git hooks to .git/hooks/.
 
-The pre-commit hook warns about undocumented commits but does not block them.
+The pre-commit hook blocks commits when undocumented commits exist,
+requiring 'timbers log' before continuing. Use --no-verify to bypass.
 Use --chain to preserve existing hooks (runs them first).
 Use --force to overwrite existing hooks without backup.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {

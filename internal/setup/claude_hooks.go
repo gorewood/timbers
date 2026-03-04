@@ -51,11 +51,16 @@ func removeTimbersHooksFromEvent(hooks map[string]any, event string) {
 	}
 }
 
-// removeTimbersHooks removes all timbers hooks from all events.
+// removeTimbersHooks removes all timbers hooks from all events,
+// including retired events that timbers previously installed.
 func removeTimbersHooks(settings map[string]any) {
 	hooks, ok := settings["hooks"].(map[string]any)
 	if !ok {
 		return
+	}
+
+	for _, event := range retiredEvents {
+		removeTimbersHooksFromEvent(hooks, event)
 	}
 
 	for _, cfg := range timbersHooks {

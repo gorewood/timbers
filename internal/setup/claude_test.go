@@ -329,6 +329,39 @@ func TestRemoveTimbersHooks_AllEvents(t *testing.T) {
 	}
 }
 
+func TestRemoveTimbersHooks_RetiredEvents(t *testing.T) {
+	// Simulate a v0.12/v0.13 install that had PostToolUse and PreToolUse hooks
+	settings := map[string]any{
+		"hooks": map[string]any{
+			"PostToolUse": []any{
+				map[string]any{
+					"matcher": "Bash",
+					"hooks": []any{
+						map[string]any{"type": "command", "command": legacyPostToolUseBashCommand},
+					},
+				},
+			},
+			"PreToolUse": []any{
+				map[string]any{
+					"matcher": "Bash",
+					"hooks": []any{
+						map[string]any{"type": "command", "command": legacyPreToolUseCommand},
+					},
+				},
+			},
+		},
+	}
+	addTimbersHooks(settings)
+	removeTimbersHooks(settings)
+
+	// Retired events should be cleaned up on uninstall
+	for _, event := range retiredEvents {
+		if hasHookForEvent(settings, event) {
+			t.Errorf("retired event %s should be removed on uninstall", event)
+		}
+	}
+}
+
 func TestRemoveTimbersSectionFromHook(t *testing.T) {
 	t.Run("nonexistent file is no-op", func(t *testing.T) {
 		dir := t.TempDir()
