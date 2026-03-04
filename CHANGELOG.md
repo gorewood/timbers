@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.14.0] - 2026-03-04
+
+### Changed
+- Simplified hook enforcement by dropping `PreToolUse` handler in favor of pre-commit blocking, which works universally across all git clients
+- Kept `Stop` hook as a session-end backstop for agents that bypass pre-commit
+- Updated `hooks install` help text from "warns" to "blocks" to reflect actual behavior
+
+### Fixed
+- Fixed `uninstall` leaving retired hooks (`PostToolUse`, `PreToolUse`) in settings by adding `retiredEvents` cleanup loop
+
+### Removed
+- Removed `PreToolUse` handler, dispatch case, and associated tests from hook enforcement
+
+
+
+
 ## [0.13.2] - 2026-03-03
 
 ### Fixed
@@ -359,3 +375,4 @@ Initial public release.
 [0.13.0]: https://github.com/gorewood/timbers/releases/tag/v0.13.0
 [0.13.1]: https://github.com/gorewood/timbers/releases/tag/v0.13.1
 [0.13.2]: https://github.com/gorewood/timbers/releases/tag/v0.13.2
+[0.14.0]: https://github.com/gorewood/timbers/releases/tag/v0.14.0

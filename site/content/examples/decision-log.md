@@ -1,6 +1,6 @@
 +++
 title = 'Decision Log'
-date = '2026-03-02'
+date = '2026-03-04'
 tags = ['example', 'decision-log']
 +++
 
@@ -8,99 +8,144 @@ Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
 
 ---
 
-# Decision Log
 
-## ADR-1: Self-Healing Warnings Over Anchor Reset Command
 
-**Context:** After squash merges or rebases, the timbers anchor commit disappears from history, leaving `ErrStaleAnchor`. Three options existed: (1) add an explicit `timbers anchor reset` command, (2) surface actionable warnings and let the anchor self-heal on next `timbers log`, or (3) treat it as a fatal error. Commands like `pending`, `prime`, and MCP already handled stale anchors gracefully, but `log` and `batch log` treated it as fatal — breaking the self-healing claim.
+## ADR-1: Pre-commit Hook Over PreToolUse for Commit Enforcement
 
-**Decision:** Warnings plus coaching, no reset command. `log` and `batch log` now accept fallback commits from `GetPendingCommits` when `ErrStaleAnchor` occurs, warn, and proceed. The anchor self-heals the next time a real entry is created, making an explicit reset unnecessary. Prime output includes a `<stale-anchor>` coaching section explaining the situation to agents.
+**Context:** Timbers needed to prevent agents from committing code without documenting their work via `timbers log`. Two enforcement mechanisms existed: Claude Code's `PreToolUse` JSON protocol (which could deny `git commit` tool calls) and standard git `pre-commit` hooks (which block commits at the git level). PreToolUse was Claude Code-specific and required JSON protocol negotiation; pre-commit hooks work universally across all git clients.
 
-**Consequences:**
-- Agents and users recover from squash merges without manual intervention
-- No new command surface area to maintain or document
-- Messaging must be clear enough to prevent confusion — if the warning text is poor, users may think something is broken
-- Self-healing behavior is harder to reason about than an explicit reset; debugging anchor issues requires understanding the implicit recovery path
+Additionally, co-committing entries with code was explored (~12 approaches including two-pass commits, predictable IDs, and post-commit amendment), but entry IDs contain the anchor commit SHA — creating a circular dependency where the entry changes the tree hash, which changes the commit SHA, which changes the entry ID.
 
-## ADR-2: Health Checks Surfaced in Prime Entry Point
-
-**Context:** Agents start sessions with `timbers prime`, which injects workflow context. Missing hooks, integrations, or configuration issues weren't discovered until agents encountered errors mid-session — after potentially significant wasted work.
-
-**Decision:** Run a quick health check during `timbers prime` and surface issues with a `doctor --fix` hint in the output. Since prime is the session entry point, agents see the fix hint before starting any work.
+**Decision:** Drop `PreToolUse` enforcement entirely and rely on `pre-commit` hook blocking, with `Stop` hook as a session-end backstop. Separate commits for entries is the correct design — the SHA reference is a feature (entries point to exact commits), not a limitation.
 
 **Consequences:**
-- Agents can self-fix configuration issues at session start rather than failing mid-task
-- `prime` output grows slightly, consuming context window tokens even when healthy
-- Health checks are duplicated between `prime` (quick) and `doctor` (comprehensive) — changes to checks must stay in sync
+- Enforcement works across all git clients, not just Claude Code
+- Simpler codebase — removed PreToolUse handler, tests, and dispatch logic (~213 lines deleted)
+- `PreToolUse` moved to `retiredEvents` requiring cleanup logic in uninstall
+- Agents that bypass pre-commit (e.g., `--no-verify`) have only the `Stop` backstop
+- Entry commits are always separate from code commits, adding one extra commit per documentation event
 
-## ADR-3: Stop Hook Over PostToolUse for Session-End Checks
+---
 
-**Context:** A `PostToolUse` hook was implemented to nudge agents toward `timbers log` after git commits. Diagnostic testing confirmed the hook fired correctly and received valid JSON on stdin. However, Claude Code does not surface `PostToolUse` hook stdout to the agent — the output goes nowhere visible.
+## ADR-2: Structured JSON Hooks Over Plain-Text Echo for Claude Code Enforcement
 
-**Decision:** Remove `PostToolUse` hook entirely. Rely on the existing `Stop` hook, which runs `timbers pending` at session end and whose output is displayed. Rather than work around Claude Code's behavior, lean on the mechanism that already works.
+**Context:** Early hook implementations used shell pipelines (`grep` + `echo`) that printed reminders to stdout. Claude Code silently consumed `PostToolUse` stdout and never enforced plain-text `Stop` output. Agents consistently ignored reminders and commits went undocumented every session.
 
-**Consequences:**
-- Nudging happens once at session end rather than after each commit — agents may batch more commits before logging
-- Simpler hook configuration with fewer events to manage
-- Added `retiredEvents` cleanup list so upgrades automatically remove the defunct hook
-- Dependent on Claude Code continuing to surface `Stop` hook output
-
-## ADR-4: Git Post-Commit Hook Over Claude Code Hooks for Agent Nudging
-
-**Context:** The `Stop` hook (ADR-3) only fires at session end, missing mid-session nudges. Claude Code's `PostToolUse` hooks fire but don't surface stdout. Git hooks, by contrast, produce stdout that is visible in the agent's bash output after every commit.
-
-**Decision:** Use a native git `post-commit` hook (`timbers hook run post-commit`) that prints a one-line reminder. `timbers init --hooks` installs it, and `timbers doctor` checks for it with `--fix` auto-installation.
+**Decision:** Use Claude Code's structured JSON protocol (`permissionDecision`/`deny` for PreToolUse, `decision`/`reason` for Stop) as the only mechanism that Claude Code actually respects for blocking. Added `HasPendingCommits()` as a fast ~15ms check (HEAD vs anchor) to avoid full `GetPendingCommits()` on the hot path.
 
 **Consequences:**
-- Agents see a nudge after every commit, not just at session end
-- Works with any tool that shells out to git, not just Claude Code
-- Git hooks are per-repo and can be overwritten by other tools or user configuration
-- Adds a new `hook` command namespace and hook installation/detection logic to maintain
+- Enforcement actually works — agents can no longer silently ignore documentation requirements
+- `HasPendingCommits()` may false-positive on ledger-only commits, but this only triggers a logging prompt (acceptable trade-off)
+- All hook logic now lives in the timbers binary rather than shell scripts
+- Shell script hooks in `.claude/hooks/*.sh` are an anti-pattern — Claude Code reads hooks from JSON settings only
 
-## ADR-5: No-Entries Handling at Display Layer, Not Storage
+---
 
-**Context:** New repositories showed all pre-timbers git history as "pending" commits, overwhelming users on first run. The initial plan modified `GetPendingCommits` in the storage layer to return empty when no entries existed. This broke `timbers log`, `batch log`, and MCP log — all of which need commits to create the first entry.
+## ADR-3: Batch Git Subprocess Calls via `diff-tree --stdin` for Performance
 
-**Decision:** Handle the no-entries state at the display layer. `pending.go` and `doctor_checks.go` check `latest==nil` and intercept before rendering. Storage behavior is unchanged, keeping all write-path callers working.
+**Context:** `filterLedgerOnlyCommits` spawned one `git` subprocess per commit to check file lists. In repositories with ~2k commits, `doctor` took 16 seconds due to O(N) process spawns.
 
-**Consequences:**
-- `timbers log` works correctly for first-ever entry creation — the write path gets real commits
-- Display callers (`pending`, `doctor`) must independently check for the no-entries case
-- The storage API's contract is preserved — no special-case return values that downstream callers must handle
-- New display-layer callers must remember to add the `latest==nil` guard
-
-## ADR-6: Input Validation Over LLM Refusal for Empty Entries
-
-**Context:** The devblog CI workflow invoked LLM generation even when no timbers entries existed for the period. The LLM generated "apology posts" explaining there was nothing to write about. Two options: teach the LLM to refuse gracefully via prompt engineering, or check for empty input before invoking the LLM at all.
-
-**Decision:** Check-before-generate. Added an entry count step in the CI workflow, gating generation/commit/push on count > 0. Deleted 10 previously generated blank posts.
+**Decision:** Batch all commit file lookups into a single `git diff-tree --stdin` call, reducing subprocess spawns from O(N) to O(1). Also added early-return in `doctor` when no entries exist.
 
 **Consequences:**
-- Zero LLM cost for empty periods — no API calls made at all
-- Simpler than prompt engineering a reliable refusal; no risk of the LLM deciding to generate anyway
-- The guard is in CI workflow YAML, not in the tool itself — other callers of `timbers draft` must implement their own empty-input checks
-- Immediate cleanup debt: 10 garbage posts had to be manually deleted
+- `doctor` performance drops from 16s to sub-second in large repos
+- `CommitFilesMulti` added to `GitOps` interface, requiring mock updates across all test files
+- Single-commit `CommitFiles` still exists for callers that need it, minor API surface increase
 
-## ADR-7: Static Examples Over Per-Release LLM Regeneration
+---
 
-**Context:** Site examples (changelog, decision-log, etc.) were regenerated on every release via LLM. Dense date ranges with many entries produce good examples, but sparse ranges produce thin ones. Each regeneration costs LLM tokens and produces non-deterministic output.
+## ADR-4: Display-Layer Filtering for Pre-Timbers History Over Storage-Layer Change
 
-**Decision:** Split the justfile into `examples` (dynamic, per-release) and `examples-static` (fixed to the dense Feb 10–14 date range). Static examples use a known-good entry range that consistently produces rich output.
+**Context:** New users installing timbers saw their entire git history reported as "pending" undocumented commits. The fix options were: (A) change `GetPendingCommits` in storage to return empty when no entries exist, or (B) have display callers check for no-entries state and show a friendly message.
 
-**Consequences:**
-- Eliminates redundant LLM calls for examples that don't benefit from fresh data
-- Static examples are deterministic and reviewable — no surprise output changes on release
-- Static examples become stale relative to schema or template changes — requires periodic manual refresh
-- Dynamic examples still exist for content that should reflect the latest release
-
-## ADR-8: Clean Template Rename Without Backward-Compat Alias
-
-**Context:** The `exec-summary` draft template was renamed to `standup` for better discoverability. The question was whether to keep `exec-summary` as an alias for backward compatibility.
-
-**Decision:** Clean break, no alias. The project is pre-GA with low usage. Backward compatibility adds code complexity — alias resolution, documentation for both names, test coverage for both paths — for effectively zero real-world benefit.
+**Decision:** Fix at the display layer — `pending.go` and `doctor_checks.go` intercept the no-entries state. Storage behavior unchanged.
 
 **Consequences:**
-- Simpler template resolution with one canonical name per template
-- Any existing scripts or documentation referencing `exec-summary` break without warning
-- Sets a precedent that pre-GA naming changes are clean breaks — reduces hesitancy to fix naming mistakes early
-- Must be revisited post-GA when breaking changes carry real user cost
+- `timbers log`, `batch log`, and MCP log continue to receive commits for creating the first entry (they need commits to work)
+- Friendly onboarding experience — no wall of "pending" commits on first use
+- Two display callers carry the guard logic instead of one storage function, slight duplication
+- JSON output includes a `status` field distinguishing "no entries yet" from "all caught up"
+
+---
+
+## ADR-5: Actionable Warnings Over Anchor-Reset Command for Stale Anchors
+
+**Context:** After squash merges, the anchor commit disappears from history, causing `ErrStaleAnchor`. Options were: (A) add an explicit `timbers anchor reset` command, or (B) improve warning messages and rely on self-healing behavior (anchor updates automatically on next `timbers log`).
+
+**Decision:** Warnings plus coaching — no anchor-reset command. The anchor self-heals on the next `timbers log`, so explicit reset is unnecessary. Added coaching section to prime workflow output explaining the situation.
+
+**Consequences:**
+- Simpler CLI surface — no command to maintain, document, or test
+- Users who hit the issue get an explanation and know it resolves itself
+- `log` and `batch log` now accept fallback commits when `ErrStaleAnchor` occurs instead of failing fatally
+- If self-healing assumptions change in the future, a reset command would need to be added retroactively
+
+---
+
+## ADR-6: Check-Before-Generate Over LLM Refusal for Empty Entry Sets
+
+**Context:** The devblog CI workflow invoked the LLM even when no timbers entries existed for the period, producing "apology posts" where the model explained it had nothing to write about. Options: teach the LLM to refuse gracefully, or check entry count before invoking.
+
+**Decision:** Gate generation on entry count > 0 in the CI workflow. Don't invoke the LLM at all when there's nothing to generate.
+
+**Consequences:**
+- Zero LLM cost on days with no entries (cheaper and faster)
+- No risk of apology posts or hallucinated content leaking to the site
+- Required deleting 10 already-published blank posts
+- Any future generation workflows need the same guard pattern
+
+---
+
+## ADR-7: Clean Break for Template Rename Over Backward-Compatible Alias
+
+**Context:** The `exec-summary` draft template was renamed to `standup` for better discoverability. Options were: (A) rename and add `exec-summary` as an alias, or (B) clean break with no alias.
+
+**Decision:** Clean break — rename to `standup` with no backward compatibility alias. Pre-GA project with low usage makes this the right time for breaking changes.
+
+**Consequences:**
+- Simpler template resolution code — no alias mapping to maintain
+- Better discoverability — `standup` is immediately understood
+- Any existing scripts or habits referencing `exec-summary` break silently
+- Sets precedent that pre-GA naming changes don't carry aliases
+
+---
+
+## ADR-8: PR Template Focused on Intent/Decisions Over Diff Summary
+
+**Context:** The `pr-description` draft template was generating diff summaries — listing what files changed and what code was modified. But agents reviewing PRs already read the diff; duplicating it in the description wastes space.
+
+**Decision:** Rewrote `pr-description` (v4) to focus on intent and design decisions rather than code changes. The template pulls from `why` fields and `notes` to surface trade-offs and reasoning.
+
+**Consequences:**
+- PR descriptions provide context that can't be derived from the diff alone
+- Reviewers get the "why" up front, reducing back-and-forth questions
+- Template is more dependent on entry quality — thin `why` fields produce thin PR descriptions
+- Agents and humans both benefit from decision-focused summaries
+
+---
+
+## ADR-9: Git Hook stdout for Agent Nudges Over Claude Code PostToolUse
+
+**Context:** Needed a way to remind agents to run `timbers log` after committing. `PostToolUse` hooks in Claude Code had stdout silently consumed — agents never saw the reminders. Git `post-commit` hook stdout, however, is visible to agents in their tool output.
+
+**Decision:** Use git `post-commit` hook to print a one-line `timbers log` reminder. `timbers init --hooks` installs it; `doctor` checks for it and `--fix` auto-installs.
+
+**Consequences:**
+- Reminders are visible to all agents, not just Claude Code
+- Non-blocking — post-commit hooks don't prevent the commit, just nudge
+- Requires git hook installation as part of setup (another moving part)
+- Combined with pre-commit blocking (ADR-1), creates a two-layer system: block before commit if pending, remind after commit to document
+
+---
+
+## ADR-10: `govulncheck` Separate from `just check` Quality Gate
+
+**Context:** Go's `govulncheck` is not included in `golangci-lint` and needs to run as a separate tool. Options: add it to `just check` (blocking on every commit) or keep it as a separate `just vulncheck` recipe.
+
+**Decision:** Separate `just vulncheck` recipe, not part of the `just check` quality gate.
+
+**Consequences:**
+- `just check` remains fast and doesn't block on stdlib vulnerability patches outside the developer's control
+- Vulnerability scanning is opt-in per session rather than mandatory per commit
+- Risk of shipping known vulnerabilities if developers forget to run it
+- Can be added to CI independently with different failure thresholds
