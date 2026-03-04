@@ -264,8 +264,8 @@ func TestAddTimbersHooks_UpgradeFromSingle(t *testing.T) {
 	if count := countTimbersHooksForEvent(settings, "SessionStart"); count != 1 {
 		t.Errorf("SessionStart: expected 1, got %d", count)
 	}
-	// 3 new events added
-	for _, event := range []string{"PreCompact", "PreToolUse", "Stop"} {
+	// 2 new events added
+	for _, event := range []string{"PreCompact", "Stop"} {
 		if !hasHookForEvent(settings, event) {
 			t.Errorf("event %s should be added during upgrade", event)
 		}
@@ -433,7 +433,7 @@ func TestIsTimbersCommand(t *testing.T) {
 		{"legacy post-tool-use stdin command", legacyPostToolUseStdinCommand, true},
 		{"stop hook command", stopHookCommand, true},
 		{"legacy stop command", legacyStopCommand, true},
-		{"pre-tool-use command", preToolUseCommand, true},
+		{"pre-tool-use command", legacyPreToolUseCommand, true},
 		{"unrelated command", "bd prime", false},
 		{"empty string", "", false},
 		{"partial match", "timbers", false},
@@ -515,14 +515,6 @@ func TestCheckHookStaleness(t *testing.T) {
 							},
 						},
 					},
-					"PreToolUse": []any{
-						map[string]any{
-							"matcher": "Bash",
-							"hooks": []any{
-								map[string]any{"type": "command", "command": preToolUseCommand},
-							},
-						},
-					},
 					"Stop": []any{
 						map[string]any{
 							"matcher": "",
@@ -537,7 +529,7 @@ func TestCheckHookStaleness(t *testing.T) {
 			wantDetails: []string{"SessionStart: outdated hook command"},
 		},
 		{
-			name: "missing PreToolUse and Stop hooks - stale",
+			name: "missing Stop hook - stale",
 			settings: map[string]any{
 				"hooks": map[string]any{
 					"SessionStart": []any{
@@ -558,11 +550,8 @@ func TestCheckHookStaleness(t *testing.T) {
 					},
 				},
 			},
-			wantStale: true,
-			wantDetails: []string{
-				"PreToolUse: missing hook",
-				"Stop: missing hook",
-			},
+			wantStale:   true,
+			wantDetails: []string{"Stop: missing hook"},
 		},
 		{
 			name: "legacy stop command - stale",
@@ -584,14 +573,6 @@ func TestCheckHookStaleness(t *testing.T) {
 							},
 						},
 					},
-					"PreToolUse": []any{
-						map[string]any{
-							"matcher": "Bash",
-							"hooks": []any{
-								map[string]any{"type": "command", "command": preToolUseCommand},
-							},
-						},
-					},
 					"Stop": []any{
 						map[string]any{
 							"matcher": "",
@@ -604,6 +585,28 @@ func TestCheckHookStaleness(t *testing.T) {
 			},
 			wantStale:   true,
 			wantDetails: []string{"Stop: outdated hook command"},
+		},
+		{
+			name: "retired PreToolUse hook - stale",
+			settings: func() map[string]any {
+				settings := make(map[string]any)
+				addTimbersHooks(settings)
+				hooks, ok := settings["hooks"].(map[string]any)
+				if !ok {
+					return settings
+				}
+				hooks["PreToolUse"] = []any{
+					map[string]any{
+						"matcher": "Bash",
+						"hooks": []any{
+							map[string]any{"type": "command", "command": legacyPreToolUseCommand},
+						},
+					},
+				}
+				return settings
+			}(),
+			wantStale:   true,
+			wantDetails: []string{"PreToolUse: retired hook (will be removed)"},
 		},
 		{
 			name: "retired PostToolUse hook - stale",
@@ -637,7 +640,6 @@ func TestCheckHookStaleness(t *testing.T) {
 			wantDetails: []string{
 				"SessionStart: missing hook",
 				"PreCompact: missing hook",
-				"PreToolUse: missing hook",
 				"Stop: missing hook",
 			},
 		},

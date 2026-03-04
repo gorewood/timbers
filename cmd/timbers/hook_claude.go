@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -18,25 +17,7 @@ import (
 
 // hookInput is the JSON payload Claude Code sends to hook stdin.
 type hookInput struct {
-	ToolName       string        `json:"tool_name"`
-	ToolInput      hookToolInput `json:"tool_input"`
-	StopHookActive bool          `json:"stop_hook_active"`
-}
-
-// hookToolInput contains the tool_input fields from Claude Code.
-type hookToolInput struct {
-	Command string `json:"command"`
-}
-
-// preToolUseOutput is the structured JSON response for PreToolUse hooks.
-type preToolUseOutput struct {
-	HookSpecificOutput hookPermission `json:"hookSpecificOutput"`
-}
-
-// hookPermission carries the permission decision and reason.
-type hookPermission struct {
-	Decision string `json:"permissionDecision"`
-	Reason   string `json:"permissionDecisionReason"`
+	StopHookActive bool `json:"stop_hook_active"`
 }
 
 // stopOutput is the structured JSON response for Stop hooks.
@@ -50,38 +31,7 @@ type pendingChecker interface {
 	HasPendingCommits() (bool, error)
 }
 
-// --- Handler implementations ---
-
-// runClaudePreToolUse handles the PreToolUse hook for Claude Code.
-// Blocks git commit when undocumented commits exist.
-// Any error silently allows the operation (hooks must never break workflows).
-func runClaudePreToolUse(cmd *cobra.Command) error {
-	return runClaudePreToolUseWith(cmd.InOrStdin(), cmd.OutOrStdout(), nil)
-}
-
-// runClaudePreToolUseWith is the testable implementation of PreToolUse.
-func runClaudePreToolUseWith(stdin io.Reader, stdout io.Writer, checker pendingChecker) error {
-	input, err := parseHookInput(stdin)
-	if err != nil {
-		return nil //nolint:nilerr // hooks must never block on malformed input
-	}
-
-	command := input.ToolInput.Command
-	if !isGitCommitCommand(command) {
-		return nil // not a git commit → allow
-	}
-
-	if strings.Contains(command, "timbers") {
-		return nil // never block timbers' own commits
-	}
-
-	pending, ok := checkPending(checker)
-	if !ok || !pending {
-		return nil
-	}
-
-	return writePreToolUseResponse(stdout)
-}
+// --- Handler implementation ---
 
 // runClaudeStop handles the Stop hook for Claude Code.
 // Blocks session end when undocumented commits exist.
@@ -128,20 +78,6 @@ func checkPending(checker pendingChecker) (bool, bool) {
 	return pending, true
 }
 
-// writePreToolUseResponse writes the deny JSON to stdout.
-func writePreToolUseResponse(w io.Writer) error {
-	resp := preToolUseOutput{
-		HookSpecificOutput: hookPermission{
-			Decision: "deny",
-			Reason:   "Undocumented commit(s) exist. Run 'timbers log' before committing.",
-		},
-	}
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		return fmt.Errorf("writing hook response: %w", err)
-	}
-	return nil
-}
-
 // writeStopResponse writes the block JSON to stdout.
 func writeStopResponse(w io.Writer) error {
 	resp := stopOutput{
@@ -165,11 +101,6 @@ func parseHookInput(r io.Reader) (*hookInput, error) {
 		return nil, fmt.Errorf("parsing hook input: %w", err)
 	}
 	return &input, nil
-}
-
-// isGitCommitCommand checks if a shell command string contains a git commit invocation.
-func isGitCommitCommand(cmd string) bool {
-	return strings.Contains(cmd, "git commit")
 }
 
 // defaultPendingChecker creates a real storage-backed pending checker.

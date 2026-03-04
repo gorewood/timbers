@@ -42,8 +42,6 @@ func runHookRun(cmd *cobra.Command, args []string) error {
 		return runPreCommitHook(cmd)
 	case "post-commit":
 		return runPostCommitHook(cmd)
-	case "claude-pre-tool-use":
-		return runClaudePreToolUse(cmd)
 	case "claude-stop":
 		return runClaudeStop(cmd)
 	default:
@@ -53,43 +51,40 @@ func runHookRun(cmd *cobra.Command, args []string) error {
 }
 
 // runPreCommitHook executes the pre-commit hook logic.
-// It checks for pending commits and warns if any exist.
-// This is non-blocking - it never returns an error to allow the commit.
+// Blocks the commit when undocumented commits exist, forcing the user/agent
+// to run 'timbers log' before committing again. This prevents stacking
+// undocumented commits — each commit must be logged before the next.
+//
+// Errors during the check silently allow the commit (hooks must never break
+// git operations due to timbers infrastructure failures).
 func runPreCommitHook(cmd *cobra.Command) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), false, useColor(cmd))
 
-	// Check if we're in a git repo
 	if !git.IsRepo() {
-		// Not in a repo - silently succeed
 		return nil
 	}
 
-	// Create storage and get pending count
 	storage, storageErr := ledger.NewDefaultStorage()
 	if storageErr != nil {
-		return nil //nolint:nilerr // hook must not block git operations
-	}
-	commits, _, err := storage.GetPendingCommits()
-	if err != nil {
-		// Error getting pending - silently succeed to not block commits
-		return nil //nolint:nilerr // intentional: hook must not block git operations
+		return nil //nolint:nilerr // hook must not block on infrastructure failure
 	}
 
-	pendingCount := len(commits)
-	if pendingCount == 0 {
-		// No pending commits - nothing to warn about
+	pending, err := storage.HasPendingCommits()
+	if err != nil {
+		return nil //nolint:nilerr // hook must not block on infrastructure failure
+	}
+
+	if !pending {
 		return nil
 	}
 
-	// Warn about pending commits (non-blocking)
 	printer.Println()
-	printer.Print("[timbers] Warning: %d undocumented commit(s)\n", pendingCount)
-	printer.Print("[timbers] Run 'timbers pending' to see details\n")
-	printer.Print("[timbers] Run 'timbers log' to document your work\n")
+	printer.Print("[timbers] Commit blocked: undocumented commit(s) exist\n")
+	printer.Print("[timbers] Run 'timbers log \"what\" --why \"why\" --how \"how\"' first\n")
+	printer.Print("[timbers] Or use --no-verify to bypass\n")
 	printer.Println()
 
-	// Always succeed - this is a warning, not a blocker
-	return nil
+	return output.NewUserError("undocumented commits exist — run 'timbers log' first")
 }
 
 // runPostCommitHook executes the post-commit hook logic.

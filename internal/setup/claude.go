@@ -36,11 +36,11 @@ const timbersHookCommand = `command -v timbers >/dev/null 2>&1 && timbers prime 
 // legacyHookCommand is the old non-resilient format, kept for backward-compat detection and removal.
 const legacyHookCommand = "timbers prime"
 
-// preToolUseCommand blocks git commit when pending commits exist.
-// Uses structured JSON responses that Claude Code actually enforces.
+// legacyPreToolUseCommand was the first structured-JSON approach for blocking git commit.
+// Replaced by git pre-commit hook blocking, which works for all git clients.
 //
 //nolint:lll // shell one-liner
-const preToolUseCommand = `command -v timbers >/dev/null 2>&1 && timbers hook run claude-pre-tool-use || true`
+const legacyPreToolUseCommand = `command -v timbers >/dev/null 2>&1 && timbers hook run claude-pre-tool-use || true`
 
 // stopHookCommand blocks session end when pending commits exist.
 // Uses structured JSON responses that Claude Code actually enforces.
@@ -71,7 +71,6 @@ const legacyPostToolUseStdinCommand = `grep -q 'git commit' && command -v timber
 var timbersHooks = []timbersHookConfig{
 	{Event: "SessionStart", Matcher: "", Command: timbersHookCommand},
 	{Event: "PreCompact", Matcher: "", Command: timbersHookCommand},
-	{Event: "PreToolUse", Matcher: "Bash", Command: preToolUseCommand},
 	{Event: "Stop", Matcher: "", Command: stopHookCommand},
 }
 
@@ -211,6 +210,7 @@ func isTimbersCommand(cmd string) bool {
 		}
 	}
 	return cmd == legacyHookCommand || cmd == legacyStopCommand ||
+		cmd == legacyPreToolUseCommand ||
 		cmd == legacyPostToolUseBashCommand || cmd == legacyPostToolUseStdinCommand
 }
 
@@ -252,4 +252,4 @@ func hasHookForEvent(settings map[string]any, event string) bool {
 
 // retiredEvents lists hook events that timbers previously installed but no longer uses.
 // On upgrade, these are cleaned up to avoid dead hooks lingering in settings.
-var retiredEvents = []string{"PostToolUse"}
+var retiredEvents = []string{"PostToolUse", "PreToolUse"}
