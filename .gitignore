@@ -92,3 +92,7 @@ Desktop.ini
 
 # Allow directories to be traversed
 !*/
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
