@@ -268,27 +268,20 @@ func (s *Storage) filterLedgerOnlyCommits(commits []git.Commit) []git.Commit {
 	return filtered
 }
 
-// HasPendingCommits is a fast check for whether undocumented commits exist.
-// Uses HEAD comparison against the latest entry's anchor — one git subprocess
-// plus a filesystem scan. Returns false when no entries exist (fresh repos
-// never trigger blocking).
-//
-// May false-positive on ledger-only commits; acceptable trade-off for ~15ms.
+// HasPendingCommits checks whether undocumented commits exist.
+// Delegates to GetPendingCommits which filters out ledger-only commits
+// (commits that only touch .timbers/ files). Returns false when no
+// entries exist (fresh repos never trigger blocking).
 func (s *Storage) HasPendingCommits() (bool, error) {
-	latest, err := s.GetLatestEntry()
-	if errors.Is(err, ErrNoEntries) {
-		return false, nil
-	}
+	commits, latest, err := s.GetPendingCommits()
 	if err != nil {
 		return false, err
 	}
-
-	head, headErr := s.git.HEAD()
-	if headErr != nil {
-		return false, headErr
+	// No entries yet — don't nag about pre-timbers history.
+	if latest == nil {
+		return false, nil
 	}
-
-	return head != latest.Workset.AnchorCommit, nil
+	return len(commits) > 0, nil
 }
 
 // LogRange returns commits in the given range (fromRef..toRef).

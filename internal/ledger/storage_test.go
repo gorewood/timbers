@@ -195,24 +195,47 @@ func TestHasPendingCommits(t *testing.T) {
 			},
 			setupMock: func(mock *mockGitOps) {
 				mock.headSHA = "anchorsha12"
+				// Log(anchor, head) returns empty when they're equal
 			},
 			want: false,
 		},
 		{
-			name: "HEAD differs from anchor - pending",
+			name: "HEAD differs from anchor - code commit pending",
 			entries: []*Entry{
 				makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
 			},
 			setupMock: func(mock *mockGitOps) {
 				mock.headSHA = "newheadsha1"
+				mock.logCommits = []git.Commit{{SHA: "newheadsha1"}}
+				mock.commitFiles = map[string][]string{
+					"newheadsha1": {"main.go"},
+				}
 			},
 			want: true,
 		},
 		{
-			name:    "no entries - not pending",
+			name: "HEAD differs from anchor - ledger-only commit not pending",
+			entries: []*Entry{
+				makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "ledgersha12"
+				mock.logCommits = []git.Commit{{SHA: "ledgersha12"}}
+				mock.commitFiles = map[string][]string{
+					"ledgersha12": {".timbers/2026/01/entry.json"},
+				}
+			},
+			want: false,
+		},
+		{
+			name:    "no entries - not pending (fresh repos never block)",
 			entries: nil,
 			setupMock: func(mock *mockGitOps) {
 				mock.headSHA = "anysha12345"
+				mock.reachableFrom = []git.Commit{{SHA: "anysha12345"}}
+				mock.commitFiles = map[string][]string{
+					"anysha12345": {"main.go"},
+				}
 			},
 			want: false,
 		},
