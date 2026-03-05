@@ -12,24 +12,23 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ## New Features
 
-- **`timbers draft --models`** shows you which AI providers are available and how to pipe to them—whether you use Claude, Codex, or Gemini
-- **Post-commit reminders** nudge you to run `timbers log` after each commit, so nothing slips through the cracks
-- **`timbers prime` now runs a quick health check** at session start—missing hooks or integrations surface immediately with a hint to fix them
-- **Pre-commit hook enforcement** blocks commits when you have pending undocumented work, with a `Stop` backstop at session end
+- **Post-commit reminders keep you on track.** After each commit, timbers now shows a brief reminder to log your work — no more forgetting at session end.
+- **Health checks surface problems early.** `timbers prime` now runs a quick health check at session start, flagging missing hooks or integrations before you begin working.
+- **Pre-commit hook blocks undocumented commits.** Timbers can now prevent commits when you have pending work to document, with a session-end backstop as a safety net.
 
 ## Improvements
 
-- **Friendlier onboarding**: repositories with no timbers history no longer show every past commit as "pending"—you start clean
-- **`Stop` hook reason now includes the full `timbers log` syntax** so agents can act on it immediately instead of guessing
-- **`timbers doctor`** is faster in large repositories—pending checks that previously stalled now complete promptly
-- **`timbers log` works after squash merges** instead of erroring on a stale anchor—it warns and proceeds gracefully
-- **macOS bash 3.x compatibility** for example justfile recipes
-- **Multi-CLI piping documentation** verified for Codex and Gemini alongside Claude
+- **Smoother onboarding for existing repos.** Setting up timbers in a repo with prior history no longer floods you with hundreds of "pending" commits — only work after setup is tracked.
+- **`timbers doctor` is faster in large repos.** Pending commit detection is now significantly more responsive, especially in repositories with thousands of commits.
+- **Hook installation works with custom hook paths.** If your Git config uses `core.hooksPath`, timbers now installs hooks to the right location instead of the default `.git/hooks/`.
+- **Better guidance when hooks remind you to log.** Stop hook messages now include the full `timbers log` syntax with flags, so you can act on them immediately.
+- **Squash merges no longer break `timbers log`.** If a branch was squash-merged, `timbers log` now warns and continues instead of failing with a stale anchor error.
 
 ## Bug Fixes
 
-- Chained pre-commit hooks now correctly propagate the timbers exit code—previously a backup hook could silently override a block
-- `HasPendingCommits` no longer false-positives after `timbers log`—ledger-only commits are filtered out instead of re-triggering the reminder
-- `timbers uninstall` now removes retired hooks from older versions (v0.12/v0.13) that were previously left behind
-- Fixed a security dependency (CVE-2026-27896) in the MCP SDK
-- Cleaned up leaked LLM commentary from the published changelog
+- **Chained pre-commit hooks now properly block commits.** Previously, if timbers was chained with another hook, a failing timbers check would be silently overridden — commits always succeeded.
+- **Fixed false "pending commits" warnings after logging.** Timbers' own auto-committed log entries no longer trigger spurious pending-commit alerts.
+- **Uninstall now removes all hooks cleanly.** Previously, hooks from older versions could be left behind after uninstalling.
+- **Fixed stale LLM commentary in the published changelog.** Cleaned up generated artifacts on the site.
+- **Fixed compatibility with macOS default shell.** Example recipes now work correctly with bash 3.x.
+- **Security dependency updated.** Addressed a high-severity vulnerability in an upstream library.
