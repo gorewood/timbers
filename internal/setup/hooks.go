@@ -54,10 +54,12 @@ func CheckHookStatus(hookPath string) HookStatus {
 func GeneratePreCommitHook(withChain bool) string {
 	script := `#!/bin/sh
 # timbers pre-commit hook
-# Warns about undocumented commits (non-blocking)
+# Blocks commits when undocumented commits exist (use --no-verify to bypass)
 
 if command -v timbers >/dev/null 2>&1; then
   timbers hook run pre-commit "$@"
+  rc=$?
+  if [ $rc -ne 0 ]; then exit $rc; fi
 fi
 `
 

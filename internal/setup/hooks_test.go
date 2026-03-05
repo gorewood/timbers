@@ -19,6 +19,9 @@ func TestGeneratePreCommitHook(t *testing.T) {
 		if strings.Contains(got, ".backup") {
 			t.Error("should not contain backup chain")
 		}
+		if !strings.Contains(got, "exit $rc") {
+			t.Error("expected exit code propagation")
+		}
 	})
 
 	t.Run("with chain", func(t *testing.T) {
