@@ -12,23 +12,22 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ## New Features
 
-- **Post-commit reminders keep you on track.** After each commit, timbers now shows a brief reminder to log your work — no more forgetting at session end.
-- **Health checks surface problems early.** `timbers prime` now runs a quick health check at session start, flagging missing hooks or integrations before you begin working.
-- **Pre-commit hook blocks undocumented commits.** Timbers can now prevent commits when you have pending work to document, with a session-end backstop as a safety net.
+- **Hook enforcement keeps you honest.** Timbers now blocks commits when you have undocumented work, and reminds you at session end. You'll see a clear `timbers log` command with the exact syntax to run—no guessing.
+- **Post-commit reminders.** After each commit, you'll get a gentle nudge to document your work. Visible in any git client, not just Claude Code.
+- **`timbers hooks status`** lets you see which hooks are installed and their current state.
+- **Health check in `timbers prime`.** Session start now surfaces missing hooks or integrations upfront, with a `doctor --fix` hint so you can resolve issues before they bite.
 
 ## Improvements
 
-- **Smoother onboarding for existing repos.** Setting up timbers in a repo with prior history no longer floods you with hundreds of "pending" commits — only work after setup is tracked.
-- **`timbers doctor` is faster in large repos.** Pending commit detection is now significantly more responsive, especially in repositories with thousands of commits.
-- **Hook installation works with custom hook paths.** If your Git config uses `core.hooksPath`, timbers now installs hooks to the right location instead of the default `.git/hooks/`.
-- **Better guidance when hooks remind you to log.** Stop hook messages now include the full `timbers log` syntax with flags, so you can act on them immediately.
-- **Squash merges no longer break `timbers log`.** If a branch was squash-merged, `timbers log` now warns and continues instead of failing with a stale anchor error.
+- **Plays nicely with other tools.** Timbers now detects your environment—if another tool (like beads) manages git hooks, timbers adapts instead of overwriting. No more hook conflicts in multi-tool setups.
+- **`timbers doctor`** is dramatically faster in large repositories. What previously took many seconds now completes near-instantly.
+- **`timbers init`** makes smarter defaults based on your existing setup, so you're less likely to need manual configuration.
+- **Old hook formats are automatically migrated** when you upgrade—no manual cleanup needed.
 
 ## Bug Fixes
 
-- **Chained pre-commit hooks now properly block commits.** Previously, if timbers was chained with another hook, a failing timbers check would be silently overridden — commits always succeeded.
-- **Fixed false "pending commits" warnings after logging.** Timbers' own auto-committed log entries no longer trigger spurious pending-commit alerts.
-- **Uninstall now removes all hooks cleanly.** Previously, hooks from older versions could be left behind after uninstalling.
-- **Fixed stale LLM commentary in the published changelog.** Cleaned up generated artifacts on the site.
-- **Fixed compatibility with macOS default shell.** Example recipes now work correctly with bash 3.x.
-- **Security dependency updated.** Addressed a high-severity vulnerability in an upstream library.
+- **`timbers log` no longer fails after a squash merge.** Previously, a squash merge could leave a stale reference that blocked logging entirely. Now it warns and continues.
+- **Pending commit detection no longer false-positives on ledger entries.** Previously, timbers' own auto-committed entries would trigger "you have undocumented work" warnings—including at every session end.
+- **Chained pre-commit hooks now properly propagate failures.** If timbers blocked a commit, a chained hook from another tool could silently override the block. Fixed.
+- **Hooks now install to the correct directory** when `core.hooksPath` is configured. Previously, hooks were always written to `.git/hooks/`, which git ignores when `core.hooksPath` points elsewhere.
+- **Uninstalling timbers now removes all hooks**, including ones from older versions that used different hook events.

@@ -10,113 +10,99 @@ Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
 
 # Decision Log
 
-## ADR-1: Pre-commit Hook Over Claude Code Protocol for Enforcement
+## ADR-1: Append-Section Over Backup-and-Chain for Git Hook Installation
 
-**Context:** Timbers needed to prevent agents from committing without documenting work. Two mechanisms were available: Claude Code's `PreToolUse` JSON protocol (which can deny specific tool calls) and standard git pre-commit hooks (which block `git commit` at the git level). The initial implementation used both — `PreToolUse` to deny commits and `Stop` as a session-end backstop.
+**Context:** Timbers needed to install git hooks in environments where other tools (notably beads) also manage hooks. The original strategy was backup-and-chain: rename the existing hook to `.original` and generate a new hook that calls the backup. This took ownership of hook files and conflicted with tools like beads that set `core.hooksPath`. Symlinks and binary hooks added further edge cases.
 
-**Decision:** Drop `PreToolUse` and rely on pre-commit hook blocking plus `Stop` backstop. Pre-commit hooks are universal across all git clients, not just Claude Code. The `PreToolUse` handler added complexity (JSON protocol negotiation, Claude Code-specific dispatch) for marginal benefit — it only prevented "stacking" commits, which pre-commit already handles.
-
-**Consequences:**
-- Positive: Enforcement works for any git client or agent, not just Claude Code
-- Positive: Significant complexity reduction (removed handler, dispatch case, tests)
-- Positive: Single enforcement point is easier to reason about
-- Negative: Loses the ability to intercept commit *intent* before the user even runs `git commit`
-- Constraint: `Stop` hook must remain as backstop for agents that somehow bypass pre-commit
-
-## ADR-2: Separate Commits for Entries Over Co-committing
-
-**Context:** Entry IDs use the format `tb_<timestamp>_<anchor-short-sha>` where the SHA comes from the commit being documented. Co-committing entries with code would be cleaner (one commit instead of two), but creates a circular dependency: entry content changes the tree hash, which changes the commit SHA, which changes the entry ID. ~12 approaches were explored including two-pass commits, predictable IDs, post-commit amendment, and deferred IDs.
-
-**Decision:** Keep separate commits for entries. The SHA reference is a feature — entries point to exact commits — not a limitation. All co-committing approaches added complexity or broke the clean SHA-addressable property.
+**Decision:** Replace backup-and-chain with append-section, where timbers appends a clearly delimited section to existing hook scripts. Refuse symlinks and binaries with guidance instead of maintaining a fallback code path. The `.original`/`.backup` naming debate became moot — append-section eliminates the need for renaming entirely.
 
 **Consequences:**
-- Positive: Entry IDs are stable, deterministic, and point to real commits
-- Positive: No complex workarounds (two-pass, amendment, deferred resolution)
-- Negative: Every documented piece of work produces two commits (code + entry)
-- Negative: `HasPendingCommits` must filter out ledger-only commits to avoid false positives
-- Constraint: Any future optimization must preserve the separate-commit model
+- Timbers no longer takes ownership of hook files, reducing conflicts in multi-tool repos
+- Simpler codebase — no second code path for rename-and-chain fallback
+- Symlink and binary hooks are not supported; users must convert them manually
+- Uninstall is a section removal rather than a file restore, which is more predictable
 
-## ADR-3: Structured JSON Hooks Over Plain-text Echo
+## ADR-2: Pre-Commit Hook Blocking Over Claude Code PreToolUse Protocol
 
-**Context:** The original hook implementation used shell pipelines (`grep` + `echo`) that printed reminders to stdout. Claude Code silently consumed `PostToolUse` stdout and never surfaced it to agents. Agents never saw reminders and commits went undocumented every session.
+**Context:** Timbers enforced documentation compliance through multiple mechanisms: a `PreToolUse` hook that denied `git commit` via Claude Code's JSON protocol, a `Stop` hook as a session-end backstop, and a git `pre-commit` hook. The PreToolUse handler required understanding Claude Code's structured JSON protocol and only worked in Claude Code, while the pre-commit hook works with all git clients.
 
-**Decision:** Use Claude Code's structured JSON protocol — `permissionDecision`/`deny` for `PreToolUse` (later removed per ADR-1), `decision`/`reason` JSON for `Stop` hooks. Structured JSON with `permissionDecision`/`deny` is the only mechanism Claude Code actually respects for blocking.
-
-**Consequences:**
-- Positive: Enforcement actually works — agents see and respond to blocking
-- Positive: Machine-parseable output enables programmatic handling
-- Negative: Tightly coupled to Claude Code's JSON protocol format
-- Negative: Protocol changes in Claude Code could silently break enforcement
-
-## ADR-4: Display-layer Filtering for Pre-timbers History
-
-**Context:** When timbers is installed in an existing repo, all prior commits appear as "pending" (undocumented). The initial fix changed `GetPendingCommits` in the storage layer to return empty when no entries exist. This broke `timbers log`, `batch log`, and MCP log — they all need commits to create the first entry.
-
-**Decision:** Keep storage behavior unchanged. Move the no-entries check to the display layer — `pending.go` and `doctor_checks.go` intercept `latest==nil` before rendering. Callers that need commits (log, batch, MCP) continue to receive them.
+**Decision:** Drop PreToolUse entirely. Rely on pre-commit hook as the primary enforcement (universal across all git clients) with Stop as a backstop for agents that bypass pre-commit. PreToolUse added complexity for marginal stacking prevention that pre-commit already handles.
 
 **Consequences:**
-- Positive: All consumers of `GetPendingCommits` keep working without special-casing
-- Positive: New users get a friendly message instead of a wall of "pending" commits
-- Negative: Display-layer callers must each remember to check `latest==nil`
-- Constraint: Any new display of pending state must also handle the no-entries case
+- Enforcement works in any git client, not just Claude Code
+- Simpler hook codebase — no JSON protocol negotiation for PreToolUse
+- Lost the ability to block before the commit attempt (pre-commit blocks during, not before)
+- Stop hook remains as a second line of defense for session-end compliance
+- Co-committing entries with code was explored (~12 approaches) and rejected — entry IDs embed the anchor commit SHA, creating a circular dependency if entries are committed alongside code. Separate commits for entries is the correct design.
 
-## ADR-5: Batch Subprocess Over Per-commit Filtering
+## ADR-3: Structured JSON Hooks Over Plain-Text Echo for Claude Code Enforcement
 
-**Context:** `filterLedgerOnlyCommits` spawned one `git` subprocess per commit to check if it only touched `.timbers/` files. In repos with ~2000 commits, `doctor` took 16 seconds due to O(N) process spawns.
+**Context:** Early hook implementations used grep+echo pipelines that printed reminders to stdout. Claude Code silently consumed stdout from PostToolUse hooks and never enforced plain-text Stop hook output. Agents never saw reminders and commits went undocumented every session.
 
-**Decision:** Batch all commit file lookups into a single `git diff-tree --stdin` call via `CommitFilesMulti`, reducing subprocess spawns from O(N) to O(1).
-
-**Consequences:**
-- Positive: `doctor` performance drops from 16s to sub-second in large repos
-- Positive: Pattern is reusable — `HasPendingCommits` also uses `CommitFilesMulti`
-- Negative: `GitOps` interface grows — all mocks must implement `CommitFilesMulti`
-- Negative: `diff-tree --stdin` parsing is more complex than per-commit calls
-
-## ADR-6: Delegate to GetPendingCommits Over Fast HasPendingCommits
-
-**Context:** `HasPendingCommits` was added as a ~15ms fast path (simple HEAD-vs-anchor comparison) to avoid the full `GetPendingCommits` call on the `Stop` hook hot path. However, it false-positived after every `timbers log` because auto-committed entries change HEAD, making it always appear that new commits exist.
-
-**Decision:** Remove the fast path. `HasPendingCommits` now delegates to `GetPendingCommits` which filters ledger-only commits via `CommitFilesMulti`. The extra subprocess runs once per session — acceptable cost.
+**Decision:** Use Claude Code's structured JSON protocol with `permissionDecision`/`deny` for the Stop hook. This is the only mechanism Claude Code actually respects for blocking behavior.
 
 **Consequences:**
-- Positive: `Stop` hook no longer blocks every session end with false positives
-- Positive: Single source of truth for "what's pending" — no divergent logic
-- Negative: Lost the ~85ms performance advantage of the simple comparison
-- Constraint: Performance is acceptable only because this runs once per session, not on every commit
+- Agents are now genuinely blocked at session end when pending commits exist
+- Hooks are coupled to Claude Code's JSON protocol, which is an undocumented interface
+- Required implementing all hook logic in the `timbers` binary rather than shell scripts
+- Added `HasPendingCommits()` as a fast ~15ms check to avoid full `GetPendingCommits()` on the hot path
 
-## ADR-7: Install Hooks to core.hooksPath Over Hardcoded .git/hooks
+## ADR-4: Accurate Pending Detection Over Fast-Path Approximation
 
-**Context:** Beads sets `core.hooksPath=.beads/hooks/` to manage its own pre-commit hook. Timbers was hardcoding `.git/hooks/` for hook installation, so hooks were installed where git never reads them.
+**Context:** `HasPendingCommits()` was introduced as a ~15ms fast path that simply compared HEAD against the anchor commit. The original design noted "may false-positive on ledger-only commits; acceptable trade-off for ~15ms." Testing in a real repo immediately revealed it blocks every session end, because `timbers log` auto-commits the entry file, advancing HEAD past the anchor.
 
-**Decision:** Read `git config core.hooksPath` and install there, falling back to `.git/hooks/` when unset. This is acknowledged as a band-aid — both beads and timbers want to own the pre-commit hook, and `core.hooksPath` is winner-take-all.
-
-**Consequences:**
-- Positive: Timbers hooks actually work in repos using `core.hooksPath`
-- Positive: `--chain` correctly backs up whatever hook was at the resolved path
-- Negative: Still fragile — two tools competing for hook ownership via the same mechanism
-- Constraint: Real fix requires beads to have a plugin/chain mechanism so timbers can register without owning the hook file
-
-## ADR-8: Git Post-commit Hook Over Claude Code PostToolUse for Reminders
-
-**Context:** Timbers needed a way to remind agents to run `timbers log` after committing. Claude Code's `PostToolUse` hooks write to stdout, but that output is silently consumed — agents never see it.
-
-**Decision:** Use a standard git `post-commit` hook. Git hook stdout is visible to agents, making it the reliable nudge mechanism. Installed via `timbers init --hooks`, checked and auto-fixed by `doctor --fix`.
+**Decision:** Delegate to `GetPendingCommits()` which filters ledger-only commits via `CommitFilesMulti` batch lookup. Accept the additional git subprocess cost (~85ms) since it runs once per session.
 
 **Consequences:**
-- Positive: Works across all git clients, not just Claude Code
-- Positive: Agents actually see the reminder text
-- Positive: `doctor` can verify and repair the hook installation
-- Negative: Adds another hook file to manage alongside pre-commit
-- Negative: Reminder is passive (stdout) not active (blocking) — agents can still ignore it
+- Stop hook no longer fires false positives after every `timbers log`
+- One extra git subprocess per session — negligible for a once-per-session check
+- The "fast path" optimization was abandoned after a single real-world test proved the trade-off unacceptable
+- Reinforces that performance optimizations in enforcement paths must not compromise correctness
 
-## ADR-9: Actionable Stop Hook Reason Over Terse Message
+## ADR-5: Batch Git Subprocess via `diff-tree --stdin` Over Per-Commit Spawning
 
-**Context:** The `Stop` hook blocked session end with a message saying to run `timbers log`, but agents receiving just those two words would fail — they didn't know the required flags or syntax.
+**Context:** `filterLedgerOnlyCommits` spawned one `git` subprocess per commit to check which files each commit touched. In repos with ~2000 commits, `timbers doctor` took 16 seconds due to O(N) process spawns.
 
-**Decision:** Expand the `Stop` hook reason string to include the full `timbers log` command syntax with `--why`/`--how` placeholder arguments, plus a `timbers pending` command to see what's undocumented.
+**Decision:** Batch all commit file lookups into a single `git diff-tree --stdin` invocation via a new `CommitFilesMulti` function, reducing subprocess count from O(N) to O(1). Also added an early return in `doctor` when no entries exist.
 
 **Consequences:**
-- Positive: Agents can act on the blocking message without prior knowledge of timbers CLI
-- Positive: Reduces failed recovery attempts and wasted tokens
-- Negative: Longer reason strings consume more agent context
-- Constraint: Reason format must stay current as CLI flags evolve
+- `doctor` performance improved from 16s to sub-second in large repos
+- `GitOps` interface expanded with `CommitFilesMulti`, requiring mock updates across all test files
+- The batch approach uses `--stdin` which is less commonly used — slightly harder to understand at a glance
+- Pattern is reusable for any future bulk commit inspection
+
+## ADR-6: Install Hooks to `core.hooksPath` Rather Than Hardcoded `.git/hooks/`
+
+**Context:** Beads sets `core.hooksPath=.beads/hooks/` to manage its own hooks. Timbers was hardcoding `.git/hooks/` for hook installation, meaning hooks were installed where git never reads them in beads-managed repos.
+
+**Decision:** Read `git config core.hooksPath` and install there, falling back to `.git/hooks/` when unset. This was acknowledged as a band-aid — both tools want to own the pre-commit hook, and `core.hooksPath` is winner-take-all.
+
+**Consequences:**
+- Hooks now work in beads-managed repos
+- Timbers is subordinate to whatever tool set `core.hooksPath` — it installs into their directory
+- The real fix (a plugin/chain mechanism in beads) is deferred
+- `--chain` backup path must be dynamic based on `hooksPath`, adding a parameter to `GeneratePreCommitHook`
+
+## ADR-7: Git Hook Stdout for Agent Nudges Over Claude Code PostToolUse Hooks
+
+**Context:** Timbers needed a reliable way to remind agents to run `timbers log` after commits. Claude Code's PostToolUse hooks write to stdout but it's consumed silently — agents never see the output. Git hook stdout, however, is visible to agents as part of the git command output.
+
+**Decision:** Use a git `post-commit` hook that prints a one-line reminder via `timbers hook run post-commit`. Surface it through `init --hooks`, check it in `doctor`, and auto-install via `doctor --fix`.
+
+**Consequences:**
+- Reminder is visible to any tool that captures git output, not just Claude Code
+- Adds a git hook dependency — repos must have the hook installed
+- `prime` now runs a quick health check and surfaces missing hooks before agents start work
+- Doctor gains another check and fix capability, increasing its value as a diagnostic tool
+
+## ADR-8: No Interactive Prompts in Init for Hook Installation
+
+**Context:** During the graceful hook deference work, the team debated whether `timbers init` in Tier 1 (uncontested) environments should prompt the user about installing hooks.
+
+**Decision:** Don't prompt. The Claude Code Stop hook (steering) is the primary enforcement mechanism; git hooks are a bonus. Adding a second interactive prompt to init was a UX regression.
+
+**Consequences:**
+- `init` stays fast and non-interactive, better for scripted/automated setups
+- Users must run `timbers hooks install` separately or use `doctor --fix`
+- Keeps a clean separation: init sets up the ledger, hooks are opt-in enforcement
+- Agents running init won't get stuck on an interactive prompt
