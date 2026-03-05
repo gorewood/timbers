@@ -12,26 +12,24 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ## New Features
 
-- **Pipe your drafts to more LLM providers.** You can now use `timbers draft` with Codex and Gemini CLIs in addition to Claude, and the new `--models` flag shows available providers and API key setup.
-- **Session health checks at startup.** `timbers prime` now runs a quick health check and tells you if hooks or integrations are missing—before you start working.
-- **Post-commit reminders keep you on track.** A new git post-commit hook nudges you to run `timbers log` after each commit. Install it with `timbers init --hooks` or let `timbers doctor --fix` set it up automatically.
-- **`timbers doctor` checks your generation setup.** Doctor now verifies that you have a CLI or API key configured for draft generation, so you're not surprised when piping fails.
+- **`timbers draft --models`** shows you which AI providers are available and how to pipe to them—whether you use Claude, Codex, or Gemini
+- **Post-commit reminders** nudge you to run `timbers log` after each commit, so nothing slips through the cracks
+- **`timbers prime` now runs a quick health check** at session start—missing hooks or integrations surface immediately with a hint to fix them
+- **Pre-commit hook enforcement** blocks commits when you have pending undocumented work, with a `Stop` backstop at session end
 
 ## Improvements
 
-- **Faster pending-commit detection in large repos.** Repos with thousands of commits no longer wait on slow per-commit lookups—batch processing makes `timbers doctor` and pending checks dramatically faster.
-- **Friendlier onboarding experience.** If you set up timbers in a repo with existing history, it no longer treats every past commit as "pending"—just the ones after you started.
-- **Better terminal colors on dark backgrounds.** Output is now legible on dark terminal themes like Solarized Dark, with colors that adapt to your background.
-- **Renamed `exec-summary` template to `standup`.** The name better describes what it generates—use `timbers draft standup --since 1d` for daily standups.
-- **Improved PR description template.** The `pr-description` template now focuses on intent and decisions rather than restating diffs.
-- **Simpler hook enforcement.** Timbers now relies on a universal pre-commit git hook instead of editor-specific mechanisms, so it works the same way regardless of your git client.
-- **`timbers uninstall` cleans up retired hooks.** Upgrading from older versions no longer leaves stale hook configurations behind.
-- **macOS compatibility fix for example recipes.** Justfile examples now work correctly with macOS's default bash 3.2.
+- **Friendlier onboarding**: repositories with no timbers history no longer show every past commit as "pending"—you start clean
+- **`Stop` hook reason now includes the full `timbers log` syntax** so agents can act on it immediately instead of guessing
+- **`timbers doctor`** is faster in large repositories—pending checks that previously stalled now complete promptly
+- **`timbers log` works after squash merges** instead of erroring on a stale anchor—it warns and proceeds gracefully
+- **macOS bash 3.x compatibility** for example justfile recipes
+- **Multi-CLI piping documentation** verified for Codex and Gemini alongside Claude
 
 ## Bug Fixes
 
-- **Fixed false "pending commits" warning after every `timbers log`.** Ledger-only commits (from timbers itself) are no longer incorrectly flagged as undocumented work.
-- **`timbers log` no longer fails after a squash merge.** If a branch was squash-merged and the anchor commit disappears, timbers now warns and continues instead of blocking you.
-- **Fixed a security dependency issue** (CVE-2026-27896) in the MCP SDK.
-- **Cleaned up leaked LLM commentary from the published changelog.** Meta-text from the generation process no longer appears in release documentation.
-- **Stop hook now shows the full `timbers log` command syntax.** Previously, the session-end reminder was too terse to be actionable.
+- Chained pre-commit hooks now correctly propagate the timbers exit code—previously a backup hook could silently override a block
+- `HasPendingCommits` no longer false-positives after `timbers log`—ledger-only commits are filtered out instead of re-triggering the reminder
+- `timbers uninstall` now removes retired hooks from older versions (v0.12/v0.13) that were previously left behind
+- Fixed a security dependency (CVE-2026-27896) in the MCP SDK
+- Cleaned up leaked LLM commentary from the published changelog
