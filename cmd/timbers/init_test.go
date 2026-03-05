@@ -326,19 +326,24 @@ func TestInitWithExistingHook(t *testing.T) {
 			t.Fatalf("command failed: %v\nOutput: %s", err, buf.String())
 		}
 
-		// Check that backup was created
-		backupPath := filepath.Join(hooksDir, "pre-commit.backup")
-		if _, err := os.Stat(backupPath); os.IsNotExist(err) {
-			t.Error("existing hook was not backed up")
-		}
-
-		// Check new hook contains timbers
+		// Check hook was appended (not backed up) — new append-section behavior
 		content, err := os.ReadFile(existingHook)
 		if err != nil {
 			t.Fatalf("failed to read hook: %v", err)
 		}
-		if !strings.Contains(string(content), "timbers hook run pre-commit") {
-			t.Error("new hook does not contain timbers command")
+		contentStr := string(content)
+
+		// Existing content preserved
+		if !strings.Contains(contentStr, "existing hook") {
+			t.Error("existing hook content was lost")
+		}
+
+		// Timbers section appended with delimiters
+		if !strings.Contains(contentStr, "timbers hook run pre-commit") {
+			t.Error("hook does not contain timbers command")
+		}
+		if !strings.Contains(contentStr, "# --- timbers section (do not edit) ---") {
+			t.Error("hook missing section delimiter")
 		}
 	})
 }

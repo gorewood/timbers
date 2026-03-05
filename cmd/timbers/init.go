@@ -16,11 +16,12 @@ import (
 
 // initFlags holds the command-line flags for the init command.
 type initFlags struct {
-	yes     bool
-	hooks   bool
-	noAgent bool
-	dryRun  bool
-	force   bool
+	yes        bool
+	gitHooks   bool
+	noGitHooks bool
+	noAgent    bool
+	dryRun     bool
+	force      bool
 }
 
 // initStepResult tracks the result of a single initialization step.
@@ -86,22 +87,30 @@ If hooks are outdated, they are automatically upgraded on re-run.
 Use --force to re-run all initialization steps regardless of current state.
 
 Examples:
-  timbers init              # Interactive setup
-  timbers init --yes        # Accept all defaults, no prompts
-  timbers init --hooks      # Also install git hooks
-  timbers init --no-agent   # Skip agent environment integration
-  timbers init --dry-run    # Show what would be done
-  timbers init --force      # Force full re-initialization`,
+  timbers init                # Interactive setup
+  timbers init --yes          # Accept all defaults, no prompts
+  timbers init --git-hooks    # Also install git hooks
+  timbers init --no-git-hooks # Skip git hooks info messages
+  timbers init --no-agent     # Skip agent environment integration
+  timbers init --dry-run      # Show what would be done
+  timbers init --force        # Force full re-initialization`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runInit(cmd, flags)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&flags.yes, "yes", "y", false, "Accept all defaults, no prompts")
-	cmd.Flags().BoolVar(&flags.hooks, "hooks", false, "Install git hooks (pre-commit)")
+	cmd.Flags().BoolVar(&flags.gitHooks, "git-hooks", false, "Install git hooks (pre-commit, post-commit, post-rewrite)")
+	cmd.Flags().BoolVar(&flags.noGitHooks, "no-git-hooks", false, "Skip git hooks even in uncontested environments")
 	cmd.Flags().BoolVar(&flags.noAgent, "no-agent", false, "Skip agent environment integration")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Show what would be done without doing it")
 	cmd.Flags().BoolVar(&flags.force, "force", false, "Force full re-initialization, ignoring current state")
+
+	// Hidden aliases for backward compatibility.
+	cmd.Flags().BoolVar(&flags.gitHooks, "hooks", false, "Alias for --git-hooks")
+	_ = cmd.Flags().MarkHidden("hooks")
+	cmd.Flags().BoolVar(&flags.noGitHooks, "no-hooks", false, "Alias for --no-git-hooks")
+	_ = cmd.Flags().MarkHidden("no-hooks")
 
 	// Deprecated alias for backward compatibility.
 	cmd.Flags().Bool("no-claude", false, "Alias for --no-agent (deprecated)")
@@ -151,14 +160,13 @@ func gatherInitState() *initState {
 
 	if hooksDir, err := setup.GetHooksDir(); err == nil {
 		preCommitPath := filepath.Join(hooksDir, "pre-commit")
-		hookStatus := setup.CheckHookStatus(preCommitPath)
-		state.hooksInstalled = hookStatus.Installed
+		state.hooksInstalled = setup.HasTimbersSection(preCommitPath) || setup.CheckHookStatus(preCommitPath).Installed
 
 		postRewritePath := filepath.Join(hooksDir, "post-rewrite")
-		state.postRewriteInstalled = checkPostRewriteHook(postRewritePath)
+		state.postRewriteInstalled = setup.HasTimbersSection(postRewritePath) || checkPostRewriteHook(postRewritePath)
 
 		postCommitPath := filepath.Join(hooksDir, "post-commit")
-		state.postCommitInstalled = setup.CheckPostCommitHookStatus(postCommitPath).Installed
+		state.postCommitInstalled = setup.HasTimbersSection(postCommitPath) || setup.CheckPostCommitHookStatus(postCommitPath).Installed
 	}
 
 	state.agentEnvInstalled = len(setup.DetectedAgentEnvs()) > 0
@@ -277,7 +285,7 @@ func handleAlreadyInitialized(printer *output.Printer, styles initStyleSet, repo
 func isAlreadyInitialized(state *initState, flags *initFlags) bool {
 	return state.timbersDirExists &&
 		state.gitattributesHasEntry &&
-		(!flags.hooks || (state.hooksInstalled && state.postRewriteInstalled && state.postCommitInstalled)) &&
+		(!flags.gitHooks || (state.hooksInstalled && state.postRewriteInstalled && state.postCommitInstalled)) &&
 		(flags.noAgent || state.agentEnvInstalled)
 }
 

@@ -33,15 +33,18 @@ Subcommands:
   install    Install timbers git hooks
   uninstall  Remove timbers git hooks
   list       Show status of hooks
+  status     Show hook environment and integration details
 
 Examples:
   timbers hooks list              # Show hook status
+  timbers hooks status            # Show environment tier and integration details
   timbers hooks install           # Install pre-commit hook
   timbers hooks install --chain   # Install and preserve existing hook
   timbers hooks uninstall         # Remove hooks, restore backups`,
 	}
 
 	cmd.AddCommand(newHooksListCmd())
+	cmd.AddCommand(newHooksStatusCmd())
 	cmd.AddCommand(newHooksInstallCmd())
 	cmd.AddCommand(newHooksUninstallCmd())
 	return cmd

@@ -44,38 +44,44 @@ func buildGitattributesStep(state *initState) initStepResult {
 
 // buildHooksStep creates the dry-run step for hooks.
 func buildHooksStep(state *initState, flags *initFlags) initStepResult {
-	switch {
-	case !flags.hooks:
-		return initStepResult{Name: "hooks", Status: "skipped", Message: "not requested (use --hooks)"}
-	case state.hooksInstalled:
-		return initStepResult{Name: "hooks", Status: "skipped", Message: "already installed"}
-	default:
+	if flags.noGitHooks {
+		return initStepResult{Name: "hooks", Status: "skipped", Message: "disabled via --no-git-hooks"}
+	}
+	if flags.gitHooks {
+		if state.hooksInstalled {
+			return initStepResult{Name: "hooks", Status: "skipped", Message: "already installed"}
+		}
 		return initStepResult{Name: "hooks", Status: "dry_run", Message: "would install pre-commit hook"}
 	}
+	return initStepResult{Name: "hooks", Status: "skipped", Message: "not requested (use --git-hooks)"}
 }
 
 // buildPostRewriteStep creates the dry-run step for the post-rewrite hook.
 func buildPostRewriteStep(state *initState, flags *initFlags) initStepResult {
-	switch {
-	case !flags.hooks:
-		return initStepResult{Name: "post_rewrite", Status: "skipped", Message: "not requested (use --hooks)"}
-	case state.postRewriteInstalled:
-		return initStepResult{Name: "post_rewrite", Status: "skipped", Message: "already installed"}
-	default:
+	if flags.noGitHooks {
+		return initStepResult{Name: "post_rewrite", Status: "skipped", Message: "disabled via --no-git-hooks"}
+	}
+	if flags.gitHooks {
+		if state.postRewriteInstalled {
+			return initStepResult{Name: "post_rewrite", Status: "skipped", Message: "already installed"}
+		}
 		return initStepResult{Name: "post_rewrite", Status: "dry_run", Message: "would install post-rewrite hook"}
 	}
+	return initStepResult{Name: "post_rewrite", Status: "skipped", Message: "not requested (use --git-hooks)"}
 }
 
 // buildPostCommitStep creates the dry-run step for the post-commit hook.
 func buildPostCommitStep(state *initState, flags *initFlags) initStepResult {
-	switch {
-	case !flags.hooks:
-		return initStepResult{Name: "post_commit", Status: "skipped", Message: "not requested (use --hooks)"}
-	case state.postCommitInstalled:
-		return initStepResult{Name: "post_commit", Status: "skipped", Message: "already installed"}
-	default:
+	if flags.noGitHooks {
+		return initStepResult{Name: "post_commit", Status: "skipped", Message: "disabled via --no-git-hooks"}
+	}
+	if flags.gitHooks {
+		if state.postCommitInstalled {
+			return initStepResult{Name: "post_commit", Status: "skipped", Message: "already installed"}
+		}
 		return initStepResult{Name: "post_commit", Status: "dry_run", Message: "would install post-commit hook"}
 	}
+	return initStepResult{Name: "post_commit", Status: "skipped", Message: "not requested (use --git-hooks)"}
 }
 
 // buildAgentEnvStep creates the dry-run step for agent environment integration.
@@ -102,7 +108,7 @@ func executeInitSteps(
 	for _, stepFn := range []func() initStepResult{
 		func() initStepResult { return performTimbersDirInit(state) },
 		func() initStepResult { return performGitattributesInit(state) },
-		func() initStepResult { return executeHooksStep(state, flags) },
+		func() initStepResult { return executeHooksStep(state, flags, printer) },
 		func() initStepResult { return executePostRewriteStep(state, flags) },
 		func() initStepResult { return executePostCommitStep(state, flags) },
 		func() initStepResult { return executeAgentEnvStep(cmd, printer, styles, state, flags) },
@@ -117,12 +123,24 @@ func executeInitSteps(
 	return steps
 }
 
-// executeHooksStep runs the hooks installation step.
-func executeHooksStep(state *initState, flags *initFlags) initStepResult {
-	if !flags.hooks {
-		return initStepResult{Name: "hooks", Status: "skipped", Message: "not requested (use --hooks)"}
+// executeHooksStep runs the hooks installation step with tier-based logic.
+func executeHooksStep(state *initState, flags *initFlags, printer *output.Printer) initStepResult {
+	if flags.noGitHooks {
+		return initStepResult{Name: "hooks", Status: "skipped", Message: "disabled via --no-git-hooks"}
 	}
-	return performHooksInstall(state)
+
+	env, err := setup.ClassifyHookEnv()
+	if err != nil {
+		return initStepResult{Name: "hooks", Status: "skipped", Message: "could not classify hook environment: " + err.Error()}
+	}
+
+	if flags.gitHooks {
+		return performHooksInstallWithTier(env, state)
+	}
+
+	// No --git-hooks flag: inform based on tier, don't install.
+	informHookOpportunity(env, printer)
+	return initStepResult{Name: "hooks", Status: "skipped", Message: "not requested (use --git-hooks)"}
 }
 
 // executeAgentEnvStep runs the agent environment integration step.
@@ -189,39 +207,6 @@ func performGitattributesInit(state *initState) initStepResult {
 
 	state.gitattributesHasEntry = true
 	return initStepResult{Name: "gitattributes", Status: "ok", Message: "added linguist-generated entry"}
-}
-
-// performHooksInstall installs the pre-commit hook.
-func performHooksInstall(state *initState) initStepResult {
-	if state.hooksInstalled {
-		return initStepResult{Name: "hooks", Status: "skipped", Message: "already installed"}
-	}
-
-	hooksDir, err := setup.GetHooksDir()
-	if err != nil {
-		return initStepResult{Name: "hooks", Status: "failed", Message: err.Error()}
-	}
-
-	preCommitPath := filepath.Join(hooksDir, "pre-commit")
-	existingHook := setup.HookExists(preCommitPath)
-
-	if existingHook {
-		if err := setup.BackupExistingHook(preCommitPath); err != nil {
-			return initStepResult{Name: "hooks", Status: "failed", Message: "failed to backup: " + err.Error()}
-		}
-	}
-
-	hookContent := setup.GeneratePreCommitHook(existingHook, hooksDir)
-	// #nosec G306 -- hook needs execute permission
-	if err := os.WriteFile(preCommitPath, []byte(hookContent), 0o755); err != nil {
-		return initStepResult{Name: "hooks", Status: "failed", Message: "failed to write: " + err.Error()}
-	}
-
-	msg := "installed"
-	if existingHook {
-		msg = "installed (chained)"
-	}
-	return initStepResult{Name: "hooks", Status: "ok", Message: msg}
 }
 
 // performAgentEnvSetup handles agent environment integration setup.
