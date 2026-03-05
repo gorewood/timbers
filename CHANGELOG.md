@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.2] - 2026-03-05
+
+### Fixed
+- Expanded stop hook reason to include full `timbers log` syntax with `--why`/`--how` flags so agents receive an actionable command instead of a bare `timbers log` that would fail
+
+
 All clear. Pending commits documented and pushed.
 
 
@@ -380,3 +386,4 @@ Initial public release.
 [0.13.2]: https://github.com/gorewood/timbers/releases/tag/v0.13.2
 [0.14.0]: https://github.com/gorewood/timbers/releases/tag/v0.14.0
 [0.14.1]: https://github.com/gorewood/timbers/releases/tag/v0.14.1
+[0.14.2]: https://github.com/gorewood/timbers/releases/tag/v0.14.2
