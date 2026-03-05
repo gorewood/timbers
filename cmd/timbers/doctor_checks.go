@@ -9,7 +9,6 @@ import (
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
-	"github.com/gorewood/timbers/internal/setup"
 )
 
 // runCoreChecks performs core infrastructure checks.
@@ -180,7 +179,8 @@ func checkRecentEntries() checkResult {
 	}
 }
 
-// checkGitattributes checks if .gitattributes has the linguist-generated rule for .timbers/.
+// checkGitattributes checks if .gitattributes has the linguist-generated
+// rule for .timbers/.
 func checkGitattributes() checkResult {
 	root, err := git.RepoRoot()
 	if err != nil {
@@ -201,7 +201,9 @@ func checkGitattributes() checkResult {
 		}
 	}
 
-	if strings.Contains(string(data), "/.timbers/**") && strings.Contains(string(data), "linguist-generated") {
+	content := string(data)
+	if strings.Contains(content, "/.timbers/**") &&
+		strings.Contains(content, "linguist-generated") {
 		return checkResult{
 			Name:    "Gitattributes",
 			Status:  checkPass,
@@ -220,80 +222,8 @@ func checkGitattributes() checkResult {
 // runIntegrationChecks performs integration-related checks.
 func runIntegrationChecks(flags *doctorFlags) []checkResult {
 	checks := make([]checkResult, 0, 3)
-	checks = append(checks, checkGitHooks())
+	checks = append(checks, checkGitHooks(flags))
 	checks = append(checks, checkPostCommitHook(flags))
 	checks = append(checks, checkAgentIntegrations(flags)...)
 	return checks
-}
-
-// checkGitHooks checks if timbers is integrated with git hooks.
-func checkGitHooks() checkResult {
-	hooksDir, err := setup.GetHooksDir()
-	if err != nil {
-		return checkResult{
-			Name:    "Git Hooks",
-			Status:  checkWarn,
-			Message: "could not determine hooks directory",
-		}
-	}
-
-	preCommitPath := filepath.Join(hooksDir, "pre-commit")
-	if !setup.HookExists(preCommitPath) {
-		return checkResult{
-			Name:    "Git Hooks",
-			Status:  checkPass,
-			Message: "not installed (optional, use 'timbers init --hooks')",
-		}
-	}
-
-	status := setup.CheckHookStatus(preCommitPath)
-	if status.Installed {
-		return checkResult{
-			Name:    "Git Hooks",
-			Status:  checkPass,
-			Message: "timbers integrated in pre-commit hook",
-		}
-	}
-
-	return checkResult{
-		Name:    "Git Hooks",
-		Status:  checkPass,
-		Message: "pre-commit hook present (no timbers integration)",
-	}
-}
-
-// checkPostCommitHook checks if a post-commit hook is installed to nudge logging.
-func checkPostCommitHook(flags *doctorFlags) checkResult {
-	hooksDir, err := setup.GetHooksDir()
-	if err != nil {
-		return checkResult{
-			Name:    "Post-commit Hook",
-			Status:  checkWarn,
-			Message: "could not determine hooks directory",
-		}
-	}
-
-	hookPath := filepath.Join(hooksDir, "post-commit")
-	if setup.CheckPostCommitHookStatus(hookPath).Installed {
-		return checkResult{
-			Name:    "Post-commit Hook",
-			Status:  checkPass,
-			Message: "timbers logging reminder installed",
-		}
-	}
-
-	if flags.fix && setup.InstallPostCommitHook(hookPath) == nil {
-		return checkResult{
-			Name:    "Post-commit Hook",
-			Status:  checkPass,
-			Message: "timbers logging reminder installed (auto-fixed)",
-		}
-	}
-
-	return checkResult{
-		Name:    "Post-commit Hook",
-		Status:  checkWarn,
-		Message: "no post-commit hook — agents may forget to run timbers log",
-		Hint:    "Run 'timbers init --hooks' or 'timbers doctor --fix'",
-	}
 }

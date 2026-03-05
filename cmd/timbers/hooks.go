@@ -25,22 +25,22 @@ func newHooksCmd() *cobra.Command {
 		Short: "Manage git hooks for timbers",
 		Long: `Manage git hooks that integrate timbers into your workflow.
 
-Timbers can install a pre-commit hook that warns about undocumented commits.
-The warning is non-blocking - commits still proceed, but you'll see a reminder
-when you have pending work to document.
+Timbers installs hooks as delimited sections appended to existing hook files,
+preserving any existing hooks. The pre-commit hook blocks commits when
+undocumented commits exist (bypass with --no-verify).
 
 Subcommands:
-  install    Install timbers git hooks
-  uninstall  Remove timbers git hooks
+  install    Install timbers git hooks (pre-commit, post-commit, post-rewrite)
+  uninstall  Remove timbers sections from all hook files
   list       Show status of hooks
   status     Show hook environment and integration details
 
 Examples:
   timbers hooks list              # Show hook status
   timbers hooks status            # Show environment tier and integration details
-  timbers hooks install           # Install pre-commit hook
-  timbers hooks install --chain   # Install and preserve existing hook
-  timbers hooks uninstall         # Remove hooks, restore backups`,
+  timbers hooks install           # Install hooks (appends to existing)
+  timbers hooks install --force   # Install even in unknown hook environments
+  timbers hooks uninstall         # Remove timbers sections from all hooks`,
 	}
 
 	cmd.AddCommand(newHooksListCmd())

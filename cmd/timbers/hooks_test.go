@@ -230,6 +230,9 @@ func TestHooksInstallCommand(t *testing.T) {
 }
 
 func TestHooksInstallChaining(t *testing.T) {
+	// --chain is now a hidden deprecated alias that maps to default append behavior.
+	// With the new append-section approach, existing hooks are preserved in-place
+	// and timbers appends a delimited section.
 	testDir := t.TempDir()
 	runGit(t, testDir, "init")
 	runGit(t, testDir, "config", "user.email", "test@test.com")
@@ -256,25 +259,30 @@ func TestHooksInstallChaining(t *testing.T) {
 			t.Fatalf("command failed: %v\nOutput: %s", err, buf.String())
 		}
 
-		// Check backup was created
-		backupPath := filepath.Join(hooksDir, "pre-commit.backup")
-		if _, err := os.Stat(backupPath); os.IsNotExist(err) {
-			t.Error("backup file not created")
-		}
-
-		// Check new hook contains chain reference
+		// With append-section, the existing hook content is preserved
+		// and timbers section is appended (no backup created).
 		content, err := os.ReadFile(existingHook)
 		if err != nil {
 			t.Fatalf("failed to read hook: %v", err)
 		}
 
-		if !strings.Contains(string(content), "pre-commit.backup") {
-			t.Error("hook does not chain to backup")
+		contentStr := string(content)
+		if !strings.Contains(contentStr, "echo 'existing hook'") {
+			t.Error("existing hook content was not preserved")
+		}
+		if !strings.Contains(contentStr, "timbers hook run pre-commit") {
+			t.Error("timbers section was not appended")
+		}
+		if !strings.Contains(contentStr, "--- timbers section") {
+			t.Error("timbers section delimiters not found")
 		}
 	})
 }
 
 func TestHooksInstallForceOverwrite(t *testing.T) {
+	// --force now means "install even in Tier 4 (unknown override)".
+	// For Tier 2 (existing hook, standard path), it behaves the same as
+	// default: append timbers section alongside existing content.
 	testDir := t.TempDir()
 	runGit(t, testDir, "init")
 	runGit(t, testDir, "config", "user.email", "test@test.com")
@@ -301,20 +309,18 @@ func TestHooksInstallForceOverwrite(t *testing.T) {
 			t.Fatalf("command failed: %v\nOutput: %s", err, buf.String())
 		}
 
-		// Check backup was NOT created
-		backupPath := filepath.Join(hooksDir, "pre-commit.backup")
-		if _, err := os.Stat(backupPath); err == nil {
-			t.Error("backup file should not be created with --force")
-		}
-
-		// Check hook was overwritten with timbers content
+		// Existing content preserved, timbers section appended.
 		content, err := os.ReadFile(existingHook)
 		if err != nil {
 			t.Fatalf("failed to read hook: %v", err)
 		}
 
-		if !strings.Contains(string(content), "timbers hook run pre-commit") {
-			t.Error("hook was not overwritten with timbers content")
+		contentStr := string(content)
+		if !strings.Contains(contentStr, "echo 'existing hook'") {
+			t.Error("existing hook content was not preserved")
+		}
+		if !strings.Contains(contentStr, "timbers hook run pre-commit") {
+			t.Error("timbers section was not appended")
 		}
 	})
 }
@@ -373,7 +379,9 @@ func TestHooksUninstallCommand(t *testing.T) {
 	}
 }
 
-func TestHooksUninstallRestoresBackup(t *testing.T) {
+func TestHooksUninstallRestoresLegacyBackup(t *testing.T) {
+	// Tests that legacy .backup files from old chain installs are restored
+	// during uninstall, even though the new install path doesn't create them.
 	testDir := t.TempDir()
 	runGit(t, testDir, "init")
 	runGit(t, testDir, "config", "user.email", "test@test.com")
@@ -381,25 +389,28 @@ func TestHooksUninstallRestoresBackup(t *testing.T) {
 
 	hooksDir := filepath.Join(testDir, ".git", "hooks")
 
-	// Create an existing hook
-	existingHook := filepath.Join(hooksDir, "pre-commit")
+	// Simulate a legacy chain install: timbers hook with section + .backup file.
 	existingContent := "#!/bin/sh\necho 'original hook'\n"
-	// #nosec G306 -- test hook needs execute permission
-	if err := os.WriteFile(existingHook, []byte(existingContent), 0o755); err != nil {
-		t.Fatalf("failed to create existing hook: %v", err)
-	}
+	timbersHookContent := "#!/bin/sh\n" +
+		"# --- timbers section (do not edit) ---\n" +
+		"if command -v timbers >/dev/null 2>&1; then\n" +
+		"  timbers hook run pre-commit \"$@\"\n" +
+		"  rc=$?\n" +
+		"  if [ $rc -ne 0 ]; then exit $rc; fi\n" +
+		"fi\n" +
+		"# --- end timbers section ---\n"
 
-	// Install with chaining
-	runInDir(t, testDir, func() {
-		var buf bytes.Buffer
-		cmd := newTestRootCmdWithHooks()
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetArgs([]string{"hooks", "install", "--chain"})
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("install failed: %v", err)
-		}
-	})
+	hookPath := filepath.Join(hooksDir, "pre-commit")
+	backupPath := filepath.Join(hooksDir, "pre-commit.backup")
+
+	// #nosec G306 -- test hook needs execute permission
+	if err := os.WriteFile(hookPath, []byte(timbersHookContent), 0o755); err != nil {
+		t.Fatalf("failed to create hook: %v", err)
+	}
+	// #nosec G306 -- test hook needs execute permission
+	if err := os.WriteFile(backupPath, []byte(existingContent), 0o755); err != nil {
+		t.Fatalf("failed to create backup: %v", err)
+	}
 
 	// Uninstall
 	runInDir(t, testDir, func() {
@@ -413,8 +424,9 @@ func TestHooksUninstallRestoresBackup(t *testing.T) {
 		}
 	})
 
-	// Verify backup was restored
-	content, err := os.ReadFile(existingHook)
+	// Verify backup was restored (section removal deleted the hook file since
+	// it was only a shebang + section, then the backup was renamed in).
+	content, err := os.ReadFile(hookPath)
 	if err != nil {
 		t.Fatalf("failed to read hook: %v", err)
 	}
@@ -424,7 +436,6 @@ func TestHooksUninstallRestoresBackup(t *testing.T) {
 	}
 
 	// Verify backup file is removed
-	backupPath := filepath.Join(hooksDir, "pre-commit.backup")
 	if _, err := os.Stat(backupPath); err == nil {
 		t.Error("backup file should be removed after restore")
 	}
