@@ -10,6 +10,144 @@ import (
 	"github.com/gorewood/timbers/internal/output"
 )
 
+// HookEnvTier classifies the hook environment by conflict level.
+type HookEnvTier int
+
+const (
+	// HookEnvUncontested means no core.hooksPath override and no existing hook.
+	HookEnvUncontested HookEnvTier = iota
+	// HookEnvExistingHook means a hook exists at the standard .git/hooks path.
+	HookEnvExistingHook
+	// HookEnvKnownOverride means core.hooksPath is set by a recognized tool.
+	HookEnvKnownOverride
+	// HookEnvUnknownOverride means core.hooksPath is set to an unrecognized path.
+	HookEnvUnknownOverride
+)
+
+// HookEnvInfo describes the classified hook environment.
+type HookEnvInfo struct {
+	Tier       HookEnvTier
+	HooksDir   string // Resolved absolute path to hooks directory
+	Owner      string // "beads", "husky", "" if unknown or N/A
+	HasHook    bool   // Pre-commit hook file exists
+	HasTimbers bool   // Timbers integration present (old or new format)
+}
+
+// knownOwner maps a path pattern to a tool name.
+type knownOwner struct {
+	Pattern string
+	Owner   string
+}
+
+// knownOwners is the registry of recognized core.hooksPath patterns.
+// Order matters: more specific patterns should come first.
+var knownOwners = []knownOwner{
+	{".beads/hooks", "beads"},
+	{".husky/_", "husky"},
+	{".husky", "husky"},
+}
+
+// matchKnownOwner returns the owner name if coreHooksPath matches a known pattern.
+func matchKnownOwner(coreHooksPath string) string {
+	for _, ko := range knownOwners {
+		if strings.Contains(coreHooksPath, ko.Pattern) {
+			return ko.Owner
+		}
+	}
+	return ""
+}
+
+// ClassifyHookEnv determines the hook environment tier by inspecting git
+// configuration and the filesystem. This is the convenience wrapper that
+// performs git and filesystem calls.
+func ClassifyHookEnv() (HookEnvInfo, error) {
+	hooksDir, err := GetHooksDir()
+	if err != nil {
+		return HookEnvInfo{}, fmt.Errorf("getting hooks dir: %w", err)
+	}
+
+	coreHooksPath, _ := git.Run("config", "core.hooksPath")
+	coreHooksPath = strings.TrimSpace(coreHooksPath)
+
+	preCommitPath := filepath.Join(hooksDir, "pre-commit")
+	hookExists := false
+	hookContent := ""
+
+	if data, readErr := os.ReadFile(preCommitPath); readErr == nil {
+		hookExists = true
+		hookContent = string(data)
+	}
+
+	info := classifyHookEnvFrom(coreHooksPath, hooksDir, hookExists, hookContent)
+	return info, nil
+}
+
+// classifyHookEnvFrom is a pure classification function that takes resolved
+// values instead of performing git or filesystem calls. This is the function
+// tests call directly.
+func classifyHookEnvFrom(coreHooksPath, hooksDir string, hookExists bool, hookContent string) HookEnvInfo {
+	info := HookEnvInfo{
+		HooksDir: hooksDir,
+		HasHook:  hookExists,
+	}
+
+	if hookExists {
+		info.HasTimbers = hasSectionDelimiters(hookContent) || hasOldFormatTimbers(hookContent)
+	}
+
+	// Tier 3 or 4: core.hooksPath is set
+	if coreHooksPath != "" {
+		owner := matchKnownOwner(coreHooksPath)
+		if owner != "" {
+			info.Tier = HookEnvKnownOverride
+			info.Owner = owner
+			return info
+		}
+		info.Tier = HookEnvUnknownOverride
+		return info
+	}
+
+	// Tier 1 or 2: standard hooks path
+	if hookExists {
+		info.Tier = HookEnvExistingHook
+		return info
+	}
+
+	info.Tier = HookEnvUncontested
+	return info
+}
+
+// IsAppendable checks if a file is a regular text file that can be safely
+// appended to. Returns (true, "") if appendable, or (false, reason) where
+// reason is "symlink", "binary", or "not found".
+func IsAppendable(hookPath string) (bool, string) {
+	fi, err := os.Lstat(hookPath)
+	if err != nil {
+		return false, "not found"
+	}
+
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return false, "symlink"
+	}
+
+	// Read first 512 bytes to check for binary content (null bytes).
+	hookFile, err := os.Open(hookPath)
+	if err != nil {
+		return false, "not found"
+	}
+	defer hookFile.Close() //nolint:errcheck // best-effort close on read-only file
+
+	buf := make([]byte, 512)
+	bytesRead, _ := hookFile.Read(buf)
+	for i := range bytesRead {
+		if buf[i] == 0 {
+			return false, "binary"
+		}
+	}
+
+	return true, ""
+}
+
 // HookStatus represents the status of a single git hook.
 type HookStatus struct {
 	Installed bool
