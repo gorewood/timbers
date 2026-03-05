@@ -9,7 +9,7 @@ import (
 
 func TestGeneratePreCommitHook(t *testing.T) {
 	t.Run("without chain", func(t *testing.T) {
-		got := GeneratePreCommitHook(false)
+		got := GeneratePreCommitHook(false, "")
 		if !strings.HasPrefix(got, "#!/bin/sh") {
 			t.Error("expected shebang")
 		}
@@ -24,13 +24,20 @@ func TestGeneratePreCommitHook(t *testing.T) {
 		}
 	})
 
-	t.Run("with chain", func(t *testing.T) {
-		got := GeneratePreCommitHook(true)
+	t.Run("with chain default dir", func(t *testing.T) {
+		got := GeneratePreCommitHook(true, "")
 		if !strings.Contains(got, "timbers hook run pre-commit") {
 			t.Error("expected timbers hook command")
 		}
-		if !strings.Contains(got, "pre-commit.backup") {
-			t.Error("expected backup chain section")
+		if !strings.Contains(got, ".git/hooks/pre-commit.backup") {
+			t.Error("expected default backup path")
+		}
+	})
+
+	t.Run("with chain custom dir", func(t *testing.T) {
+		got := GeneratePreCommitHook(true, ".beads/hooks")
+		if !strings.Contains(got, ".beads/hooks/pre-commit.backup") {
+			t.Error("expected custom backup path, got: " + got)
 		}
 	})
 }

@@ -20,11 +20,11 @@ func newHooksInstallCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install timbers git hooks",
-		Long: `Install timbers git hooks to .git/hooks/.
+		Long: `Install timbers git hooks. Respects core.hooksPath if configured.
 
 The pre-commit hook blocks commits when undocumented commits exist,
 requiring 'timbers log' before continuing. Use --no-verify to bypass.
-Use --chain to preserve existing hooks (runs them first).
+Use --chain to preserve existing hooks (runs them after timbers).
 Use --force to overwrite existing hooks without backup.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runHooksInstall(cmd, chain, force, dryRun)
@@ -78,7 +78,7 @@ func performInstall(printer *output.Printer, hookPath string, existingHook, chai
 		}
 	}
 
-	hookContent := setup.GeneratePreCommitHook(chain && existingHook)
+	hookContent := setup.GeneratePreCommitHook(chain && existingHook, filepath.Dir(hookPath))
 	// #nosec G306 -- hook needs execute permission
 	if err := os.WriteFile(hookPath, []byte(hookContent), 0o755); err != nil {
 		sysErr := output.NewSystemErrorWithCause("failed to write hook", err)

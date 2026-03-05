@@ -211,7 +211,7 @@ func performHooksInstall(state *initState) initStepResult {
 		}
 	}
 
-	hookContent := setup.GeneratePreCommitHook(existingHook)
+	hookContent := setup.GeneratePreCommitHook(existingHook, hooksDir)
 	// #nosec G306 -- hook needs execute permission
 	if err := os.WriteFile(preCommitPath, []byte(hookContent), 0o755); err != nil {
 		return initStepResult{Name: "hooks", Status: "failed", Message: "failed to write: " + err.Error()}

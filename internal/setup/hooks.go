@@ -16,12 +16,23 @@ type HookStatus struct {
 	Chained   bool
 }
 
-// GetHooksDir returns the path to the .git/hooks directory.
+// GetHooksDir returns the active git hooks directory.
+// Respects core.hooksPath if configured; defaults to .git/hooks.
 func GetHooksDir() (string, error) {
 	root, err := git.RepoRoot()
 	if err != nil {
 		return "", err
 	}
+
+	// Check core.hooksPath (set by beads, husky, etc.)
+	hooksPath, configErr := git.Run("config", "core.hooksPath")
+	if configErr == nil && hooksPath != "" {
+		if filepath.IsAbs(hooksPath) {
+			return hooksPath, nil
+		}
+		return filepath.Join(root, hooksPath), nil
+	}
+
 	return filepath.Join(root, ".git", "hooks"), nil
 }
 
@@ -51,7 +62,8 @@ func CheckHookStatus(hookPath string) HookStatus {
 
 // GeneratePreCommitHook generates the pre-commit hook script content.
 // If withChain is true, the hook chains to the backed-up original hook.
-func GeneratePreCommitHook(withChain bool) string {
+// The hooksDir parameter sets the backup path for chaining; pass "" for default.
+func GeneratePreCommitHook(withChain bool, hooksDir string) string {
 	script := `#!/bin/sh
 # timbers pre-commit hook
 # Blocks commits when undocumented commits exist (use --no-verify to bypass)
@@ -64,12 +76,16 @@ fi
 `
 
 	if withChain {
-		script += `
+		backupPath := ".git/hooks/pre-commit.backup"
+		if hooksDir != "" {
+			backupPath = filepath.Join(hooksDir, "pre-commit.backup")
+		}
+		script += fmt.Sprintf(`
 # Chain to original hook if it exists
-if [ -x ".git/hooks/pre-commit.backup" ]; then
-  exec .git/hooks/pre-commit.backup "$@"
+if [ -x %q ]; then
+  exec %q "$@"
 fi
-`
+`, backupPath, backupPath)
 	}
 
 	return script
