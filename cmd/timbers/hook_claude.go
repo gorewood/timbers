@@ -80,9 +80,13 @@ func checkPending(checker pendingChecker) (bool, bool) {
 
 // writeStopResponse writes the block JSON to stdout.
 func writeStopResponse(w io.Writer) error {
+	reason := "Undocumented commit(s) exist." +
+		" Run 'timbers pending' to see them," +
+		" then 'timbers log \"what\" --why \"why\" --how \"how\"'" +
+		" for each commit before ending the session."
 	resp := stopOutput{
 		Decision: "block",
-		Reason:   "Undocumented commit(s) exist. Run 'timbers pending' to review, then 'timbers log' to document.",
+		Reason:   reason,
 	}
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		return fmt.Errorf("writing hook response: %w", err)
