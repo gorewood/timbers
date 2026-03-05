@@ -23,6 +23,10 @@ func checkGitHooks(flags *doctorFlags) checkResult {
 
 	// If timbers section is present, report active regardless of tier.
 	if setup.HasTimbersSection(preCommitPath) {
+		// Migrate old-format hooks to section-delimited on --fix.
+		if flags.fix && setup.IsOldFormatHook(preCommitPath) {
+			return migrateOldFormatHook(preCommitPath, agentActive)
+		}
 		return checkGitHooksActive(env, agentActive)
 	}
 
@@ -113,6 +117,22 @@ func checkGitHooksUncontested(agentActive bool) checkResult {
 			" Run `timbers init` for Claude Code integration," +
 			" or `timbers init --git-hooks` for commit-time enforcement.",
 	}
+}
+
+// migrateOldFormatHook replaces an old-format hook with the section-delimited format.
+func migrateOldFormatHook(preCommitPath string, agentActive bool) checkResult {
+	if err := setup.MigrateOldFormatHook(preCommitPath, preCommitSectionContent); err != nil {
+		return checkResult{
+			Name:    "Git Hooks",
+			Status:  checkWarn,
+			Message: "old-format hook migration failed: " + err.Error(),
+		}
+	}
+	msg := "pre-commit hook migrated to section-delimited format"
+	if agentActive {
+		msg += ". Claude Code steering provides session-end enforcement."
+	}
+	return checkResult{Name: "Git Hooks", Status: checkPass, Message: msg}
 }
 
 // fixGitHooks attempts to install timbers hooks via AppendTimbersSection.

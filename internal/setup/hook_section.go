@@ -52,11 +52,12 @@ func AppendTimbersSection(hookPath string, sectionContent string) error {
 	return atomicWrite(hookPath, content)
 }
 
-// RemoveTimbersSection removes the delimited timbers section from the hook file
-// at hookPath. If the file becomes empty (only shebang + whitespace) after
-// removal, the file is deleted. Returns nil if the file does not exist or
-// contains no timbers section (idempotent). Writes are atomic via temp file +
-// os.Rename.
+// RemoveTimbersSection removes timbers integration from the hook file at
+// hookPath. For new-format hooks (with delimiters), removes the delimited
+// section. For old-format hooks (timbers owns the entire file), deletes the
+// file. If the file becomes empty after section removal, it is deleted.
+// Returns nil if the file does not exist or contains no timbers content
+// (idempotent). Writes are atomic via temp file + os.Rename.
 func RemoveTimbersSection(hookPath string) error {
 	existing, err := os.ReadFile(hookPath)
 	if err != nil {
@@ -67,22 +68,32 @@ func RemoveTimbersSection(hookPath string) error {
 	}
 
 	content := string(existing)
-	if !hasSectionDelimiters(content) {
-		return nil
+
+	// New format: remove delimited section.
+	if hasSectionDelimiters(content) {
+		remaining := removeSectionLines(content)
+
+		// If only shebang + whitespace remains, delete the file.
+		stripped := strings.TrimSpace(remaining)
+		if stripped == "" || stripped == "#!/bin/sh" {
+			if removeErr := os.Remove(hookPath); removeErr != nil {
+				return fmt.Errorf("removing empty hook file: %w", removeErr)
+			}
+			return nil
+		}
+
+		return atomicWrite(hookPath, remaining)
 	}
 
-	remaining := removeSectionLines(content)
-
-	// If only shebang + whitespace remains, delete the file.
-	stripped := strings.TrimSpace(remaining)
-	if stripped == "" || stripped == "#!/bin/sh" {
+	// Old format: timbers owns the file. Delete it.
+	if hasOldFormatTimbers(content) {
 		if removeErr := os.Remove(hookPath); removeErr != nil {
-			return fmt.Errorf("removing empty hook file: %w", removeErr)
+			return fmt.Errorf("removing old-format hook file: %w", removeErr)
 		}
 		return nil
 	}
 
-	return atomicWrite(hookPath, remaining)
+	return nil
 }
 
 // removeSectionLines strips the timbers section (delimiters inclusive) from content.
@@ -119,6 +130,32 @@ func HasTimbersSection(hookPath string) bool {
 	}
 	content := string(data)
 	return hasSectionDelimiters(content) || hasOldFormatTimbers(content)
+}
+
+// IsOldFormatHook returns true if the hook file at hookPath contains timbers
+// integration in the old format (no section delimiters). These hooks were
+// written by timbers before the section-delimited format was introduced.
+func IsOldFormatHook(hookPath string) bool {
+	data, err := os.ReadFile(hookPath)
+	if err != nil {
+		return false
+	}
+	return hasOldFormatTimbers(string(data))
+}
+
+// MigrateOldFormatHook replaces an old-format timbers hook with the
+// section-delimited format. The old file is replaced entirely (since timbers
+// owned it). The sectionContent should be the hook-type-specific content
+// (without delimiters — they are added by AppendTimbersSection).
+func MigrateOldFormatHook(hookPath string, sectionContent string) error {
+	if !IsOldFormatHook(hookPath) {
+		return nil
+	}
+	// Remove the old file and create a fresh section-delimited one.
+	if err := os.Remove(hookPath); err != nil {
+		return fmt.Errorf("removing old-format hook: %w", err)
+	}
+	return AppendTimbersSection(hookPath, sectionContent)
 }
 
 // hasSectionDelimiters returns true if content contains the timbers section

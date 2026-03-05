@@ -753,3 +753,106 @@ func TestHasTimbersSection(t *testing.T) {
 		}
 	})
 }
+
+func TestRemoveTimbersSection_OldFormat(t *testing.T) {
+	t.Run("removes old-format hook file entirely", func(t *testing.T) {
+		dir := t.TempDir()
+		hookPath := filepath.Join(dir, "pre-commit")
+		// Old format: timbers owns the entire file, no delimiters.
+		writeTestFile(t, hookPath, "#!/bin/sh\ntimbers hook run pre-commit \"$@\"\n")
+
+		if err := RemoveTimbersSection(hookPath); err != nil {
+			t.Fatalf("RemoveTimbersSection() error: %v", err)
+		}
+
+		if HookExists(hookPath) {
+			t.Error("expected old-format hook file to be deleted")
+		}
+	})
+
+	t.Run("leaves non-timbers file untouched", func(t *testing.T) {
+		dir := t.TempDir()
+		hookPath := filepath.Join(dir, "pre-commit")
+		content := "#!/bin/sh\necho hello\n"
+		writeTestFile(t, hookPath, content)
+
+		if err := RemoveTimbersSection(hookPath); err != nil {
+			t.Fatalf("RemoveTimbersSection() error: %v", err)
+		}
+
+		got, _ := os.ReadFile(hookPath)
+		if string(got) != content {
+			t.Error("non-timbers file was modified")
+		}
+	})
+}
+
+func TestIsOldFormatHook(t *testing.T) {
+	dir := t.TempDir()
+
+	t.Run("old format detected", func(t *testing.T) {
+		hookPath := filepath.Join(dir, "old-hook")
+		writeTestFile(t, hookPath, "#!/bin/sh\ntimbers hook run pre-commit \"$@\"\n")
+		if !IsOldFormatHook(hookPath) {
+			t.Error("expected true for old-format hook")
+		}
+	})
+
+	t.Run("new format not detected as old", func(t *testing.T) {
+		hookPath := filepath.Join(dir, "new-hook")
+		content := "#!/bin/sh\n# --- timbers section (do not edit) ---\ntimbers hook run pre-commit\n# --- end timbers section ---\n"
+		writeTestFile(t, hookPath, content)
+		if IsOldFormatHook(hookPath) {
+			t.Error("expected false for new-format hook")
+		}
+	})
+
+	t.Run("non-timbers not detected", func(t *testing.T) {
+		hookPath := filepath.Join(dir, "other-hook")
+		writeTestFile(t, hookPath, "#!/bin/sh\necho hello\n")
+		if IsOldFormatHook(hookPath) {
+			t.Error("expected false for non-timbers hook")
+		}
+	})
+}
+
+func TestMigrateOldFormatHook(t *testing.T) {
+	t.Run("migrates old format to section-delimited", func(t *testing.T) {
+		dir := t.TempDir()
+		hookPath := filepath.Join(dir, "pre-commit")
+		writeTestFile(t, hookPath, "#!/bin/sh\ntimbers hook run pre-commit \"$@\"\n")
+
+		sectionContent := "if command -v timbers >/dev/null 2>&1; then\n  timbers hook run pre-commit \"$@\"\nfi\n"
+		if err := MigrateOldFormatHook(hookPath, sectionContent); err != nil {
+			t.Fatalf("MigrateOldFormatHook() error: %v", err)
+		}
+
+		got, err := os.ReadFile(hookPath)
+		if err != nil {
+			t.Fatalf("failed to read migrated hook: %v", err)
+		}
+		content := string(got)
+		if !strings.Contains(content, "# --- timbers section (do not edit) ---") {
+			t.Error("expected section delimiters after migration")
+		}
+		if !strings.Contains(content, "timbers hook run pre-commit") {
+			t.Error("expected timbers command after migration")
+		}
+	})
+
+	t.Run("no-ops on new format", func(t *testing.T) {
+		dir := t.TempDir()
+		hookPath := filepath.Join(dir, "pre-commit")
+		content := "#!/bin/sh\n# --- timbers section (do not edit) ---\ntimbers hook run pre-commit\n# --- end timbers section ---\n"
+		writeTestFile(t, hookPath, content)
+
+		if err := MigrateOldFormatHook(hookPath, "ignored"); err != nil {
+			t.Fatalf("MigrateOldFormatHook() error: %v", err)
+		}
+
+		got, _ := os.ReadFile(hookPath)
+		if string(got) != content {
+			t.Error("new-format hook should not be modified")
+		}
+	})
+}
