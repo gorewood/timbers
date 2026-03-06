@@ -217,9 +217,9 @@ func TestLogPendingCycle(t *testing.T) {
 
 Beads uses a local Dolt SQL server for issue tracking. Key operational notes:
 
-**Port assignment**: This repo uses port **3308** (set via `bd dolt set port`).
-Each repo needs a unique port — collisions cause cross-repo database pollution
-and misleading "port in use" errors.
+**Port assignment**: bd 0.59+ uses hash-derived ports (deterministic per repo
+path). Do NOT hardcode ports with `bd dolt set port` — let hash derivation
+handle it. Run `bd dolt show` to see the current port.
 
 **`bd dolt push/pull` is broken** (bd 0.58–0.59, issues #2306/#2118). Use raw
 dolt commands from the actual database directory:
