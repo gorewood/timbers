@@ -213,6 +213,47 @@ func TestLogPendingCycle(t *testing.T) {
 | `timbers doctor` | Health check and diagnostics |
 | `timbers onboard` | Generate CLAUDE.md snippet |
 
+## Beads / Dolt Sync
+
+Beads uses a local Dolt SQL server for issue tracking. Key operational notes:
+
+**Port assignment**: This repo uses port **3308** (set via `bd dolt set port`).
+Each repo needs a unique port — collisions cause cross-repo database pollution
+and misleading "port in use" errors.
+
+**`bd dolt push/pull` is broken** (bd 0.58–0.59, issues #2306/#2118). Use raw
+dolt commands from the actual database directory:
+
+```bash
+# Find database dir:
+ls .beads/dolt/  # e.g., "timbers/"
+
+# Push:
+cd .beads/dolt/timbers && dolt push origin main && cd -
+
+# Pull (commit first to avoid #2316):
+cd .beads/dolt/timbers && dolt add . && dolt commit -m "pre-pull" 2>/dev/null; dolt pull origin main && cd -
+```
+
+**Session workflow**:
+- Start: pull latest beads data (raw dolt pull from database dir)
+- End: push beads data (raw dolt push from database dir), then `git push`
+
+**Recovery**: If dolt server won't start or DB is corrupted:
+```bash
+bd dolt stop
+cd .beads/dolt && mv timbers timbers.bak
+dolt clone git@github.com:gorewood/timbers.git timbers
+cd -
+bd dolt start
+```
+
+**Worktrees**: Always use `bd worktree create`, never `git worktree add`.
+The `bd` version sets up a `.beads/redirect` so worktrees share the main
+repo's Dolt database.
+
+**Destructive commands — DO NOT USE**: `bd init --force`, `bd admin reset --force`
+
 ## Development Workflow
 
 **Session start:**
