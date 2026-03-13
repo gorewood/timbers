@@ -78,16 +78,17 @@ bd sync               # Sync with git
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+4. **Session retro** - Harvest factual learnings into `bd remember`. Ask: "What did I learn today that I'd have to rediscover from scratch next time?"
+5. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
    bd sync
    git push
    git status  # MUST show "up to date with origin"
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+6. **Clean up** - Clear stashes, prune remote branches
+7. **Verify** - All changes committed AND pushed
+8. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
 - Work is NOT complete until `git push` succeeds
@@ -166,8 +167,17 @@ bd close bd-42 --reason "Completed" --json
 bd automatically syncs via Dolt:
 
 - Each write auto-commits to Dolt history
-- Use `bd dolt push`/`bd dolt pull` for remote sync
+- Use `bd dolt push`/`bd dolt pull` for remote sync (bd 0.60+ auto-commits pending changes before push/pull)
 - No manual export/import needed!
+
+### Persistent Knowledge
+
+```bash
+bd remember "insight"    # Save a factual learning for future sessions
+bd memories <keyword>    # Search saved memories by keyword
+```
+
+Use `bd remember` to persist factual learnings (library gotchas, API quirks, env-specific behaviors) across sessions. Search with `bd memories <keyword>` when you encounter a problem that might have been solved before — especially at session start or when debugging unfamiliar behavior.
 
 ### Important Rules
 
@@ -190,16 +200,17 @@ For more details, see README.md and docs/QUICKSTART.md.
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+4. **Session retro** - Harvest factual learnings into `bd remember`. Ask: "What did I learn today that I'd have to rediscover from scratch next time?"
+5. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
    bd sync
    git push
    git status  # MUST show "up to date with origin"
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+6. **Clean up** - Clear stashes, prune remote branches
+7. **Verify** - All changes committed AND pushed
+8. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
 - Work is NOT complete until `git push` succeeds

@@ -217,27 +217,16 @@ func TestLogPendingCycle(t *testing.T) {
 
 Beads uses a local Dolt SQL server for issue tracking. Key operational notes:
 
-**Port assignment**: bd 0.59+ uses hash-derived ports (deterministic per repo
-path). Do NOT hardcode ports with `bd dolt set port` — let hash derivation
-handle it. Run `bd dolt show` to see the current port.
+**Port assignment**: bd 0.60+ uses OS-assigned ephemeral ports. No port
+configuration needed — ports are assigned automatically at server start.
 
-**`bd dolt push/pull` is broken** (bd 0.58–0.59, issues #2306/#2118). Use raw
-dolt commands from the actual database directory:
-
-```bash
-# Find database dir:
-ls .beads/dolt/  # e.g., "timbers/"
-
-# Push:
-cd .beads/dolt/timbers && dolt push origin main && cd -
-
-# Pull (commit first to avoid #2316):
-cd .beads/dolt/timbers && dolt add . && dolt commit -m "pre-pull" 2>/dev/null; dolt pull origin main && cd -
-```
+**Sync**: `bd dolt push` and `bd dolt pull` work directly (bd 0.60+).
+Auto-commits pending changes before push/pull, so explicit `bd dolt commit`
+is no longer needed. Auto-resolves metadata merge conflicts on pull.
 
 **Session workflow**:
-- Start: pull latest beads data (raw dolt pull from database dir)
-- End: push beads data (raw dolt push from database dir), then `git push`
+- Start: `bd dolt pull` (pull latest beads data)
+- End: `bd dolt push`, then `git push`
 
 **Recovery**: If dolt server won't start or DB is corrupted:
 ```bash
