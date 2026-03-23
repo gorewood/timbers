@@ -24,6 +24,7 @@ func newQueryCmdInternal(storage *ledger.Storage) *cobra.Command {
 	var lastFlag string
 	var sinceFlag string
 	var untilFlag string
+	var rangeFlag string
 	var tagFlags []string
 	var onelineFlag bool
 
@@ -40,16 +41,18 @@ Examples:
   timbers query --since 2026-01-01 --until 2026-01-15  # Date range
   timbers query --last 10 --json              # Show last 10 as JSON
   timbers query --last 3 --oneline            # Show last 3 in compact format
+  timbers query --range v1.0.0..v1.1.0         # Show entries in commit range
   timbers query --last 10 --tag security      # Show last 10 entries tagged with security
   timbers query --since 7d --tag bug,fix      # Show entries from last week tagged with bug or fix`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runQuery(cmd, storage, lastFlag, sinceFlag, untilFlag, tagFlags, onelineFlag)
+			return runQuery(cmd, storage, lastFlag, sinceFlag, untilFlag, rangeFlag, tagFlags, onelineFlag)
 		},
 	}
 
 	cmd.Flags().StringVar(&lastFlag, "last", "", "Retrieve last N entries")
 	cmd.Flags().StringVar(&sinceFlag, "since", "", "Retrieve entries since duration (24h, 7d) or date (2026-01-17)")
 	cmd.Flags().StringVar(&untilFlag, "until", "", "Retrieve entries until duration (24h, 7d) or date (2026-01-17)")
+	cmd.Flags().StringVar(&rangeFlag, "range", "", "Retrieve entries in commit range (A..B)")
 	cmd.Flags().StringSliceVar(&tagFlags, "tag", []string{}, "Filter by tag (can specify multiple times or comma-separated)")
 	cmd.Flags().BoolVar(&onelineFlag, "oneline", false, "Show compact format: <id>  <what>")
 
@@ -61,18 +64,19 @@ type queryParams struct {
 	count       int
 	sinceCutoff time.Time
 	untilCutoff time.Time
+	rangeStr    string
 	tags        []string
 }
 
 // runQuery executes the query command.
 func runQuery(
 	cmd *cobra.Command, storage *ledger.Storage,
-	lastFlag, sinceFlag, untilFlag string, tagFlags []string, onelineFlag bool,
+	lastFlag, sinceFlag, untilFlag, rangeFlag string, tagFlags []string, onelineFlag bool,
 ) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
 	// Parse and validate flags
-	params, err := parseQueryFlags(lastFlag, sinceFlag, untilFlag, tagFlags)
+	params, err := parseQueryFlags(lastFlag, sinceFlag, untilFlag, rangeFlag, tagFlags)
 	if err != nil {
 		printer.Error(err)
 		return err
@@ -85,10 +89,24 @@ func runQuery(
 	}
 
 	// Get entries based on filters
-	entries, err := getQueryEntries(storage, params.count, params.sinceCutoff, params.untilCutoff, params.tags)
-	if err != nil {
-		printer.Error(err)
-		return err
+	var entries []*ledger.Entry
+	if params.rangeStr != "" {
+		entries, err = getEntriesByRange(printer, storage, params.rangeStr)
+		if err != nil {
+			return err
+		}
+		// Apply additional filters on range results
+		entries = applyQueryFilters(entries, params.sinceCutoff, params.untilCutoff, params.tags)
+		sortEntriesByCreatedAt(entries)
+		if params.count > 0 && len(entries) > params.count {
+			entries = entries[:params.count]
+		}
+	} else {
+		entries, err = getQueryEntries(storage, params.count, params.sinceCutoff, params.untilCutoff, params.tags)
+		if err != nil {
+			printer.Error(err)
+			return err
+		}
 	}
 
 	// Output based on mode
@@ -96,12 +114,19 @@ func runQuery(
 }
 
 // parseQueryFlags validates and parses the query flags.
-func parseQueryFlags(lastFlag, sinceFlag, untilFlag string, tagFlags []string) (*queryParams, error) {
-	if lastFlag == "" && sinceFlag == "" && untilFlag == "" {
-		return nil, output.NewUserError("specify --last N, --since <duration|date>, or --until <duration|date> to retrieve entries")
+func parseQueryFlags(lastFlag, sinceFlag, untilFlag, rangeFlag string, tagFlags []string) (*queryParams, error) {
+	if lastFlag == "" && sinceFlag == "" && untilFlag == "" && rangeFlag == "" {
+		return nil, output.NewUserError("specify --last N, --since <duration|date>, --until <duration|date>, or --range A..B to retrieve entries")
 	}
 
 	params := &queryParams{}
+
+	if rangeFlag != "" {
+		if err := validateRangeFormat(rangeFlag); err != nil {
+			return nil, err
+		}
+		params.rangeStr = rangeFlag
+	}
 
 	if err := parseQuerySinceFlag(sinceFlag, params); err != nil {
 		return nil, err

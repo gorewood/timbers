@@ -71,7 +71,7 @@ func TestQueryCommand(t *testing.T) {
 		wantNotContain []string
 	}{
 		{
-			name:         "no --last flag",
+			name:         "no flags at all",
 			lastFlag:     "",
 			entries:      nil,
 			wantErr:      true,
