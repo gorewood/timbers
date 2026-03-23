@@ -78,6 +78,10 @@ func (m *mockGitOpsForLog) CommitFilesMulti(shas []string) (map[string][]string,
 	return make(map[string][]string), nil
 }
 
+func (m *mockGitOpsForLog) DiffNameOnly(fromRef, toRef, pathPrefix string) ([]string, error) {
+	return nil, nil
+}
+
 // newLogTestStorage creates a Storage with a temp dir for writing entries.
 func newLogTestStorage(t *testing.T, mock *mockGitOpsForLog) (*ledger.Storage, string) {
 	t.Helper()

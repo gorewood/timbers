@@ -2,6 +2,7 @@
 package main
 
 import (
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -105,6 +106,10 @@ func getEntriesByLast(printer *output.Printer, storage *ledger.Storage, lastFlag
 }
 
 // getEntriesByRange retrieves entries whose commits fall within the given range.
+// First tries anchor-based matching (entry's workset commits in the range).
+// Falls back to file-based discovery via git diff when anchor matching returns
+// nothing — this handles squash merges where entry files are present but their
+// anchor commits reference feature branch SHAs no longer in main's history.
 func getEntriesByRange(printer *output.Printer, storage *ledger.Storage, rangeFlag string) ([]*ledger.Entry, error) {
 	parts := strings.Split(rangeFlag, "..")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
@@ -121,6 +126,7 @@ func getEntriesByRange(printer *output.Printer, storage *ledger.Storage, rangeFl
 		return nil, err
 	}
 
+	// Primary path: match entries by anchor commit ancestry
 	commits, err := storage.LogRange(fromRef, toRef)
 	if err != nil {
 		printer.Error(err)
@@ -132,7 +138,45 @@ func getEntriesByRange(printer *output.Printer, storage *ledger.Storage, rangeFl
 		commitSet[commit.SHA] = true
 	}
 
-	return filterEntriesByCommits(allEntries, commitSet), nil
+	entries := filterEntriesByCommits(allEntries, commitSet)
+	if len(entries) > 0 {
+		return entries, nil
+	}
+
+	// Fallback: discover entries by file presence in the diff.
+	// Handles squash merges where anchor commits aren't in the current branch.
+	return getEntriesByDiff(printer, storage, allEntries, fromRef, toRef)
+}
+
+// getEntriesByDiff discovers entries introduced in a commit range by checking
+// which .timbers/ files were added or changed. This is the fallback path for
+// squash merges where entry anchor commits aren't in the current branch history.
+func getEntriesByDiff(
+	printer *output.Printer, storage *ledger.Storage,
+	allEntries []*ledger.Entry, fromRef, toRef string,
+) ([]*ledger.Entry, error) {
+	files, err := storage.DiffNameOnly(fromRef, toRef, ".timbers/")
+	if err != nil {
+		printer.Error(err)
+		return nil, err
+	}
+
+	// Build a set of entry IDs from the diff file paths
+	idSet := make(map[string]bool, len(files))
+	for _, f := range files {
+		base := filepath.Base(f)
+		if id, ok := strings.CutSuffix(base, ".json"); ok {
+			idSet[id] = true
+		}
+	}
+
+	var entries []*ledger.Entry
+	for _, entry := range allEntries {
+		if idSet[entry.ID] {
+			entries = append(entries, entry)
+		}
+	}
+	return entries, nil
 }
 
 // filterEntriesByCommits returns entries that have at least one commit in the given set.

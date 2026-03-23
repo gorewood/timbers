@@ -43,6 +43,10 @@ func (m *mockGitOpsForAmend) CommitFilesMulti(shas []string) (map[string][]strin
 	return make(map[string][]string), nil
 }
 
+func (m *mockGitOpsForAmend) DiffNameOnly(fromRef, toRef, pathPrefix string) ([]string, error) {
+	return nil, nil
+}
+
 // setupAmendTestStorage creates a temp dir, writes the entry file if non-nil,
 // and returns the storage and dir path. The gitAdd function is a no-op by default.
 func setupAmendTestStorage(t *testing.T, mock *mockGitOpsForAmend, entry *ledger.Entry) (*ledger.Storage, string) {

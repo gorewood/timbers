@@ -74,6 +74,10 @@ func (m *mockGitOps) CommitFilesMulti(shas []string) (map[string][]string, error
 	return result, nil
 }
 
+func (m *mockGitOps) DiffNameOnly(fromRef, toRef, pathPrefix string) ([]string, error) {
+	return nil, nil
+}
+
 // makeTestEntry creates a valid entry for testing.
 func makeTestEntry(anchor string, createdAt time.Time) *Entry {
 	return &Entry{

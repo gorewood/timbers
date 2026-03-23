@@ -46,6 +46,10 @@ func (m *mockGitOpsForPrime) CommitFilesMulti(shas []string) (map[string][]strin
 	return make(map[string][]string), nil
 }
 
+func (m *mockGitOpsForPrime) DiffNameOnly(fromRef, toRef, pathPrefix string) ([]string, error) {
+	return nil, nil
+}
+
 func TestPrimeCommand(t *testing.T) {
 	now := time.Now()
 	oneHourAgo := now.Add(-1 * time.Hour)

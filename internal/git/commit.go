@@ -271,6 +271,31 @@ func CommitFilesMulti(shas []string) (map[string][]string, error) {
 	return result, nil
 }
 
+// DiffNameOnly returns file paths changed between fromRef and toRef,
+// optionally filtered to a path prefix.
+// Uses git diff --name-only fromRef..toRef -- [pathPrefix].
+func DiffNameOnly(fromRef, toRef, pathPrefix string) ([]string, error) {
+	args := []string{"diff", "--name-only", fromRef + ".." + toRef}
+	if pathPrefix != "" {
+		args = append(args, "--", pathPrefix)
+	}
+	out, err := Run(args...)
+	if err != nil {
+		return nil, output.NewSystemErrorWithCause("failed to get diff for range "+fromRef+".."+toRef, err)
+	}
+	if out == "" {
+		return nil, nil
+	}
+	var files []string
+	for line := range strings.SplitSeq(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			files = append(files, line)
+		}
+	}
+	return files, nil
+}
+
 // extractDiffstatFromSummary parses the diffstat summary line using regex.
 func extractDiffstatFromSummary(summaryLine string) Diffstat {
 	matches := diffstatLineRegex.FindStringSubmatch(summaryLine)

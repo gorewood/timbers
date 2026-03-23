@@ -54,6 +54,10 @@ func (m *mockGitOps) CommitFilesMulti(shas []string) (map[string][]string, error
 	return result, nil
 }
 
+func (m *mockGitOps) DiffNameOnly(fromRef, toRef, pathPrefix string) ([]string, error) {
+	return nil, nil
+}
+
 // --- Test helpers ---
 
 func makeTestStorage(t *testing.T, gitOps *mockGitOps, entries []*ledger.Entry) *ledger.Storage {

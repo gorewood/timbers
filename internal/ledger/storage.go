@@ -39,6 +39,7 @@ type GitOps interface {
 	GetDiffstat(fromRef, toRef string) (git.Diffstat, error)
 	CommitFiles(sha string) ([]string, error)
 	CommitFilesMulti(shas []string) (map[string][]string, error)
+	DiffNameOnly(fromRef, toRef, pathPrefix string) ([]string, error)
 }
 
 // realGitOps implements GitOps using the actual git package functions.
@@ -66,6 +67,10 @@ func (realGitOps) CommitFiles(sha string) ([]string, error) {
 
 func (realGitOps) CommitFilesMulti(shas []string) (map[string][]string, error) {
 	return git.CommitFilesMulti(shas)
+}
+
+func (realGitOps) DiffNameOnly(fromRef, toRef, pathPrefix string) ([]string, error) {
+	return git.DiffNameOnly(fromRef, toRef, pathPrefix)
 }
 
 // Storage provides read/write access to ledger entries stored as files in .timbers/.
@@ -293,4 +298,10 @@ func (s *Storage) LogRange(fromRef, toRef string) ([]git.Commit, error) {
 // GetDiffstat returns the change statistics for the given commit range.
 func (s *Storage) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
 	return s.git.GetDiffstat(fromRef, toRef)
+}
+
+// DiffNameOnly returns file paths changed between fromRef and toRef,
+// optionally filtered to a path prefix.
+func (s *Storage) DiffNameOnly(fromRef, toRef, pathPrefix string) ([]string, error) {
+	return s.git.DiffNameOnly(fromRef, toRef, pathPrefix)
 }

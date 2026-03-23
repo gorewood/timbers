@@ -48,6 +48,10 @@ func (m *mockGitOpsForPending) CommitFilesMulti(shas []string) (map[string][]str
 	return make(map[string][]string), nil
 }
 
+func (m *mockGitOpsForPending) DiffNameOnly(fromRef, toRef, pathPrefix string) ([]string, error) {
+	return nil, nil
+}
+
 func TestPendingCommand(t *testing.T) {
 	// Helper to create a test entry struct.
 	makeEntry := func(anchor string, created time.Time) *ledger.Entry {

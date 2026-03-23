@@ -36,6 +36,10 @@ func (m *mockGitOpsForQuery) CommitFilesMulti(shas []string) (map[string][]strin
 	return make(map[string][]string), nil
 }
 
+func (m *mockGitOpsForQuery) DiffNameOnly(fromRef, toRef, pathPrefix string) ([]string, error) {
+	return nil, nil
+}
+
 // writeQueryEntryFile writes an entry JSON file to the correct date subdirectory.
 func writeQueryEntryFile(t *testing.T, dir string, entry *ledger.Entry) {
 	t.Helper()
