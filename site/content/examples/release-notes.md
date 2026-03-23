@@ -1,6 +1,6 @@
 +++
 title = 'Release Notes'
-date = '2026-03-22'
+date = '2026-03-23'
 tags = ['example', 'release-notes']
 +++
 
@@ -12,19 +12,21 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ## New Features
 
-- You can now filter entries by commit range with `timbers query --range`, bringing it in line with `export` and `draft`
-- `timbers hooks status` shows you how your hooks are configured and whether timbers is active
-- `timbers init` now handles multi-tool environments gracefully — if another tool manages your git hooks, timbers appends its section instead of taking over the hook file
+- You can now filter `timbers query` results by commit range using the `--range` flag, matching the flexibility already available in `export` and `draft`
+- `timbers hooks status` shows you exactly how your git hooks are configured and whether timbers is active
+- `timbers doctor` now detects stale anchors and merge strategy mismatches, with actionable guidance
 
 ## Improvements
 
-- Hook installation now respects `core.hooksPath`, so timbers works correctly alongside tools like beads that redirect hooks to a custom directory
-- Devblog template rewritten with a structured three-voice essay format for richer, more engaging generated posts
-- `timbers doctor` gives clearer guidance when hooks are managed by another tool, with specific next steps instead of generic warnings
+- Hook installation plays nicely with other tools — timbers no longer takes over your hook files, instead appending its section alongside existing hooks
+- `timbers init` adapts to your environment, detecting whether hooks are uncontested, shared with other tools, or managed by an external `core.hooksPath` configuration
+- Hooks are now installed to wherever `core.hooksPath` points, so setups using custom hook directories work correctly out of the box
+- The devblog template produces richer, more structured essays with clearer takeaways
 
 ## Bug Fixes
 
-- `timbers query --range` now finds entries after a squash merge — previously, squash-merged branch entries were invisible because their commit SHAs no longer appeared in main's history
-- Chained pre-commit hooks now correctly propagate exit codes — previously, a failing timbers check was silently overridden by the next hook in the chain, allowing commits to slip through
-- Fixed a JSON parsing vulnerability by upgrading a dependency that mishandled null Unicode characters
-- Updated Go runtime to patch two standard library security issues affecting URL parsing and directory traversal
+- Squash-merged branches no longer cause `timbers pending` to list every commit in history — it now gracefully reports zero pending commits with guidance
+- Squash merges no longer break `timbers query --range` — entries are found even when original branch commits are absent from history
+- Stale anchors after squash merges no longer block hooks or produce confusing agent errors
+- Fixed a security vulnerability in JSON parsing by upgrading a dependency that could allow crafted Unicode characters to override message fields
+- Updated Go runtime to address standard library security fixes for URL parsing and directory traversal
