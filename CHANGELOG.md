@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+Pending is clear. The changelog output above is your v0.15.2 release notes.
+
+
 These 2 pending commits pre-date this session (they were already pending when we started). I didn't make any commits — I just generated changelog output from the entries you provided.
 
 Want me to document those 2 pre-existing commits before we wrap up?
@@ -412,3 +415,4 @@ Initial public release.
 [0.14.4]: https://github.com/gorewood/timbers/releases/tag/v0.14.4
 [0.15.0]: https://github.com/gorewood/timbers/releases/tag/v0.15.0
 [0.15.1]: https://github.com/gorewood/timbers/releases/tag/v0.15.1
+[0.15.2]: https://github.com/gorewood/timbers/releases/tag/v0.15.2
