@@ -8,68 +8,100 @@ Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
 
 ---
 
-# Decision Log
+# Timbers Decision Log
 
-## ADR-1: Tiered Environment Classification for Hook Installation
+## ADR-1: File-Based Fallback for Entry Discovery After Squash Merge
 
-**Context:** Timbers was "stompy" in multi-tool environments — its backup-and-chain strategy for git hooks took ownership of hook files, conflicted with beads' `core.hooksPath`, and silent skips left agents unaware of their options. The question was how to coexist gracefully when other tools also want to own the pre-commit hook.
+**Context:** `query --range` matched entries by checking if their anchor commit SHA appeared in the target range's git history. After a squash merge, feature branch SHAs are replaced by a single squash commit, so anchor-based matching returned zero results — entries created on the feature branch became invisible from `main`.
 
-**Decision:** Classify the hook environment into four tiers (uncontested / existing / known-override / unknown-override) and use an append-section strategy instead of backup-and-chain. Refuse symlinks and binaries with guidance rather than maintaining a rename-and-chain fallback. Steering via Claude Code's Stop hook is the primary enforcement mechanism; git hooks are a bonus, so `init` does not prompt for hook installation in Tier 1.
-
-**Consequences:**
-- Timbers no longer overwrites or takes ownership of hook files, eliminating conflicts with beads and other tools
-- Append-section eliminates the need for `.original` / `.backup` rename bookkeeping entirely
-- Symlinks and compiled binaries are explicitly unsupported — users with exotic hook setups get guidance, not silent corruption
-- Adding an interactive hook prompt to `init` was rejected as a UX regression, meaning uncontested environments get hooks silently without user opt-in
-- Doctor and `hooks status` now give tier-aware messaging, so agents and users can understand why hooks aren't active
-
-## ADR-2: Install Hooks to `core.hooksPath` as a Band-Aid
-
-**Context:** Beads sets `core.hooksPath=.beads/hooks/`, redirecting git away from `.git/hooks/`. Timbers was hardcoding `.git/hooks/` for hook installation, so hooks were installed where git never reads them. The deeper problem: both beads and timbers want to own the pre-commit hook, and `core.hooksPath` is winner-take-all.
-
-**Decision:** Read `core.hooksPath` from git config and install there, falling back to `.git/hooks/`. Acknowledged as a band-aid — the real fix requires beads to provide a plugin/chain mechanism so timbers can register without owning the hook file.
+**Decision:** Added a `git diff --name-only` fallback in `entry_filter.go` that finds entries by checking which `.timbers/` files were modified in the commit range. When anchor matching returns zero results, the file-based path kicks in via `EntryPathsInRange` in `storage.go`.
 
 **Consequences:**
-- Hooks now actually execute in beads-managed repos, fixing a silent failure
-- `--chain` correctly backs up whatever exists at the resolved hooks directory
-- The underlying ownership conflict remains: whichever tool writes last wins the pre-commit hook
-- Creates implicit coupling to beads' directory layout — if beads changes its hooks path, timbers follows automatically via git config, but the append-section content may need updating
-- Documents a known architectural debt that should be resolved by a beads plugin mechanism
+- Entries are now discoverable regardless of merge strategy (merge commit, squash, rebase)
+- Two code paths for range matching — anchor-first with file fallback — adds maintenance surface
+- File-based matching is less semantically precise (it finds entries whose files changed, not entries whose anchors are in range), but this is acceptable since the fallback only fires when anchor matching fails entirely
+- Enables `timbers draft pr-description --range` to work correctly after squash merges, which is the common GitHub flow
 
-## ADR-3: Three-Voice Essay Structure for Devblog Template
+---
 
-**Context:** The devblog template used a Carmack `.plan`-style stream-of-consciousness format. This produced flat recaps — readable but lacking narrative arc or distinct takeaways. The question was whether to iterate on the `.plan` style or switch to a fundamentally different structure.
+## ADR-2: Three-Voice Essay Structure Over Stream-of-Consciousness for Devblog Template
 
-**Decision:** Replace stream-of-consciousness with a three-voice essay structure (Storyteller / Conceptualist / Practitioner) using a Hook → Work → Insight → Landing scaffold. Named voices give the LLM generating the post distinct perspectives to inhabit rather than a single monotone recap.
+**Context:** The devblog template (used by `timbers draft devblog`) originally produced Carmack `.plan`-style stream-of-consciousness output. This generated flat recaps that read like status updates rather than engaging technical essays.
 
-**Consequences:**
-- Posts have clearer narrative structure with identifiable takeaways
-- The three-voice constraint forces richer analysis — the Conceptualist voice must find a generalizable insight, the Practitioner must give concrete guidance
-- Template is more opinionated, which means less flexibility for entries that don't naturally decompose into three perspectives
-- Adds a no-headers constraint after test generation revealed excessive markdown structure in output
-- All existing site posts were regenerated, creating a visual consistency break with any cached or archived versions
-
-## ADR-4: Hash-Derived Ports Over Hardcoded for Dolt Server
-
-**Context:** Beads' Dolt server initially used hardcoded port 3307, causing cross-repo collisions when multiple projects ran simultaneously. A temporary fix assigned port 3308, but beads 0.59 introduced hash-derived ports as a general solution. The question was whether to keep the explicit port override or adopt the hash-derived mechanism.
-
-**Decision:** Remove hardcoded port overrides and adopt beads 0.59's hash-derived port assignment. Hardcoded overrides defeat the collision-prevention mechanism — they're the problem masquerading as the solution.
+**Decision:** Replaced with a structured three-voice approach — Storyteller, Conceptualist, and Practitioner — scaffolded with Hook → Work → Insight → Landing structure. Each voice contributes a different dimension: narrative drive, conceptual depth, and practical grounding.
 
 **Consequences:**
-- Each repo gets a deterministic but unique port derived from its path, eliminating cross-repo collisions without manual coordination
-- Port numbers are no longer human-memorable, making manual `dolt sql-client` connections slightly harder to debug
-- Configuration files (`metadata.json`, `config.yaml`) are simpler — no port fields to manage
-- Requires beads 0.59+, creating a minimum version dependency
-- Previously documented port 3308 workarounds in `CLAUDE.md` became obsolete and needed cleanup
+- Richer, more engaging essays with clear takeaways instead of flat recaps
+- Template is more prescriptive, which constrains the LLM's creative freedom but produces more consistent quality
+- Added a no-headers constraint after test generation revealed the LLM was over-structuring output
+- Three named voices may feel artificial if the source entries are thin — the template quality is bounded by entry quality
 
-## ADR-5: Full Command Syntax in Stop Hook Reason Strings
+---
 
-**Context:** The Claude Code Stop hook fires when timbers detects undocumented commits, telling the agent to run `timbers log`. But agents receiving just the command name would fail — they need the full invocation syntax including required flags (`--why`, `--how`) with placeholder arguments to produce a valid command.
+## ADR-3: Append-Section Hook Strategy Over Backup-and-Chain
 
-**Decision:** Expand the Stop hook reason string to include `timbers pending` for diagnosis plus the full `timbers log` syntax with placeholder arguments, making the hook output directly actionable.
+**Context:** Timbers needed to install a `pre-commit` hook, but in multi-tool environments (especially with beads), the previous backup-and-chain strategy took ownership of hook files. This conflicted with beads' `core.hooksPath`, and silent skips left agents unaware of their options. The tool was "stompy" — it assumed it was the only hook manager.
+
+**Decision:** Implemented a four-tier environment classification (uncontested / existing / known-override / unknown-override) with an append-section strategy. Instead of renaming the existing hook and chaining to it, timbers appends a clearly delimited section to the existing hook file. Symlinks and binaries are refused with guidance rather than maintaining a second code path.
 
 **Consequences:**
-- Agents can parse the reason string and construct a valid `timbers log` invocation without consulting documentation
-- The reason string is longer and more verbose for human readers
-- Placeholder arguments (e.g., `"what you did"`) set expectations about required fields, reducing retry loops from missing-argument errors
-- Couples the hook output format to the CLI's argument syntax — flag renames require updating the hook reason string
+- Eliminates `.original` / `.backup` file proliferation and the rename-and-chain code path
+- Plays nicely with beads and other hook managers — no longer takes exclusive ownership
+- Tier-aware messaging in `init` and `doctor` gives agents clear guidance instead of silent failures
+- Decided against prompting for hooks in Tier 1 (uncontested) `init` — Claude Code Stop hook is the primary enforcement mechanism, git hooks are a bonus. Adding an interactive prompt was a UX regression.
+- New `hooks status` command provides visibility into the hook state
+
+---
+
+## ADR-4: Respect `core.hooksPath` Instead of Hardcoding `.git/hooks/`
+
+**Context:** Beads sets `core.hooksPath=.beads/hooks/` to manage its own hooks. Timbers was hardcoding `.git/hooks/` for hook installation, so hooks were installed where git never reads them — completely invisible.
+
+**Decision:** `GetHooksDir` now reads `git config core.hooksPath` and falls back to `.git/hooks/` only if unset. `GeneratePreCommitHook` takes a `hooksDir` param for dynamic chain backup path.
+
+**Consequences:**
+- Hooks now install to wherever git actually reads them, fixing the beads coexistence bug
+- This is explicitly a band-aid: both beads and timbers want to own the pre-commit hook, and `core.hooksPath` is winner-take-all. The real fix is a plugin/chain mechanism in beads' pre-commit so timbers can register without owning the hook file.
+- Fallback to `.git/hooks/` preserves behavior for repos without `core.hooksPath` set
+- Created a dependency on beads' hook architecture — future beads changes to hook management could break timbers again
+
+---
+
+## ADR-5: Capture Exit Code Before Chaining Pre-Commit Hooks
+
+**Context:** Timbers' generated pre-commit hook was designed to block commits when entries were pending, then chain to a backup hook. But it unconditionally `exec`'d the backup hook, so timbers' non-zero exit was silently overridden — commits always succeeded regardless of pending state.
+
+**Decision:** Capture the exit code after `timbers hook run`, and exit early with that code if non-zero, before `exec`'ing the backup hook.
+
+**Consequences:**
+- Timbers can now actually block commits when pending entries exist, which was the entire point of the hook
+- If timbers fails for any reason (binary missing, crash), it blocks the chain — acceptable since `timbers hook run` is designed to be fast and gracefully degrade
+- Simple two-line fix (capture + early exit) rather than restructuring the hook generation
+
+---
+
+## ADR-6: Unique Dolt Ports Over Shared Default to Prevent Cross-Repo Collisions
+
+**Context:** Beads uses a local Dolt SQL server per repository. Multiple repos using the default port 3307 caused collisions with misleading error messages. Separately, Claude Code's sandbox blocking localhost TCP was being misdiagnosed as stale PIDs rather than a sandbox issue.
+
+**Decision:** Moved from hardcoded port 3307 to unique ports (initially explicit 3308, then beads 0.59 introduced hash-derived ports, then 0.60 moved to OS-assigned ephemeral ports). Documented sandbox workarounds and recovery procedures in `CLAUDE.md`.
+
+**Consequences:**
+- Eliminates cross-repo port collisions entirely (ephemeral ports are guaranteed unique)
+- Hardcoded overrides were explicitly removed because they defeat the collision-prevention mechanism
+- No port configuration needed — simplifies setup and documentation
+- Documented the sandbox/localhost TCP issue prevents future misdiagnosis of connection failures
+- Port is no longer predictable, which means external tooling can't assume a known port — must discover it from beads
+
+---
+
+## ADR-7: Gitignore Beads Backup State as Machine-Local Runtime Data
+
+**Context:** The `.beads/backup/` directory contained timestamps and dolt commit hashes that changed on every `bd` operation, creating noisy diffs in git status and commits.
+
+**Decision:** Added `backup/` to `.beads/.gitignore` and untracked existing files with `git rm -r --cached`.
+
+**Consequences:**
+- Eliminates noisy diffs from machine-local runtime state
+- Backup state is no longer shared across clones — each machine manages its own backup timestamps
+- Clean `git status` makes it easier to spot actual changes

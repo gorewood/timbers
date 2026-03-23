@@ -12,18 +12,19 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ## New Features
 
-- You can now filter `timbers query` results by commit range using the `--range` flag, matching the filtering already available in `export` and `draft`
-- `timbers hooks status` shows you which hooks are installed and how timbers coexists with other tools in your repo
-- `timbers init` now detects your environment and chooses smart defaults — if another tool already manages git hooks, timbers adapts instead of overwriting
+- You can now filter entries by commit range with `timbers query --range`, bringing it in line with `export` and `draft`
+- `timbers hooks status` shows you how your hooks are configured and whether timbers is active
+- `timbers init` now handles multi-tool environments gracefully — if another tool manages your git hooks, timbers appends its section instead of taking over the hook file
 
 ## Improvements
 
-- Hook installation now respects `core.hooksPath`, so timbers installs hooks where git actually reads them — even when other tools redirect the hooks directory
-- The stop hook now provides the full `timbers log` syntax with `--why` and `--how` flags, so agents can act on it immediately without guessing the command format
-- Devblog drafts now use a richer three-voice essay structure, producing more engaging and structured posts from your development entries
-- Multi-tool environments are handled gracefully — timbers classifies your setup and cooperates with existing hooks rather than taking ownership of them
+- Hook installation now respects `core.hooksPath`, so timbers works correctly alongside tools like beads that redirect hooks to a custom directory
+- Devblog template rewritten with a structured three-voice essay format for richer, more engaging generated posts
+- `timbers doctor` gives clearer guidance when hooks are managed by another tool, with specific next steps instead of generic warnings
 
 ## Bug Fixes
 
-- Fixed chained pre-commit hooks silently ignoring timbers' exit code — previously, commits would succeed even when timbers flagged undocumented work
-- Fixed pending commit detection producing false positives in certain repository states
+- `timbers query --range` now finds entries after a squash merge — previously, squash-merged branch entries were invisible because their commit SHAs no longer appeared in main's history
+- Chained pre-commit hooks now correctly propagate exit codes — previously, a failing timbers check was silently overridden by the next hook in the chain, allowing commits to slip through
+- Fixed a JSON parsing vulnerability by upgrading a dependency that mishandled null Unicode characters
+- Updated Go runtime to patch two standard library security issues affecting URL parsing and directory traversal

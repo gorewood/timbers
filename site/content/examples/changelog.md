@@ -15,6 +15,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+The warning about uncommitted changes is because there are no uncommitted changes relevant here (just the untracked `.beads/` files from git status). The entry is documented. Now back to the changelog output:
+
+## [0.15.3] - 2026-03-22
+
+### Fixed
+- Fixed `query --range` returning empty results after squash merge by falling back to file-based entry discovery when anchor commit SHAs are no longer in main's history
+
+
 Pending is clear. The changelog output above is your v0.15.2 release notes.
 
 
@@ -426,3 +434,4 @@ Initial public release.
 [0.15.0]: https://github.com/gorewood/timbers/releases/tag/v0.15.0
 [0.15.1]: https://github.com/gorewood/timbers/releases/tag/v0.15.1
 [0.15.2]: https://github.com/gorewood/timbers/releases/tag/v0.15.2
+[0.15.3]: https://github.com/gorewood/timbers/releases/tag/v0.15.3
