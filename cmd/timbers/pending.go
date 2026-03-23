@@ -92,10 +92,11 @@ func runPending(cmd *cobra.Command, storage *ledger.Storage, countOnly bool) err
 		printer.Error(err)
 		return err
 	}
+
+	// Stale anchor: don't show the fallback commit list — it's not actionable
+	// and confuses agents into re-documenting already-covered work.
 	if errors.Is(err, ledger.ErrStaleAnchor) {
-		printer.Warn("last entry's anchor commit is no longer in git history (likely squash merge or rebase); " +
-			"showing all reachable commits — if the squash-merged branch had timbers entries, " +
-			"this work is already documented; do not catch up; the anchor self-heals on your next timbers log")
+		return outputStaleAnchor(printer, latest)
 	}
 
 	// Build result
@@ -107,6 +108,31 @@ func runPending(cmd *cobra.Command, storage *ledger.Storage, countOnly bool) err
 	}
 
 	outputPendingHuman(printer, result, countOnly)
+	return nil
+}
+
+// outputStaleAnchor handles the stale anchor case — reports 0 actionable
+// pending with clear guidance instead of dumping a confusing commit list.
+func outputStaleAnchor(printer *output.Printer, latest *ledger.Entry) error {
+	if printer.IsJSON() {
+		data := map[string]any{
+			"count":  0,
+			"status": "stale_anchor",
+			"message": "Anchor commit no longer in history (squash merge or rebase). " +
+				"No action needed — anchor self-heals on next timbers log.",
+		}
+		if latest != nil {
+			data["last_entry"] = &entryReference{
+				ID:           latest.ID,
+				AnchorCommit: latest.Workset.AnchorCommit,
+				CreatedAt:    latest.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			}
+		}
+		return printer.Success(data)
+	}
+
+	printer.Warn("Anchor commit no longer in history (likely squash merge or rebase)")
+	printer.Println("No action needed — do not re-document. The anchor self-heals on your next timbers log.")
 	return nil
 }
 

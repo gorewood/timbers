@@ -2,6 +2,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -79,9 +80,10 @@ func checkBinaryInPath() checkResult {
 
 // runWorkflowChecks performs workflow-related checks.
 func runWorkflowChecks() []checkResult {
-	checks := make([]checkResult, 0, 2)
+	checks := make([]checkResult, 0, 3)
 	checks = append(checks, checkPendingCommits())
 	checks = append(checks, checkRecentEntries())
+	checks = append(checks, checkMergeStrategy())
 	return checks
 }
 
@@ -119,6 +121,14 @@ func checkPendingCommits() checkResult {
 
 	commits, _, err := storage.GetPendingCommits()
 	if err != nil {
+		if errors.Is(err, ledger.ErrStaleAnchor) {
+			return checkResult{
+				Name:    "Pending Commits",
+				Status:  checkWarn,
+				Message: "stale anchor — last entry references a commit no longer in history (squash merge or rebase)",
+				Hint:    "No action needed. The anchor self-heals on your next timbers log. Prefer merge commits over squash/rebase to avoid this.",
+			}
+		}
 		return checkResult{
 			Name:    "Pending Commits",
 			Status:  checkWarn,
@@ -140,6 +150,39 @@ func checkPendingCommits() checkResult {
 		Status:  checkWarn,
 		Message: strconv.Itoa(count) + " undocumented commit(s)",
 		Hint:    "Run 'timbers pending' to review, then 'timbers log' to document",
+	}
+}
+
+// checkMergeStrategy checks git config for timbers-friendly merge settings.
+// Squash merges and rebases break anchor tracking; merge commits preserve it.
+func checkMergeStrategy() checkResult {
+	var warnings []string
+
+	// Check pull.rebase
+	pullRebase, _ := git.Run("config", "--get", "pull.rebase")
+	if pullRebase == "true" {
+		warnings = append(warnings, "pull.rebase=true (rebases break anchor tracking)")
+	}
+
+	// Check merge.ff (only/true means fast-forward, which avoids merge commits)
+	mergeFF, _ := git.Run("config", "--get", "merge.ff")
+	if mergeFF == "only" {
+		warnings = append(warnings, "merge.ff=only (no merge commits created)")
+	}
+
+	if len(warnings) > 0 {
+		return checkResult{
+			Name:    "Merge Strategy",
+			Status:  checkWarn,
+			Message: strings.Join(warnings, "; "),
+			Hint:    "Timbers works best with merge commits. Run: git config pull.rebase false && git config merge.ff false",
+		}
+	}
+
+	return checkResult{
+		Name:    "Merge Strategy",
+		Status:  checkPass,
+		Message: "merge-friendly configuration",
 	}
 }
 

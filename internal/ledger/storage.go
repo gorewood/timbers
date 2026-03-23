@@ -277,9 +277,15 @@ func (s *Storage) filterLedgerOnlyCommits(commits []git.Commit) []git.Commit {
 // Delegates to GetPendingCommits which filters out ledger-only commits
 // (commits that only touch .timbers/ files). Returns false when no
 // entries exist (fresh repos never trigger blocking).
+// Returns false on stale anchor (squash/rebase) — the commits shown
+// in the fallback are not actionable, and blocking on them causes
+// agents to create duplicate entries.
 func (s *Storage) HasPendingCommits() (bool, error) {
 	commits, latest, err := s.GetPendingCommits()
 	if err != nil {
+		if errors.Is(err, ErrStaleAnchor) {
+			return false, nil // stale anchor is not actionable pending
+		}
 		return false, err
 	}
 	// No entries yet — don't nag about pre-timbers history.
