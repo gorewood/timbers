@@ -106,10 +106,14 @@ func getEntriesByLast(printer *output.Printer, storage *ledger.Storage, lastFlag
 }
 
 // getEntriesByRange retrieves entries whose commits fall within the given range.
-// First tries anchor-based matching (entry's workset commits in the range).
-// Falls back to file-based discovery via git diff when anchor matching returns
-// nothing — this handles squash merges where entry files are present but their
-// anchor commits reference feature branch SHAs no longer in main's history.
+// Uses two discovery strategies and unions the results:
+//  1. Anchor-based: entry's workset commits appear in git rev-list A..B
+//  2. File-based: entry file appears in git diff --name-only A..B -- .timbers/
+//
+// Both paths are always run because a squash merge can leave some entries with
+// valid anchors (e.g., from a prior session on main) while others have stale
+// anchors from the feature branch. Running only anchor-based and falling back
+// on zero results misses the partial-stale case.
 func getEntriesByRange(printer *output.Printer, storage *ledger.Storage, rangeFlag string) ([]*ledger.Entry, error) {
 	parts := strings.Split(rangeFlag, "..")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
@@ -126,7 +130,7 @@ func getEntriesByRange(printer *output.Printer, storage *ledger.Storage, rangeFl
 		return nil, err
 	}
 
-	// Primary path: match entries by anchor commit ancestry
+	// Path 1: match entries by anchor commit ancestry
 	commits, err := storage.LogRange(fromRef, toRef)
 	if err != nil {
 		printer.Error(err)
@@ -138,14 +142,14 @@ func getEntriesByRange(printer *output.Printer, storage *ledger.Storage, rangeFl
 		commitSet[commit.SHA] = true
 	}
 
-	entries := filterEntriesByCommits(allEntries, commitSet)
-	if len(entries) > 0 {
-		return entries, nil
-	}
+	anchorEntries := filterEntriesByCommits(allEntries, commitSet)
 
-	// Fallback: discover entries by file presence in the diff.
-	// Handles squash merges where anchor commits aren't in the current branch.
-	return getEntriesByDiff(printer, storage, allEntries, fromRef, toRef)
+	// Path 2: discover entries by file presence in the diff.
+	// On failure, anchor results alone are still valid — don't propagate the error.
+	diffEntries, _ := getEntriesByDiff(printer, storage, allEntries, fromRef, toRef)
+
+	// Union both result sets
+	return unionEntries(anchorEntries, diffEntries), nil
 }
 
 // getEntriesByDiff discovers entries introduced in a commit range by checking
@@ -177,6 +181,23 @@ func getEntriesByDiff(
 		}
 	}
 	return entries, nil
+}
+
+// unionEntries merges two entry slices, deduplicating by ID.
+func unionEntries(a, b []*ledger.Entry) []*ledger.Entry {
+	seen := make(map[string]bool, len(a))
+	result := make([]*ledger.Entry, 0, len(a)+len(b))
+
+	for _, e := range a {
+		seen[e.ID] = true
+		result = append(result, e)
+	}
+	for _, e := range b {
+		if !seen[e.ID] {
+			result = append(result, e)
+		}
+	}
+	return result
 }
 
 // filterEntriesByCommits returns entries that have at least one commit in the given set.
