@@ -12,21 +12,22 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ## New Features
 
-- You can now filter `timbers query` results by commit range using the `--range` flag, matching the flexibility already available in `export` and `draft`
-- `timbers hooks status` shows you exactly how your git hooks are configured and whether timbers is active
-- `timbers doctor` now detects stale anchors and merge strategy mismatches, with actionable guidance
+- You can now use `--range` with `timbers query` to filter entries by commit range, matching the behavior already available in `export` and `draft`
 
 ## Improvements
 
-- Hook installation plays nicely with other tools — timbers no longer takes over your hook files, instead appending its section alongside existing hooks
-- `timbers init` adapts to your environment, detecting whether hooks are uncontested, shared with other tools, or managed by an external `core.hooksPath` configuration
-- Hooks are now installed to wherever `core.hooksPath` points, so setups using custom hook directories work correctly out of the box
+- `--range` is smarter about finding entries after squash merges — it no longer loses track of work that was merged via squash or rebase
+- `timbers pending` gracefully handles stale anchors instead of dumping hundreds of false-positive commits — you'll see a clear message explaining what happened and what to do
+- Hooks no longer block when the anchor is stale, so your workflow keeps moving after squash merges
+- `timbers doctor` now checks your merge strategy and warns about configurations that can cause stale anchors
 - The devblog template produces richer, more structured essays with clearer takeaways
 
 ## Bug Fixes
 
-- Squash-merged branches no longer cause `timbers pending` to list every commit in history — it now gracefully reports zero pending commits with guidance
-- Squash merges no longer break `timbers query --range` — entries are found even when original branch commits are absent from history
-- Stale anchors after squash merges no longer block hooks or produce confusing agent errors
-- Fixed a security vulnerability in JSON parsing by upgrading a dependency that could allow crafted Unicode characters to override message fields
-- Updated Go runtime to address standard library security fixes for URL parsing and directory traversal
+- Fixed `--range` silently dropping entries when some anchors were stale but others were valid
+- Fixed `query --range` returning empty results after a squash merge
+
+## Security
+
+- Upgraded Go to 1.25.8 to address vulnerabilities in IPv6 URL parsing and directory traversal
+- Updated go-sdk to v1.4.1 to fix a JSON parsing vulnerability that could allow message field override via duplicate keys

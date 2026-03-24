@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+All caught up — the `dcd1bfa` commit is now documented.
+
+
 Both pending commits are now documented. The first log entry covered both commits (the blog post was auto-generated from the same work). Pending is clear.
 
 The changelog output I generated above is ready — here it is again for reference:
@@ -440,3 +443,4 @@ Initial public release.
 [0.15.2]: https://github.com/gorewood/timbers/releases/tag/v0.15.2
 [0.15.3]: https://github.com/gorewood/timbers/releases/tag/v0.15.3
 [0.16.0]: https://github.com/gorewood/timbers/releases/tag/v0.16.0
+[0.16.1]: https://github.com/gorewood/timbers/releases/tag/v0.16.1
