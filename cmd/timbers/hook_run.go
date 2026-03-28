@@ -64,6 +64,13 @@ func runPreCommitHook(cmd *cobra.Command) error {
 		return nil
 	}
 
+	// During rebase/merge/cherry-pick, the pre-commit hook fires for each
+	// replayed commit. Don't block — the work is already documented (or will
+	// be after the operation completes and the anchor self-heals).
+	if git.IsInteractiveGitOp() {
+		return nil
+	}
+
 	storage, storageErr := ledger.NewDefaultStorage()
 	if storageErr != nil {
 		return nil //nolint:nilerr // hook must not block on infrastructure failure
@@ -92,6 +99,12 @@ func runPreCommitHook(cmd *cobra.Command) error {
 // This is non-blocking - it never returns an error.
 func runPostCommitHook(cmd *cobra.Command) error {
 	if !git.IsRepo() {
+		return nil
+	}
+
+	// Suppress per-commit reminders during rebase — they're noise for
+	// replayed commits and confuse agents into thinking they need to log each one.
+	if git.IsInteractiveGitOp() {
 		return nil
 	}
 

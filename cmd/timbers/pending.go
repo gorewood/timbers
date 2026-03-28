@@ -86,6 +86,12 @@ func runPending(cmd *cobra.Command, storage *ledger.Storage, countOnly bool) err
 		}
 	}
 
+	// During rebase/merge/cherry-pick, pending counts are unreliable —
+	// check early to avoid wasted git work that produces garbage results.
+	if git.IsInteractiveGitOp() {
+		return outputMidOperation(printer)
+	}
+
 	// Get pending commits
 	commits, latest, err := storage.GetPendingCommits()
 	if err != nil && !errors.Is(err, ledger.ErrStaleAnchor) {
@@ -133,6 +139,23 @@ func outputStaleAnchor(printer *output.Printer, latest *ledger.Entry) error {
 
 	printer.Warn("Anchor commit no longer in history (likely squash merge or rebase)")
 	printer.Println("No action needed — do not re-document. The anchor self-heals on your next timbers log.")
+	return nil
+}
+
+// outputMidOperation handles the mid-rebase/merge/cherry-pick case.
+// Reports 0 actionable pending with clear guidance.
+func outputMidOperation(printer *output.Printer) error {
+	if printer.IsJSON() {
+		return printer.Success(map[string]any{
+			"count":  0,
+			"status": "mid_operation",
+			"message": "Git operation in progress (rebase, merge, or cherry-pick). " +
+				"Pending count is unreliable until the operation completes.",
+		})
+	}
+
+	printer.Warn("Git operation in progress (rebase, merge, or cherry-pick)")
+	printer.Println("Pending count unreliable — complete the operation, then check again.")
 	return nil
 }
 

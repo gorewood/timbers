@@ -50,6 +50,12 @@ func runClaudeStopWith(stdin io.Reader, stdout io.Writer, checker pendingChecker
 		return nil // prevent infinite loops
 	}
 
+	// Don't block session end during rebase/merge — pending counts are
+	// unreliable and timbers log can't commit entries mid-operation.
+	if git.IsInteractiveGitOp() {
+		return nil
+	}
+
 	pending, ok := checkPending(checker)
 	if !ok || !pending {
 		return nil

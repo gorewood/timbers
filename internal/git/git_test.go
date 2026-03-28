@@ -269,3 +269,111 @@ func TestSHAExists(t *testing.T) {
 		}
 	})
 }
+
+func TestIsInteractiveGitOp(t *testing.T) {
+	t.Run("normal repo is not mid-operation", func(t *testing.T) {
+		chdirToRepoRoot(t)
+
+		if IsInteractiveGitOp() {
+			t.Error("IsInteractiveGitOp() = true in normal repo, expected false")
+		}
+	})
+
+	t.Run("detects rebase-merge directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupGitRepoWithCommit(t, tmpDir)
+
+		gitDir := filepath.Join(tmpDir, ".git", "rebase-merge")
+		if err := os.MkdirAll(gitDir, 0o755); err != nil {
+			t.Fatalf("failed to create rebase-merge dir: %v", err)
+		}
+
+		if !IsInteractiveGitOp() {
+			t.Error("IsInteractiveGitOp() = false with rebase-merge dir, expected true")
+		}
+	})
+
+	t.Run("detects rebase-apply directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupGitRepoWithCommit(t, tmpDir)
+
+		gitDir := filepath.Join(tmpDir, ".git", "rebase-apply")
+		if err := os.MkdirAll(gitDir, 0o755); err != nil {
+			t.Fatalf("failed to create rebase-apply dir: %v", err)
+		}
+
+		if !IsInteractiveGitOp() {
+			t.Error("IsInteractiveGitOp() = false with rebase-apply dir, expected true")
+		}
+	})
+
+	t.Run("detects MERGE_HEAD file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupGitRepoWithCommit(t, tmpDir)
+
+		mergeHead := filepath.Join(tmpDir, ".git", "MERGE_HEAD")
+		if err := os.WriteFile(mergeHead, []byte("abc123\n"), 0o600); err != nil {
+			t.Fatalf("failed to create MERGE_HEAD: %v", err)
+		}
+
+		if !IsInteractiveGitOp() {
+			t.Error("IsInteractiveGitOp() = false with MERGE_HEAD, expected true")
+		}
+	})
+
+	t.Run("detects CHERRY_PICK_HEAD file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupGitRepoWithCommit(t, tmpDir)
+
+		cpHead := filepath.Join(tmpDir, ".git", "CHERRY_PICK_HEAD")
+		if err := os.WriteFile(cpHead, []byte("abc123\n"), 0o600); err != nil {
+			t.Fatalf("failed to create CHERRY_PICK_HEAD: %v", err)
+		}
+
+		if !IsInteractiveGitOp() {
+			t.Error("IsInteractiveGitOp() = false with CHERRY_PICK_HEAD, expected true")
+		}
+	})
+
+	t.Run("detects REVERT_HEAD file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupGitRepoWithCommit(t, tmpDir)
+
+		revertHead := filepath.Join(tmpDir, ".git", "REVERT_HEAD")
+		if err := os.WriteFile(revertHead, []byte("abc123\n"), 0o600); err != nil {
+			t.Fatalf("failed to create REVERT_HEAD: %v", err)
+		}
+
+		if !IsInteractiveGitOp() {
+			t.Error("IsInteractiveGitOp() = false with REVERT_HEAD, expected true")
+		}
+	})
+}
+
+// setupGitRepoWithCommit creates a temporary git repo with one commit and chdirs to it.
+func setupGitRepoWithCommit(t *testing.T, dir string) {
+	t.Helper()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+
+	cmds := [][]string{
+		{"git", "init"},
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test"},
+		{"git", "commit", "--allow-empty", "-m", "init"},
+	}
+	for _, args := range cmds {
+		cmd := exec.CommandContext(context.Background(), args[0], args[1:]...) //nolint:gosec // test helper with fixed commands
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("cmd %v failed: %v\n%s", args, err, out)
+		}
+	}
+}

@@ -101,6 +101,16 @@ func runLog(cmd *cobra.Command, storage *ledger.Storage, isDirty dirtyChecker, a
 		printer.Warn("working tree has uncommitted changes; commit first to avoid phantom entries")
 	}
 
+	// Refuse to log during rebase/merge — we can't commit the entry file
+	// and the pending commit set is unreliable.
+	if git.IsInteractiveGitOp() {
+		err := output.NewUserError(
+			"git operation in progress (rebase, merge, or cherry-pick); " +
+				"complete it first, then run timbers log")
+		printer.Error(err)
+		return err
+	}
+
 	// Dispatch to batch mode if --batch is set
 	if flags.batch {
 		return runBatchLog(storage, flags, printer)

@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/gorewood/timbers/internal/output"
@@ -101,4 +103,56 @@ func HasUncommittedChanges() bool {
 		return false
 	}
 	return strings.TrimSpace(out) != ""
+}
+
+// IsInteractiveGitOp returns true when git is in the middle of a rebase,
+// merge, cherry-pick, or revert. Hooks should suppress blocking behavior
+// during these operations because:
+//   - Rebased commits are replayed, not new work — don't nag per-commit
+//   - timbers log can't commit entries mid-rebase (working tree is locked)
+//   - Pending counts are unreliable until the operation completes
+func IsInteractiveGitOp() bool {
+	gitDir, err := Run("rev-parse", "--git-dir")
+	if err != nil {
+		return false
+	}
+
+	// rev-parse --git-dir returns a relative path (".git") in normal repos
+	// but absolute paths in worktrees. Resolve relative paths so file checks
+	// work regardless of the process's current working directory.
+	if !filepath.IsAbs(gitDir) {
+		root, rootErr := RepoRoot()
+		if rootErr != nil {
+			return false
+		}
+		gitDir = filepath.Join(root, gitDir)
+	}
+
+	// git rebase (interactive or standard)
+	for _, dir := range []string{"rebase-merge", "rebase-apply"} {
+		if isDir(filepath.Join(gitDir, dir)) {
+			return true
+		}
+	}
+
+	// git merge, cherry-pick, revert
+	for _, file := range []string{"MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"} {
+		if fileExists(filepath.Join(gitDir, file)) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isDir reports whether path is an existing directory.
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+// fileExists reports whether path exists as a regular file.
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
