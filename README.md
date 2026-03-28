@@ -160,6 +160,18 @@ Use `--notes` when you explored alternatives or made a real choice.
 
 Native hooks and setup commands for additional agent environments are planned for a future release.
 
+## How It Works
+
+Entries are JSON files in `.timbers/`, committed to your repo alongside your code. Each `timbers log` creates its own git commit — you'll see `timbers: document ...` commits interleaved with your code commits. This is intentional: separate commits enable reliable tracking of what's been documented, survive rebases and squash merges cleanly, and ensure entries travel with every clone without special configuration.
+
+The trade-off is a noisier `git log`. Agents handle this automatically (timbers filters entry commits internally). For humans who want a clean view:
+
+```bash
+git log --invert-grep --grep="^timbers: document"
+```
+
+See [docs/design-decisions.md](docs/design-decisions.md) for the full rationale, including alternatives that were evaluated and why they were rejected.
+
 ## Documentation
 
 - [Tutorial](docs/tutorial.md) — Setup, catching up history, agent integration
