@@ -5,12 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-All caught up — the `dcd1bfa` commit is now documented.
+## [0.16.2] - 2026-03-28
 
+### Fixed
+- Fixed hook deadlock during rebase, merge, cherry-pick, and revert where agents were blocked by pending-commit checks and couldn't log or continue
+- Fixed `--range` silently dropping entries when only some anchor commits were stale; v0.15.3 fallback only triggered on zero anchor matches, missing the partial-stale case
 
-Both pending commits are now documented. The first log entry covered both commits (the blog post was auto-generated from the same work). Pending is clear.
-
-The changelog output I generated above is ready — here it is again for reference:
+### Technical
+- Added `git.IsInteractiveGitOp()` that detects in-progress interactive git operations by checking `.git` state files; all hooks early-return during these operations
+- Changed `--range` entry discovery to run both anchor-based and diff-based discovery unconditionally and union results by entry ID
 
 ## [0.16.0] - 2026-03-23
 
@@ -21,25 +24,10 @@ The changelog output I generated above is ready — here it is again for referen
 ### Technical
 - Added `DiffNameOnly` to `GitOps` interface to support file-based entry discovery in `getEntriesByRange`
 
-
-The warning about uncommitted changes is because there are no uncommitted changes relevant here (just the untracked `.beads/` files from git status). The entry is documented. Now back to the changelog output:
-
 ## [0.15.3] - 2026-03-22
 
 ### Fixed
 - Fixed `query --range` returning empty results after squash merge by falling back to file-based entry discovery when anchor commit SHAs are no longer in main's history
-
-
-Pending is clear. The changelog output above is your v0.15.2 release notes.
-
-
-These 2 pending commits pre-date this session (they were already pending when we started). I didn't make any commits — I just generated changelog output from the entries you provided.
-
-Want me to document those 2 pre-existing commits before we wrap up?
-
-
-All clear. Now back to the changelog — it was already output above. The generated v0.15.0 changelog section is ready for use.
-
 
 ## [0.14.4] - 2026-03-05
 
@@ -59,12 +47,6 @@ All clear. Now back to the changelog — it was already output above. The genera
 ### Fixed
 - Expanded stop hook reason to include full `timbers log` syntax with `--why`/`--how` flags so agents receive an actionable command instead of a bare `timbers log` that would fail
 
-
-All clear. Pending commits documented and pushed.
-
-
-
-
 ## [0.14.0] - 2026-03-04
 
 ### Changed
@@ -79,8 +61,6 @@ All clear. Pending commits documented and pushed.
 - Removed `PreToolUse` handler, dispatch case, and associated tests from hook enforcement
 
 
-
-
 ## [0.13.2] - 2026-03-03
 
 ### Fixed
@@ -93,9 +73,6 @@ All clear. Pending commits documented and pushed.
 ### Added
 - Added quick health check to `timbers prime` output that surfaces missing hooks and integration issues at session start
 - `runQuickHealthCheck` validates post-commit hook and agent environment, displaying a `Health` section with `doctor --fix` hint when issues are found
-
-
-
 
 ## [0.13.0] - 2026-03-02
 
@@ -114,9 +91,6 @@ All clear. Pending commits documented and pushed.
 
 - Added unit tests for hook `Generate`, `Check`, and `Install` functions
 - Added integration tests for `init --hooks` post-commit workflow
-
-
-
 
 ## [0.12.2] - 2026-03-02
 
@@ -444,3 +418,4 @@ Initial public release.
 [0.15.3]: https://github.com/gorewood/timbers/releases/tag/v0.15.3
 [0.16.0]: https://github.com/gorewood/timbers/releases/tag/v0.16.0
 [0.16.1]: https://github.com/gorewood/timbers/releases/tag/v0.16.1
+[0.16.2]: https://github.com/gorewood/timbers/releases/tag/v0.16.2
