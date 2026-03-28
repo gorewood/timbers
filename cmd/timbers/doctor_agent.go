@@ -22,13 +22,13 @@ func checkAgentIntegrations(flags *doctorFlags) []checkResult {
 func checkAgentEnv(env setup.AgentEnv, flags *doctorFlags) checkResult {
 	name := env.DisplayName() + " Integration"
 
-	path, _, installed := env.Detect()
+	path, scope, installed := env.Detect()
 	if !installed {
 		return fixOrWarnAgentEnv(env, name, flags)
 	}
 
 	// Hooks are installed — check if they're outdated
-	if result, stale := checkAgentEnvStaleness(env, name, path, flags); stale {
+	if result, stale := checkAgentEnvStaleness(env, name, path, scope, flags); stale {
 		return result
 	}
 
@@ -60,7 +60,9 @@ func fixOrWarnAgentEnv(env setup.AgentEnv, name string, flags *doctorFlags) chec
 
 // checkAgentEnvStaleness checks if installed hooks are outdated.
 // Returns the result and whether staleness was detected.
-func checkAgentEnvStaleness(env setup.AgentEnv, name, path string, flags *doctorFlags) (checkResult, bool) {
+// The scope parameter ("project" or "global") ensures --fix targets
+// the same settings file where staleness was detected.
+func checkAgentEnvStaleness(env setup.AgentEnv, name, path, scope string, flags *doctorFlags) (checkResult, bool) {
 	if env.Name() != "claude" {
 		return checkResult{}, false
 	}
@@ -71,7 +73,7 @@ func checkAgentEnvStaleness(env setup.AgentEnv, name, path string, flags *doctor
 	}
 
 	if flags.fix {
-		if _, err := env.Install(true); err == nil {
+		if _, err := env.Install(scope == "project"); err == nil {
 			return checkResult{
 				Name:    name,
 				Status:  checkPass,
