@@ -8,60 +8,66 @@ Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
 
 ---
 
-# Timbers Decision Log — March 2026
+# Timbers Decision Log — 2026-03-06 to 2026-03-28
 
 ## ADR-1: Suppress Hooks During Interactive Git Operations
 
-**Context:** Timbers hooks (post-commit, pre-push) run pending-commit checks and other validation. During interactive git operations — rebase, merge, cherry-pick, revert — these hooks created a deadlock: the agent was blocked by the pending check mid-rebase but couldn't log work or commit to clear it, because the rebase was still in progress. The agent was stuck with no path forward.
+**Context:** Timbers hooks (post-commit, pre-tool-use) run automatically during git operations. When an agent performed a rebase, merge, cherry-pick, or revert, the hooks fired mid-operation — the pending check blocked the agent from continuing the rebase, and `timbers log` couldn't commit mid-rebase. This created a deadlock where the agent could neither proceed nor document.
 
-**Decision:** All hooks early-return during interactive git operations. `git.IsInteractiveGitOp()` checks for `.git` state files (e.g., `rebase-merge/`, `MERGE_HEAD`) and suppresses hook execution entirely when detected. The approach was validated by a code-review agent that caught two issues before commit: relative `gitDir` paths not resolved against the repo root (breaks when CWD isn't repo root), and redundant `GetPendingCommits` calls in `pending.go` after the operation check.
+**Decision:** All hooks early-return during interactive git operations. A new `git.IsInteractiveGitOp()` function detects in-progress operations by checking for `.git` state files (e.g., `rebase-merge/`, `MERGE_HEAD`). Hooks silently skip rather than warn or error.
 
 **Consequences:**
-- Agents can rebase, merge, cherry-pick, and revert without getting deadlocked by timbers hooks
-- Work done during interactive operations is invisible to timbers until the operation completes — a gap in tracking, but acceptable since the alternative was total blockage
-- The state-file detection approach is git-implementation-dependent; if git changes its state file conventions, detection could silently break
+- Agents can complete rebases, merges, cherry-picks, and reverts without deadlock
+- Work performed during interactive operations is invisible to hooks until the operation completes — a gap in real-time tracking, accepted as necessary
+- Detection relies on `.git` state file conventions, which are stable across git versions but technically an implementation detail
+- The pattern is conservative: any recognized state file causes all hooks to skip, even if only some hooks would deadlock
 
 ## ADR-2: Graceful Degradation Over Hard Errors for Stale Anchors
 
-**Context:** Entry anchor commits reference the SHA that was HEAD when the entry was created. After a squash-merge or rebase, those feature-branch SHAs disappear from `main`'s history. `HasPendingCommits` errored on stale anchors, which blocked hooks. `pending` dumped every reachable commit as "undocumented," and agents dutifully tried to re-document hundreds of already-documented commits, creating duplicates.
+**Context:** After a squash merge, entry `anchor_commit` SHAs reference feature-branch commits that no longer exist in `main`'s history. This caused `pending` to dump every reachable commit as "undocumented" (hundreds of false positives), and `HasPendingCommits` returned an error that blocked hooks. Agents interpreted the false positives literally — attempting to re-document already-covered work and creating duplicate entries.
 
-**Decision:** Graceful degradation: `HasPendingCommits` returns `false` (not an error) when it encounters a stale anchor. `pending` reports 0 actionable commits with a clear warning message instead of listing commits. `doctor` gained merge-strategy checks (`pull.rebase`, `merge.ff`) and stale-anchor detection to surface the root cause proactively.
-
-**Consequences:**
-- Hooks no longer block on stale anchors — agents can continue working after squash-merges without manual intervention
-- Genuinely pending commits could be masked if stale-anchor detection has a false positive, but `doctor` provides a diagnostic path
-- Shifts the responsibility from "fix it now" (hard error) to "surface it for later" (warning + diagnostics), which matches the reality that stale anchors are a known consequence of squash/rebase workflows, not an actionable error
-
-## ADR-3: Union Discovery Over Fallback for Range Entry Matching
-
-**Context:** `--range` flag entry discovery used anchor-commit matching as the primary strategy, with a file-based `git diff --name-only` fallback that only triggered when anchor matching returned zero results. In partial-stale scenarios — where some entries had valid anchors and others had stale ones — the fallback never triggered because the result set wasn't empty. Entries with stale anchors were silently dropped.
-
-**Decision:** Run both anchor-based and diff-based discovery unconditionally, union the results by entry ID, and deduplicate. Neither strategy is treated as primary or fallback.
+**Decision:** Stale anchors are treated as a degraded-but-functional state, not an error. `HasPendingCommits` returns `false` (not an error) on `ErrStaleAnchor`. `pending` shows 0 actionable commits with a clear warning explaining the stale anchor, rather than listing unreachable commits. `doctor` gained merge-strategy and stale-anchor health checks to surface the root cause.
 
 **Consequences:**
-- Partial-stale scenarios now return complete results — no silent entry drops regardless of merge strategy
-- Slightly more work per query (two discovery passes instead of one), but entry sets are small enough that the cost is negligible
-- Eliminates an entire class of "works in testing, fails in production" bugs where the fallback path was only exercised in the zero-result case
+- Hooks no longer block agents after squash merges — the most common trigger for the stale anchor state
+- Agents stop generating duplicate entries from false-positive pending lists
+- Genuine pending commits are invisible while the anchor is stale — a real gap in tracking, but preferable to the cascade of duplicates
+- The anchor self-heals on the next `timbers log` after a real commit, limiting the window of degraded tracking
+- `doctor` can proactively warn about merge strategies (e.g., missing `pull.rebase`) that cause frequent stale anchors
 
-## ADR-4: File-Based Fallback for Squash-Merged Entry Discovery
+## ADR-3: File-Based Fallback for Entry Discovery After Squash Merge
 
-**Context:** `query --range` used anchor-commit ancestry to find entries within a commit range. After squash-merge, the original feature-branch SHAs that entries reference no longer exist in `main`'s history, so ancestry-based matching found nothing — even though the entry files themselves were clearly present in the diff between the range endpoints.
+**Context:** `query --range` found entries by checking whether each entry's `anchor_commit` was an ancestor of commits in the requested range. After squash merge, feature-branch SHAs disappear from `main`'s history, so anchor-based matching found nothing — even though the entry files themselves were clearly present in the diff between the two range endpoints.
 
-**Decision:** Added `DiffNameOnly` to the `GitOps` interface. When anchor matching returns zero results, a fallback discovers entries via `git diff --name-only A..B -- .timbers/`, finding entry files that were introduced in the range regardless of whether their internal anchor SHAs are reachable.
-
-**Consequences:**
-- Entries are discoverable after squash-merge, making `--range` work regardless of merge strategy
-- File-based discovery can't distinguish entries *about* the range from entries that *happen to be in* the range (e.g., an entry committed alongside unrelated code) — anchor matching is more semantically precise when it works
-- The `GitOps` interface gained another method (`DiffNameOnly`), increasing the surface area for test mocking, but it's a clean single-responsibility addition
-
-## ADR-5: Three-Voice Essay Structure Over Carmack .plan Style for Devblog Template
-
-**Context:** The devblog template originally used a Carmack `.plan` style — stream-of-consciousness narration of what happened. Generated posts read as flat recaps without clear takeaways or narrative arc.
-
-**Decision:** Replaced with a structured three-voice approach: Storyteller (narrative arc), Conceptualist (abstractions and patterns), and Practitioner (concrete details and code). Posts follow a Hook → Work → Insight → Landing scaffolding. Added a no-headers constraint after test generation showed that section headers broke the essay feel.
+**Decision:** When anchor-based matching returns zero results for a `--range` query, fall back to `git diff --name-only A..B -- .timbers/` to discover entries by file presence in the commit range. This was exposed via `EntryPathsInRange` in `storage.go` and `DiffNameOnly` on the `GitOps` interface.
 
 **Consequences:**
-- Generated essays have clearer narrative structure with identifiable takeaways, rather than chronological brain-dumps
-- The three-voice structure is more opinionated — it constrains the tone in ways that may not suit all types of development work (e.g., pure bugfix sessions may not have enough "Conceptualist" material)
-- The template is more complex to maintain and tune, but the quality improvement in output justified the investment
-- Existing site posts were regenerated to maintain consistency, creating a one-time churn cost
+- Entries are discoverable after squash merge regardless of whether their anchor SHAs survive in the target branch's history
+- The fallback treats "file appeared in this range" as a proxy for "entry belongs to this range" — less precise than anchor matching, but correct for the squash-merge case
+- Adds a new method to the `GitOps` interface, expanding the git abstraction surface
+- Only triggers on zero results, keeping the faster anchor-based path as the primary strategy
+
+## ADR-4: Union Over Fallback for Anchor and Diff-Based Entry Discovery
+
+**Context:** ADR-3 introduced file-based discovery as a fallback when anchor matching returned zero results. But a subtler case emerged: partial-stale ranges where *some* entries had valid anchors and others had stale feature-branch anchors. Because the fallback only triggered on zero matches, partial-stale cases silently dropped entries — anchor matching returned a non-zero (but incomplete) set, so the fallback never ran.
+
+**Decision:** Run both anchor-based and diff-based discovery unconditionally for every `--range` query, then union and deduplicate results by entry ID. No fallback logic — both paths always execute.
+
+**Consequences:**
+- Partial-stale ranges now return complete results — no silent drops
+- Slightly more work per query (two discovery passes instead of one), but the `git diff --name-only` call is fast enough to be negligible
+- Simpler control flow: no conditional fallback branching, just "run both, merge"
+- Any future discovery strategy can be added to the union without restructuring the fallback chain
+
+## ADR-5: Three-Voice Essay Structure Over Stream-of-Consciousness for Devblog Template
+
+**Context:** The devblog template originally used a Carmack `.plan`-style format — stream-of-consciousness technical writing. Generated posts came out as flat recaps of what was done, without narrative arc or insight extraction.
+
+**Decision:** Replaced the stream-of-consciousness format with a structured three-voice essay: Storyteller (narrative and anecdotes), Conceptualist (patterns and abstractions), and Practitioner (concrete techniques and trade-offs). Posts follow a Hook → Work → Insight → Landing scaffolding. A no-headers constraint was added after test generation showed that section headers broke the essay flow.
+
+**Consequences:**
+- Generated posts have clearer narrative structure and extractable takeaways
+- The voice framework gives the LLM concrete roles to inhabit, producing more varied and engaging prose than an open-ended "write a blog post" prompt
+- More opinionated template — less flexibility for posts that don't fit the three-voice model
+- The no-headers constraint forces cohesive prose but makes posts harder to skim
+- Template complexity increased significantly; future template edits require understanding the voice/scaffolding system
