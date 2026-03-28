@@ -72,7 +72,11 @@ Examples:
   timbers log "New API" --why "Agents need access" --how "MCP server" --notes "Debated HTTP vs exec wrapping"
   timbers log --auto              # Extract what/why/how from commit messages
   timbers log --auto --yes        # Auto mode without confirmation
-  timbers log --batch             # Create entries for each work-item group or day`
+  timbers log --batch             # Create entries for each work-item group or day
+
+Each entry is committed separately (not folded into the code commit). This is
+by design — it enables reliable pending detection and survives rebases. To
+filter entry commits from git log: git log --invert-grep --grep="^timbers: document"`
 
 // logContext holds all data needed to create a log entry.
 type logContext struct {

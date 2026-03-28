@@ -64,6 +64,30 @@ This pattern is agent-friendly: status-bearing responses confirm mutations occur
 
 **Why changed**: The spec mentioned a `--replace` flag but it was never implemented. Rather than add another flag, the simpler approach is to rely on `--dry-run` to preview what would happen before committing. Users who need to overwrite can delete the note manually with git.
 
+### Separate Commits for Ledger Entries
+
+**Location**: `internal/ledger/filestorage.go` (`DefaultGitCommit`)
+
+**Pattern**: Each `timbers log` creates its own git commit (`timbers: document <id>`) rather than folding the entry into the code commit it documents.
+
+**Why retained**: This design was evaluated against three alternatives — co-committing entries into code commits (via `--amend`), storing entries on a side branch, and deferring commits to a session-end batch. All were rejected after adversarial review. Separate commits are retained because:
+
+1. **Pending detection depends on it.** `filterLedgerOnlyCommits` identifies entry commits by checking whether *every* file in the commit is under `.timbers/`. This is what prevents entry commits from showing as "undocumented work" in `timbers pending`. Co-committed entries (mixed code + `.timbers/` files) would break this filter entirely, requiring a fundamentally different detection mechanism.
+
+2. **Entry IDs contain commit SHAs.** The format `tb_<timestamp>_<short-sha>` bakes the anchor commit's SHA into the entry ID. Amending the code commit changes its SHA, creating a chicken-and-egg: the entry needs the SHA before the commit exists, but the commit includes the entry. Using the parent SHA as anchor was considered but introduces anchor-semantic changes throughout the codebase.
+
+3. **Push timing makes amend unreliable.** The workflow is commit → log → push, but agents and hooks frequently push commits before `timbers log` runs. Once pushed, amending requires force-push. In testing, the amend path would succeed less than 20% of the time, with the remaining 80% falling back to separate commits — creating inconsistent commit patterns that complicate every downstream consumer.
+
+4. **Side branches break clone safety.** Moving entries to an orphan branch means `git clone --single-branch`, `git clone --depth=1`, and many CI environments silently lose all entries. The current model's strongest property is that entries travel with the repo unconditionally.
+
+**The git log noise is real** — roughly 45% of recent commits are entry commits. This is mitigated by:
+- Agents never see the noise (`filterLedgerOnlyCommits` handles it)
+- `.gitattributes linguist-generated` collapses entries in GitHub diffs
+- Human filtering: `git log --invert-grep --grep="^timbers: document"`
+- Or add a git alias: `git config alias.lg 'log --oneline --invert-grep --grep="^timbers: document"'`
+
+**The value proposition**: Timbers captures *reasoning* — the why and how behind changes — which git commit messages rarely preserve. The separate-commit noise is the cost of reliable, self-healing documentation that survives rebases, squash merges, and multi-agent workflows without special configuration.
+
 ---
 
 *Document created during M1-complete review. Update when revisiting these decisions.*

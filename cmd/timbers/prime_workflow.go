@@ -122,6 +122,16 @@ Sync:
 - Entries are committed files in .timbers/ — use standard git push/pull
 </commands>
 
+<git-log>
+# Git Log & Separate Commits
+
+Each timbers log creates its own git commit. This is by design — it enables
+reliable pending detection and clean filtering. To view git log without
+ledger entries: git log --invert-grep --grep="^timbers: document"
+
+See docs/design-decisions.md in the timbers repo for the full rationale.
+</git-log>
+
 <stale-anchor>
 # Stale Anchor After Squash Merge
 
