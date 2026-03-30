@@ -162,7 +162,7 @@ Native hooks and setup commands for additional agent environments are planned fo
 
 ## How It Works
 
-Entries are JSON files in `.timbers/`, committed to your repo alongside your code. Each `timbers log` creates its own git commit — you'll see `timbers: document ...` commits interleaved with your code commits. The optional pre-commit hook enforces documentation before each new commit, so with hooks enabled you'll see roughly one entry commit per code commit.
+Entries are JSON files in `.timbers/`, committed to your repo alongside your code. Each `timbers log` creates its own git commit — you'll see `timbers: document ...` commits interleaved with your code commits. The optional pre-commit hook enforces documentation before each new commit, so with hooks enabled you'll see roughly one entry commit per code commit. If commits slip through without documentation (hook bypassed, batch workflow, or hooks not installed), `timbers log` gracefully falls back to batch mode — one entry covers all pending commits.
 
 This is intentional: separate commits enable reliable tracking of what's been documented, survive rebases and squash merges cleanly, and ensure entries travel with every clone without special configuration.
 
