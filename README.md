@@ -162,9 +162,11 @@ Native hooks and setup commands for additional agent environments are planned fo
 
 ## How It Works
 
-Entries are JSON files in `.timbers/`, committed to your repo alongside your code. Each `timbers log` creates its own git commit — you'll see `timbers: document ...` commits interleaved with your code commits. This is intentional: separate commits enable reliable tracking of what's been documented, survive rebases and squash merges cleanly, and ensure entries travel with every clone without special configuration.
+Entries are JSON files in `.timbers/`, committed to your repo alongside your code. Each `timbers log` creates its own git commit — you'll see `timbers: document ...` commits interleaved with your code commits. The optional pre-commit hook enforces documentation before each new commit, so with hooks enabled you'll see roughly one entry commit per code commit.
 
-The trade-off is a noisier `git log`. Agents handle this automatically (timbers filters entry commits internally). For humans who want a clean view:
+This is intentional: separate commits enable reliable tracking of what's been documented, survive rebases and squash merges cleanly, and ensure entries travel with every clone without special configuration.
+
+The trade-off is a noisier `git log` (roughly 2x the commit count with hooks). Agents handle this automatically (timbers filters entry commits internally). For humans who want a clean view:
 
 ```bash
 git log --invert-grep --grep="^timbers: document"
