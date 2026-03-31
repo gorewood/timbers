@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.4] - 2026-03-31
+
+### Added
+- Added How It Works section to README covering commit design, filter command, and link to design decisions
+- Added design decision documentation explaining why separate commits for ledger entries is by design (council-evaluated, two rounds)
+
+### Changed
+- Updated README to clarify pre-commit hook enforcement of 1:1 commit cadence and ~2x commit count
+- Added batch mode fallback note to README for graceful degradation when hooks are bypassed
+
+### Fixed
+- Fixed stale anchor detection to use reachability check (`git merge-base --is-ancestor`) instead of SHA existence — prevents phantom pending commits after rebase when old objects linger in the object store
+- Fixed pre-commit hook to skip gracefully when `.timbers/` directory is absent at worktree root
+
+### Technical
+- Added `IsAncestorOf` method to `GitOps` interface for commit reachability checks
+- Added `git merge-base --is-ancestor` guard in `GetPendingCommits` before invoking `git log`
+
+
 ## [0.16.3] - 2026-03-28
 
 ### Fixed
@@ -429,3 +448,4 @@ Initial public release.
 [0.16.1]: https://github.com/gorewood/timbers/releases/tag/v0.16.1
 [0.16.2]: https://github.com/gorewood/timbers/releases/tag/v0.16.2
 [0.16.3]: https://github.com/gorewood/timbers/releases/tag/v0.16.3
+[0.16.4]: https://github.com/gorewood/timbers/releases/tag/v0.16.4
