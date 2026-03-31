@@ -2,6 +2,9 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+
 	"github.com/spf13/cobra"
 
 	"github.com/gorewood/timbers/internal/git"
@@ -69,6 +72,19 @@ func runPreCommitHook(cmd *cobra.Command) error {
 	// be after the operation completes and the anchor self-heals).
 	if git.IsInteractiveGitOp() {
 		return nil
+	}
+
+	// Skip if .timbers/ doesn't exist at the worktree root. This handles
+	// infrastructure worktrees (e.g., beads backup branches) where git hooks
+	// are shared but timbers isn't initialized. The implicit path through
+	// NewDefaultStorage → HasPendingCommits also handles this, but an
+	// explicit check makes the intent clear and avoids unnecessary git ops.
+	root, rootErr := git.RepoRoot()
+	if rootErr != nil {
+		return nil //nolint:nilerr // hook must not block on infrastructure failure
+	}
+	if info, err := os.Stat(filepath.Join(root, ".timbers")); err != nil || !info.IsDir() {
+		return nil //nolint:nilerr // missing .timbers/ means not initialized — skip
 	}
 
 	storage, storageErr := ledger.NewDefaultStorage()
