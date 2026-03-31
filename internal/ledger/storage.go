@@ -36,6 +36,7 @@ type GitOps interface {
 	HEAD() (string, error)
 	Log(fromRef, toRef string) ([]git.Commit, error)
 	CommitsReachableFrom(sha string) ([]git.Commit, error)
+	IsAncestorOf(ancestor, descendant string) bool
 	GetDiffstat(fromRef, toRef string) (git.Diffstat, error)
 	CommitFiles(sha string) ([]string, error)
 	CommitFilesMulti(shas []string) (map[string][]string, error)
@@ -55,6 +56,10 @@ func (realGitOps) Log(fromRef, toRef string) ([]git.Commit, error) {
 
 func (realGitOps) CommitsReachableFrom(sha string) ([]git.Commit, error) {
 	return git.CommitsReachableFrom(sha)
+}
+
+func (realGitOps) IsAncestorOf(ancestor, descendant string) bool {
+	return git.IsAncestorOf(ancestor, descendant)
 }
 
 func (realGitOps) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
@@ -216,17 +221,29 @@ func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 		return s.filterLedgerOnlyCommits(commits), nil, nil
 	}
 
+	// Check if the anchor is reachable from HEAD. After rebase or squash merge,
+	// old SHAs may linger in the object store (until gc.pruneExpire) but are no
+	// longer in HEAD's history. Without this check, git log succeeds but returns
+	// phantom commits — rebased versions of already-documented work.
+	anchor := latest.Workset.AnchorCommit
+	if !s.git.IsAncestorOf(anchor, head) {
+		fallback, reachErr := s.git.CommitsReachableFrom(head)
+		if reachErr != nil {
+			return nil, nil, reachErr
+		}
+		return s.filterLedgerOnlyCommits(fallback), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
+	}
+
 	// Get commits from anchor (exclusive) to HEAD (inclusive).
-	// If the anchor no longer exists (squash merge, rebase, GC), fall back
-	// to all reachable commits from HEAD and wrap ErrStaleAnchor so the
-	// caller can emit a warning while still returning useful data.
-	commits, logErr := s.git.Log(latest.Workset.AnchorCommit, head)
+	// If the anchor no longer exists (GC'd), fall back to all reachable
+	// commits from HEAD and wrap ErrStaleAnchor.
+	commits, logErr := s.git.Log(anchor, head)
 	if logErr != nil {
 		fallback, reachErr := s.git.CommitsReachableFrom(head)
 		if reachErr != nil {
 			return nil, nil, reachErr
 		}
-		return s.filterLedgerOnlyCommits(fallback), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, latest.Workset.AnchorCommit)
+		return s.filterLedgerOnlyCommits(fallback), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
 	}
 
 	return s.filterLedgerOnlyCommits(commits), latest, nil

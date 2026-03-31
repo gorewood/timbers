@@ -96,6 +96,18 @@ func SHAExists(sha string) bool {
 	return err == nil
 }
 
+// IsAncestorOf returns true if ancestor is an ancestor of (or equal to) descendant.
+// Returns false if either SHA doesn't exist or ancestor is not in descendant's history.
+// Useful for detecting anchors that exist in the object store but were rewritten
+// by rebase or squash merge and are no longer reachable from HEAD.
+func IsAncestorOf(ancestor, descendant string) bool {
+	if ancestor == "" || descendant == "" {
+		return false
+	}
+	_, err := Run("merge-base", "--is-ancestor", ancestor, descendant)
+	return err == nil
+}
+
 // HasUncommittedChanges returns true if the working tree has staged or unstaged changes.
 func HasUncommittedChanges() bool {
 	out, err := Run("status", "--porcelain")

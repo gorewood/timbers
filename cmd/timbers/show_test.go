@@ -31,6 +31,10 @@ func (m *mockGitOpsForShow) CommitsReachableFrom(sha string) ([]git.Commit, erro
 	return nil, nil
 }
 
+func (m *mockGitOpsForShow) IsAncestorOf(ancestor, descendant string) bool {
+	return true
+}
+
 func (m *mockGitOpsForShow) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
 	return git.Diffstat{}, nil
 }

@@ -37,6 +37,10 @@ func (m *mockGitOpsForPrime) CommitsReachableFrom(sha string) ([]git.Commit, err
 	return m.reachableResult, m.reachableErr
 }
 
+func (m *mockGitOpsForPrime) IsAncestorOf(ancestor, descendant string) bool {
+	return true
+}
+
 func (m *mockGitOpsForPrime) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
 	return git.Diffstat{}, nil
 }

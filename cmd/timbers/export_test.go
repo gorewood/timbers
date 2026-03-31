@@ -28,6 +28,10 @@ func (m *mockGitOpsForExport) CommitsReachableFrom(_ string) ([]git.Commit, erro
 	return nil, nil
 }
 
+func (m *mockGitOpsForExport) IsAncestorOf(ancestor, descendant string) bool {
+	return true
+}
+
 func (m *mockGitOpsForExport) GetDiffstat(_, _ string) (git.Diffstat, error) {
 	return git.Diffstat{}, nil
 }

@@ -69,6 +69,10 @@ func (m *mockGitOpsForLog) CommitsReachableFrom(_ string) ([]git.Commit, error) 
 	return m.reachableResult, m.reachableErr
 }
 
+func (m *mockGitOpsForLog) IsAncestorOf(ancestor, descendant string) bool {
+	return true
+}
+
 func (m *mockGitOpsForLog) GetDiffstat(_, _ string) (git.Diffstat, error) {
 	return m.diffstat, m.diffstatErr
 }

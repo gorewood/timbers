@@ -19,11 +19,12 @@ type mockGitOps struct {
 	logErr        error
 	reachableFrom []git.Commit
 	reachableErr  error
+	isAncestor    bool
 	commitFiles   map[string][]string // SHA -> files; nil map = unknown (no filtering)
 }
 
 func newMockGitOps() *mockGitOps {
-	return &mockGitOps{}
+	return &mockGitOps{isAncestor: true}
 }
 
 func (m *mockGitOps) HEAD() (string, error) {
@@ -45,6 +46,10 @@ func (m *mockGitOps) CommitsReachableFrom(sha string) ([]git.Commit, error) {
 		return nil, m.reachableErr
 	}
 	return m.reachableFrom, nil
+}
+
+func (m *mockGitOps) IsAncestorOf(ancestor, descendant string) bool {
+	return m.isAncestor
 }
 
 func (m *mockGitOps) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
