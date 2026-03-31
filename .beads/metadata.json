@@ -2,5 +2,6 @@
   "database": "dolt",
   "backend": "dolt",
   "dolt_mode": "server",
-  "dolt_database": "timbers"
+  "dolt_database": "timbers",
+  "project_id": "e059b73f-4d54-4a9e-adbe-8e20c22a46cf"
 }

@@ -162,13 +162,13 @@ bd close bd-42 --reason "Completed" --json
    - `bd create "Found bug" --description="Details about what was found" -p 1 --deps discovered-from:<parent-id>`
 5. **Complete**: `bd close <id> --reason "Done"`
 
-### Auto-Sync
+### Sync
 
-bd automatically syncs via Dolt:
+Beads auto-syncs via `.beads/issues.jsonl` (git-tracked):
 
-- Each write auto-commits to Dolt history
-- Use `bd dolt push`/`bd dolt pull` for remote sync (bd 0.60+ auto-commits pending changes before push/pull)
-- No manual export/import needed!
+- Every `bd` mutation auto-flushes to `.beads/issues.jsonl`
+- After `git pull`, the next `bd` command auto-imports changes
+- Pre-commit hook auto-stages the file — no manual export/import needed
 
 ### Persistent Knowledge
 

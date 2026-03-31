@@ -213,29 +213,19 @@ func TestLogPendingCycle(t *testing.T) {
 | `timbers doctor` | Health check and diagnostics |
 | `timbers onboard` | Generate CLAUDE.md snippet |
 
-## Beads / Dolt Sync
+## Beads Sync
 
-Beads uses a local Dolt SQL server for issue tracking. Key operational notes:
+Beads 0.63+ uses auto-flush sync via `.beads/issues.jsonl` (git-tracked, auto-synced).
 
-**Port assignment**: bd 0.60+ uses OS-assigned ephemeral ports. No port
-configuration needed — ports are assigned automatically at server start.
-
-**Sync**: `bd dolt push` and `bd dolt pull` work directly (bd 0.60+).
-Auto-commits pending changes before push/pull, so explicit `bd dolt commit`
-is no longer needed. Auto-resolves metadata merge conflicts on pull.
+**Auto-flush**: Every `bd` mutation writes `.beads/issues.jsonl` automatically.
+**Auto-import**: After `git pull`, the next `bd` command auto-imports changes.
+**Pre-commit hook**: Auto-stages `.beads/issues.jsonl` so it ships with every commit.
 
 **Session workflow**:
-- Start: `bd dolt pull` (pull latest beads data)
-- End: `bd dolt push`, then `git push`
+- Start: `git pull`, `bd ready`
+- End: `git commit`, `git push`
 
-**Recovery**: If dolt server won't start or DB is corrupted:
-```bash
-bd dolt stop
-cd .beads/dolt && mv timbers timbers.bak
-dolt clone git@github.com:gorewood/timbers.git timbers
-cd -
-bd dolt start
-```
+**Manual fallback**: `bd export -o .beads/issues.jsonl` (note: bare `bd export` = stdout!)
 
 **Worktrees**: Always use `bd worktree create`, never `git worktree add`.
 The `bd` version sets up a `.beads/redirect` so worktrees share the main
