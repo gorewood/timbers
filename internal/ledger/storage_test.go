@@ -494,46 +494,61 @@ func TestStorage_NilFiles(t *testing.T) {
 	}
 }
 
-// --- isLedgerOnlyCommit Tests ---
+// --- isInfrastructureOnlyCommit Tests ---
 
-func TestIsLedgerOnlyCommit(t *testing.T) {
+func TestIsInfrastructureOnlyCommit(t *testing.T) {
 	tests := []struct {
 		name  string
 		files []string
 		want  bool
 	}{
 		{
-			name:  "empty list is not ledger-only",
+			name:  "empty list is not infrastructure-only",
 			files: nil,
 			want:  false,
 		},
 		{
-			name:  "all .timbers/ files is ledger-only",
+			name:  "all .timbers/ files is infrastructure-only",
 			files: []string{".timbers/2026/01/15/tb_entry.json"},
 			want:  true,
 		},
 		{
-			name:  "multiple .timbers/ files is ledger-only",
+			name:  "multiple .timbers/ files is infrastructure-only",
 			files: []string{".timbers/2026/01/15/tb_a.json", ".timbers/2026/01/15/tb_b.json"},
 			want:  true,
 		},
 		{
-			name:  "mixed files is not ledger-only",
+			name:  "all .beads/ files is infrastructure-only",
+			files: []string{".beads/issues.jsonl"},
+			want:  true,
+		},
+		{
+			name:  "mixed .timbers/ and .beads/ is infrastructure-only",
+			files: []string{".timbers/2026/01/15/tb_a.json", ".beads/issues.jsonl"},
+			want:  true,
+		},
+		{
+			name:  "mixed infrastructure and code is not infrastructure-only",
 			files: []string{".timbers/2026/01/15/tb_a.json", "cmd/main.go"},
 			want:  false,
 		},
 		{
-			name:  "only real files is not ledger-only",
+			name:  "only code files is not infrastructure-only",
 			files: []string{"cmd/main.go", "internal/ledger/storage.go"},
+			want:  false,
+		},
+		{
+			name:  ".beads/ plus code is not infrastructure-only",
+			files: []string{".beads/issues.jsonl", "AGENTS.md"},
 			want:  false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isLedgerOnlyCommit(tt.files)
+			got := isInfrastructureOnlyCommit(tt.files)
 			if got != tt.want {
-				t.Errorf("isLedgerOnlyCommit(%v) = %v, want %v", tt.files, got, tt.want)
+				t.Errorf("isInfrastructureOnlyCommit(%v) = %v, want %v", tt.files, got, tt.want)
 			}
 		})
 	}

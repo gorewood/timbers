@@ -249,22 +249,40 @@ func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 	return s.filterLedgerOnlyCommits(commits), latest, nil
 }
 
-// isLedgerOnlyCommit returns true if every file in the list is under .timbers/.
+// infrastructurePrefixes lists path prefixes for tooling-only files that should
+// not count as "pending work." Commits touching only these paths are filtered
+// from pending counts. Currently hardcoded; a future .timbersignore file would
+// make this configurable.
+var infrastructurePrefixes = []string{".timbers/", ".beads/"}
+
+// isInfrastructureOnlyCommit returns true if every file in the list is under
+// a known infrastructure prefix (.timbers/, .beads/, etc.).
 // Returns false for empty lists (unknown = don't filter).
-func isLedgerOnlyCommit(files []string) bool {
+func isInfrastructureOnlyCommit(files []string) bool {
 	if len(files) == 0 {
 		return false
 	}
 	for _, f := range files {
-		if !strings.HasPrefix(f, ".timbers/") {
+		if !isInfrastructureFile(f) {
 			return false
 		}
 	}
 	return true
 }
 
-// filterLedgerOnlyCommits removes commits that only touch .timbers/ files.
-// Uses batch file lookup (single git process) instead of one subprocess per commit.
+// isInfrastructureFile returns true if the path is under a known infrastructure prefix.
+func isInfrastructureFile(path string) bool {
+	for _, prefix := range infrastructurePrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// filterLedgerOnlyCommits removes commits that only touch infrastructure files
+// (.timbers/, .beads/, etc.). Uses batch file lookup (single git process)
+// instead of one subprocess per commit.
 // On error, returns all commits unfiltered (safe default).
 func (s *Storage) filterLedgerOnlyCommits(commits []git.Commit) []git.Commit {
 	if len(commits) == 0 {
@@ -283,7 +301,7 @@ func (s *Storage) filterLedgerOnlyCommits(commits []git.Commit) []git.Commit {
 
 	filtered := make([]git.Commit, 0, len(commits))
 	for _, c := range commits {
-		if !isLedgerOnlyCommit(fileMap[c.SHA]) {
+		if !isInfrastructureOnlyCommit(fileMap[c.SHA]) {
 			filtered = append(filtered, c)
 		}
 	}
