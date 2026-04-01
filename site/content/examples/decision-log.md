@@ -8,74 +8,91 @@ Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
 
 ---
 
-# Decision Log — Timbers 2026-03-23 to 2026-03-31
+# Timbers Architectural Decision Log
 
-## ADR-1: File-Based Fallback for Entry Discovery After Squash Merge
+## ADR-1: Separate Git Commits for Ledger Entries
 
-**Context:** Entry `anchor_commit` fields reference feature-branch SHAs. After squash-merge into main, those SHAs no longer appear in main's commit history, so `query --range` returned zero results even though the entry files were present in the diff between the two range endpoints.
+**Context:** Each `timbers log` invocation creates its own git commit for the ledger entry file, doubling the visible commit count in `git log`. This was flagged as a potential UX concern — users may perceive the extra commits as noise. Three alternatives were evaluated across two council rounds: side-branch storage, amending the previous commit, and stage-and-flush on next real commit.
 
-**Decision:** Added a `git diff --name-only A..B -- .timbers/` fallback path in `entry_filter.go`. When anchor-based commit-ancestry matching returns zero results, the system discovers entries by checking which `.timbers/` files were added or modified in the commit range. Exposed `EntryPathsInRange` in `storage.go` and `DiffNameOnly` in the `GitOps` interface.
-
-**Consequences:**
-- Entries are now discoverable regardless of merge strategy (squash, rebase, fast-forward)
-- Introduces a secondary discovery mechanism that must be maintained alongside anchor-based matching
-- The fallback only triggers on zero anchor matches, which created a gap addressed in ADR-2
-
-## ADR-2: Union Discovery Over Fallback for `--range` Partial-Stale Anchors
-
-**Context:** ADR-1's fallback only triggered when anchor-based matching returned zero results. In partial-stale scenarios — where some entries have valid anchors and others have stale feature-branch anchors — the fallback never fired. Entries with stale anchors were silently dropped from range queries.
-
-**Decision:** Run both anchor-based and `git diff`-based discovery unconditionally, then union the results by entry ID. This replaces the zero-results-only fallback with an always-on dual-path approach.
+**Decision:** Keep separate commits. Side-branch was rejected due to clone gaps and push regression. Amend was rejected due to <20% success rate in practice and because it breaks `filterLedgerOnlyCommits`, which depends on ledger entries being isolated in their own commits. Stage-and-flush was viable but added unnecessary complexity for a cosmetic problem already mitigated by filtering.
 
 **Consequences:**
-- Eliminates the silent data loss from partial-stale anchor sets
-- Every range query now does two git operations instead of one, with a deduplication step
-- Simpler mental model: both paths always run, no conditional fallback logic to reason about
+- Positive: `filterLedgerOnlyCommits` works reliably — one simple check per commit
+- Positive: Agents can filter ledger commits with `git log --invert-grep --grep="^timbers: document"`; humans get the same trivial filter
+- Positive: Pending detection stays simple — each entry commit is self-contained
+- Negative: ~2x commit count in raw `git log` output, which requires explanation for new users
+- Negative: Pre-commit hook enforcement needed to maintain the 1:1 cadence
 
-## ADR-3: Graceful Degradation Over Hard Errors for Stale Anchors
+## ADR-2: Graceful Degradation Over Hard Errors for Stale Anchors
 
-**Context:** After squash-merge, anchor tracking breaks — the last documented anchor SHA is no longer in HEAD's history. `pending` was dumping all reachable commits (hundreds) as false positives, `HasPendingCommits` was returning errors that blocked hooks, and agents were attempting to re-document already-covered commits, creating duplicates.
+**Context:** After squash-merge or rebase, timbers' anchor commit (the SHA linking the last entry to git history) becomes unreachable. `HasPendingCommits` returned an error, blocking hooks. `pending` dumped all reachable commits as false positives. Agents interpreted the false positives as undocumented work and attempted to re-document, creating duplicates.
 
-**Decision:** Chose graceful degradation: `HasPendingCommits` returns `false` (not an error) on `ErrStaleAnchor`, `pending` shows 0 actionable commits with a clear warning and guidance, and `doctor` gained merge-strategy checks (`pull.rebase`, `merge.ff`) and stale-anchor detection.
-
-**Consequences:**
-- Hooks no longer block during stale-anchor conditions — agents can continue working
-- Agents stop creating duplicate entries from false-positive pending lists
-- Trades correctness for availability: genuinely pending commits during a stale-anchor window won't be flagged until the anchor self-heals on the next `timbers log`
-- `doctor` now proactively surfaces merge strategy misconfigurations before they cause stale anchors
-
-## ADR-4: Reachability Check Over Existence Check for Stale Anchor Detection
-
-**Context:** After `git pull --rebase`, old commit SHAs linger in the object store for ~2 weeks before garbage collection. The existing stale-anchor detection only fired when a SHA was completely absent from the object store. This meant `git log` succeeded with phantom results — commits that existed as objects but weren't in HEAD's ancestry — causing `timbers pending` to show already-documented commits as pending.
-
-**Decision:** Added a `git merge-base --is-ancestor` check before `git log` in `GetPendingCommits`. If the anchor commit exists but isn't an ancestor of HEAD, it's treated as stale. Added `IsAncestorOf` to the `GitOps` interface.
+**Decision:** Treat stale anchors as a recoverable state, not an error. `HasPendingCommits` returns `false` (not error) on `ErrStaleAnchor`. `pending` reports 0 actionable commits with a clear warning and guidance. The anchor self-heals on the next real `timbers log` after a commit.
 
 **Consequences:**
-- Stale anchors are detected immediately after rebase, not after a 2-week GC delay
-- Eliminates the phantom-commit class of false positives entirely
-- Adds one extra git operation per `pending` check (the ancestry test), but it's fast and avoids the far more expensive phantom enumeration
-- Depends on git's `merge-base --is-ancestor` semantics, which are well-defined and stable
+- Positive: Hooks no longer deadlock agents mid-workflow after squash-merge
+- Positive: Agents stop creating duplicate entries for already-documented work
+- Positive: Self-healing means no manual intervention needed — normal workflow resumes naturally
+- Negative: Genuinely pending commits during a stale-anchor window are invisible until the anchor heals
+- Negative: Users must understand the warning message to know why pending shows zero during the gap
 
-## ADR-5: Suppress Hooks During Interactive Git Operations
+## ADR-3: Suppress Hooks During Interactive Git Operations
 
-**Context:** Timbers hooks (pre-commit, post-commit) created a deadlock during rebase, merge, cherry-pick, and revert. The agent couldn't continue the rebase (blocked by the pending-commits check) and couldn't run `timbers log` to clear the check (can't commit mid-rebase). Code review caught two additional issues: relative `gitDir` paths broke in non-root CWD, and `pending.go` was checking mid-operation after already running `GetPendingCommits`.
+**Context:** Timbers hooks (pre-commit pending check, session-start prime) ran during `git rebase`, `git merge`, `git cherry-pick`, and `git revert`. This created a deadlock: the agent couldn't continue the rebase (blocked by pending check) and couldn't log (can't commit mid-rebase).
 
-**Decision:** Added `git.IsInteractiveGitOp()` which checks for `.git` state files (`rebase-merge/`, `rebase-apply/`, `MERGE_HEAD`, `CHERRY_PICK_HEAD`, `REVERT_HEAD`). All hooks early-return during interactive operations.
-
-**Consequences:**
-- Eliminates the deadlock — agents can complete rebases and merges without manual intervention
-- Commits made during interactive operations are temporarily invisible to timbers until the operation completes
-- Relies on git's internal state file conventions, which are stable but technically implementation details
-- The suppression is broad (all hooks, all interactive ops) rather than targeted, which is simpler but means no timbers instrumentation during these windows
-
-## ADR-6: Separate Commits for Ledger Entries By Design
-
-**Context:** Each `timbers log` creates a separate commit for the ledger entry file, roughly doubling the commit count visible in `git log`. Three alternatives were evaluated across two council rounds: (1) side-branch storage — rejected due to clone gaps and push regression; (2) amending the previous commit — rejected due to <20% success rate and breaking `filterLedgerOnlyCommits`; (3) staging entries and flushing in a batch — viable but unnecessary complexity.
-
-**Decision:** Kept separate commits as the intentional design. The `filterLedgerOnlyCommits` function depends on the separation to distinguish ledger-only commits from work commits. The git log noise is cosmetic — already mitigated for agents via filtering, and trivially filterable for humans (`git log --invert-grep --grep="timbers: document"`). Documented as a deliberate design choice rather than leaving it as an apparent wart.
+**Decision:** Detect interactive git operations by checking `.git` state files (`rebase-merge/`, `rebase-apply/`, `MERGE_HEAD`, `CHERRY_PICK_HEAD`, `REVERT_HEAD`) via `git.IsInteractiveGitOp()`. All hooks early-return during these operations.
 
 **Consequences:**
-- `filterLedgerOnlyCommits` works reliably because ledger commits are structurally distinct
-- `timbers pending` can precisely identify which work commits lack documentation
-- Git log shows ~2x the expected commit count, which may surprise new users
-- Batch mode (`timbers log --batch`) provides graceful degradation when hooks are bypassed, grouping undocumented commits after the fact
+- Positive: Agents can rebase, merge, cherry-pick, and revert without hook interference
+- Positive: Detection is filesystem-based (checking `.git` state files), so it's fast and doesn't shell out
+- Negative: Pending check is genuinely skipped during multi-step git operations — a commit during rebase won't be flagged
+- Negative: Any new hook added in the future must remember to call `IsInteractiveGitOp()` or risk the same deadlock
+
+## ADR-4: Reachability Check Over Object Existence for Anchor Validation
+
+**Context:** After `git pull --rebase`, old commit SHAs linger in the object store for ~2 weeks (git's GC grace period). Stale anchor detection only fired when the SHA was completely absent. This meant `git log` succeeded with phantom results — commits reachable from the old SHA but not from HEAD — causing `pending` to show already-documented commits as undocumented. Reported by a user after rebase.
+
+**Decision:** Added `git merge-base --is-ancestor` check before `git log` in `GetPendingCommits`. The anchor must be reachable from HEAD, not merely present in the object store. Added `IsAncestorOf` to the `GitOps` interface.
+
+**Consequences:**
+- Positive: Catches stale anchors immediately after rebase, not after 2-week GC delay
+- Positive: Eliminates phantom pending commits entirely — no false positives from lingering objects
+- Negative: Extra git call on every `pending` check (though `merge-base --is-ancestor` is fast)
+- Negative: Expands the `GitOps` interface, adding a method that's only used for this one validation
+
+## ADR-5: Union Discovery Over Fallback for `--range` Entry Resolution
+
+**Context:** `--range` flag resolved entries by matching anchor commits to the given commit range. When anchors became stale (e.g., after rebase on a feature branch), a fallback used diff-based discovery. But the fallback only triggered when *zero* anchor matches were found. In partial-stale cases — some entries with valid anchors, some with stale feature-branch anchors — the fallback was short-circuited, silently dropping the stale entries.
+
+**Decision:** Run both anchor-based and diff-based discovery unconditionally, then union and deduplicate results by entry ID. No fallback logic — both paths always execute.
+
+**Consequences:**
+- Positive: Partial-stale scenarios no longer silently drop entries
+- Positive: Simpler control flow — no conditional fallback branching
+- Negative: Both discovery paths run every time, even when anchors are fully valid (minor performance cost)
+- Negative: Deduplication logic required to prevent double-counting entries found by both paths
+
+## ADR-6: Broadening Ledger-Only Filter to Infrastructure-Only with Configurable Prefixes
+
+**Context:** `isLedgerOnlyCommit` filtered out commits that only touched `.timbers/` files, preventing timbers from showing its own entry commits as pending work. When beads added an auto-stage hook for `.beads/issues.jsonl`, timbers entry commits started containing beads files too, breaking the filter and creating a timbers-on-timbers loop: each entry commit appeared as pending, triggering another entry.
+
+**Decision:** Renamed `isLedgerOnlyCommit` to `isInfrastructureOnlyCommit` with a configurable prefix list (`.timbers/`, `.beads/`). A commit is "infrastructure-only" if all changed files fall under one of the configured prefixes.
+
+**Consequences:**
+- Positive: Breaks the infinite loop caused by beads auto-staging into timbers commits
+- Positive: Configurable prefix list means future infrastructure tools (beyond timbers and beads) can be added without code changes
+- Negative: The filter is now a denylist — any new tool that auto-stages files into commits must be explicitly added to the prefix list or it will trigger false pending results
+- Negative: Slightly looser semantics — "infrastructure" is a broader concept than "ledger," so the filter may suppress commits that a user considers meaningful if they happen to only touch files under a configured prefix
+
+## ADR-7: Git-Native Auto-Flush Sync Over Dolt Push/Pull for Beads
+
+**Context:** Beads issue tracking previously synced via Dolt's own push/pull mechanism against a Dolt remote. This required a running Dolt server, was blocked by Claude Code's sandbox (TCP to localhost), and added a separate sync workflow orthogonal to git.
+
+**Decision:** Replaced Dolt sync with auto-flush to `.beads/issues.jsonl` — a git-tracked JSONL file that ships with every commit via pre-commit hook auto-staging. Import happens automatically after `git pull`.
+
+**Consequences:**
+- Positive: Sync piggybacks on existing `git push`/`git pull` — no separate sync commands or Dolt remote needed
+- Positive: Eliminates sandbox TCP issues — no localhost connections required
+- Positive: Beads state is visible in git history and diffs, improving auditability
+- Negative: Merge conflicts in `issues.jsonl` are possible when multiple collaborators modify issues concurrently
+- Negative: Dolt's native conflict resolution (cell-level merge) is lost — conflicts fall to git's line-level merge

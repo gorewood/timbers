@@ -10,14 +10,14 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ## Bug Fixes
 
-- `timbers pending` no longer shows false-positive commits after a rebase — stale anchors are now caught immediately instead of lingering for weeks
-- `timbers query --range` no longer returns empty results after a squash merge — entries are discoverable regardless of your merge strategy
-- `--range` no longer silently drops entries when only some anchors are stale; all matching entries are now included
-- `doctor --fix` now correctly removes stale hooks from global settings, not just project-local ones
+- Rebase, merge, cherry-pick, and revert operations no longer deadlock — hooks now detect these in-progress git operations and stay out of the way
+- `timbers pending` no longer shows phantom commits after rebasing; stale anchors from rewritten history are caught immediately instead of lingering
+- `--range` queries no longer silently drop entries when some anchors are stale — both discovery methods now run unconditionally and results are merged
+- `timbers doctor --fix` now correctly cleans up stale hooks from global settings, not just project-local ones
+- Infrastructure files (like `.beads/` tracking data) no longer appear as undocumented pending work
 
 ## Improvements
 
-- Hooks automatically pause during rebase, merge, cherry-pick, and revert — no more deadlocks that block you mid-operation
-- Stale anchors degrade gracefully: `timbers pending` reports zero actionable items with clear guidance instead of dumping hundreds of false positives
-- `timbers doctor` now checks your merge strategy configuration and detects stale anchors before they cause problems
-- Security dependency update addressing a JSON parsing vulnerability in the underlying SDK
+- Stale anchors degrade gracefully — `timbers pending` reports zero actionable commits with clear guidance instead of flooding you with hundreds of false positives
+- `timbers doctor` now checks your merge strategy (`pull.rebase`, `merge.ff`) and warns about configurations that tend to cause stale anchors
+- New "How It Works" section in the README explains the commit design, how to filter ledger commits from `git log`, and how batch mode covers gaps when hooks are bypassed

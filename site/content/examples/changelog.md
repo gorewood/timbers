@@ -15,6 +15,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.5] - 2026-03-31
+
+### Changed
+- Upgraded beads to 0.63.3, replacing Dolt push/pull sync with auto-flush to `.beads/issues.jsonl` for simpler git-native sync
+
+### Fixed
+- Fixed timbers-on-timbers loop caused by `.beads/issues.jsonl` appearing in pending commits after beads auto-stage hook
+- Broadened `isLedgerOnlyCommit` to `isInfrastructureOnlyCommit` with configurable prefix list (`.timbers/`, `.beads/`)
+
+
 ## [0.16.4] - 2026-03-31
 
 ### Added
@@ -459,3 +469,4 @@ Initial public release.
 [0.16.2]: https://github.com/gorewood/timbers/releases/tag/v0.16.2
 [0.16.3]: https://github.com/gorewood/timbers/releases/tag/v0.16.3
 [0.16.4]: https://github.com/gorewood/timbers/releases/tag/v0.16.4
+[0.16.5]: https://github.com/gorewood/timbers/releases/tag/v0.16.5
