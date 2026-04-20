@@ -141,7 +141,7 @@ decision-log file +args:
     unset CLAUDECODE
     next=1
     if [ -f "{{file}}" ]; then
-        max=$(grep -oE 'ADR-[0-9]+' "{{file}}" | sed 's/ADR-//' | sort -n | tail -1 || true)
+        max=$(grep -oE 'ADR-[0-9]+' "{{file}}" 2>/dev/null | sed 's/ADR-//' | sort -n | tail -1 || echo "")
         if [ -n "$max" ]; then next=$((max + 1)); fi
     fi
     echo "Appending to {{file}} starting at ADR-$next..." >&2

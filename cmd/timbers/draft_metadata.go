@@ -34,6 +34,9 @@ func parseVars(raw []string) (map[string]string, error) {
 		if !ok || key == "" {
 			return out, fmt.Errorf("invalid --var %q: expected key=value", pair)
 		}
+		if _, exists := out[key]; exists {
+			return out, fmt.Errorf("duplicate --var key %q", key)
+		}
 		out[key] = val
 	}
 	return out, nil
