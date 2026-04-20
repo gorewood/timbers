@@ -1,6 +1,6 @@
 +++
 title = 'Changelog'
-date = '2026-03-31'
+date = '2026-04-20'
 tags = ['example', 'changelog']
 +++
 
@@ -14,6 +14,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.17.0] - 2026-04-20
+
+### Added
+- Added `--var key=value` flag to `timbers draft` for caller-supplied template variables, namespaced under `{{vars.key}}` to avoid shadowing built-ins.
+- Added `vars:` map to template frontmatter for per-template default variables, applied after caller-supplied vars.
+- Added durable ADR numbering to the `decision-log` template via `{{vars.starting_number}}`, with caller-owned offset for stable identifiers across regenerations.
+- Added `just decision-log` recipe that derives the next ADR number by grepping the target file and passes it via `--var`.
+
+### Changed
+- Hardened `parseVars` with a duplicate-key check to prevent silent last-wins behavior under scripting.
+- Changed the `just decision-log` pipeline to use `|| echo ""` inside the command substitution for unambiguous empty-file and no-match handling under `pipefail`.
+
+### Technical
+- Extracted `prepareRender` helper in `runDraftRender` to stay under the cyclop complexity limit.
+- Threaded caller variables through `RenderContext.Vars`, substituted after built-in tokens in `internal/draft/render.go`; unknown keys remain literal.
+
 
 ## [0.16.5] - 2026-03-31
 
@@ -470,3 +487,4 @@ Initial public release.
 [0.16.3]: https://github.com/gorewood/timbers/releases/tag/v0.16.3
 [0.16.4]: https://github.com/gorewood/timbers/releases/tag/v0.16.4
 [0.16.5]: https://github.com/gorewood/timbers/releases/tag/v0.16.5
+[0.17.0]: https://github.com/gorewood/timbers/releases/tag/v0.17.0

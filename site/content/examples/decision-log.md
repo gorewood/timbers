@@ -1,6 +1,6 @@
 +++
 title = 'Decision Log'
-date = '2026-03-31'
+date = '2026-04-20'
 tags = ['example', 'decision-log']
 +++
 
@@ -8,91 +8,83 @@ Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
 
 ---
 
-# Timbers Architectural Decision Log
+## ADR-1: Caller-Supplied Template Variables via `--var` Flag with Namespacing
 
-## ADR-1: Separate Git Commits for Ledger Entries
+**Context:** The `draft` command needed a way for callers to inject arbitrary values into templates (e.g., a starting ADR number) without baking domain-specific logic into the command itself. Options included a generic flat `--var` flag, a template-owned counter in `.timbers/state.json`, or special-case flags per template.
 
-**Context:** Each `timbers log` invocation creates its own git commit for the ledger entry file, doubling the visible commit count in `git log`. This was flagged as a potential UX concern — users may perceive the extra commits as noise. Three alternatives were evaluated across two council rounds: side-branch storage, amending the previous commit, and stage-and-flush on next real commit.
-
-**Decision:** Keep separate commits. Side-branch was rejected due to clone gaps and push regression. Amend was rejected due to <20% success rate in practice and because it breaks `filterLedgerOnlyCommits`, which depends on ledger entries being isolated in their own commits. Stage-and-flush was viable but added unnecessary complexity for a cosmetic problem already mitigated by filtering.
+**Decision:** Added a repeatable `--var key=value` flag, threaded through `RenderContext.Vars` and substituted under the `{{vars.key}}` namespace after built-in tokens. Rejected a state file because it creates two sources of truth that can drift (regenerating output orphans the counter); the rendered markdown is inherently durable and version-controlled, so making the caller extract state from it keeps one source of truth. Namespacing under `{{vars.*}}` (rather than a flat namespace) was chosen to keep built-in tokens sacred so callers cannot accidentally shadow them.
 
 **Consequences:**
-- Positive: `filterLedgerOnlyCommits` works reliably — one simple check per commit
-- Positive: Agents can filter ledger commits with `git log --invert-grep --grep="^timbers: document"`; humans get the same trivial filter
-- Positive: Pending detection stays simple — each entry commit is self-contained
-- Negative: ~2x commit count in raw `git log` output, which requires explanation for new users
-- Negative: Pre-commit hook enforcement needed to maintain the 1:1 cadence
+- Templates remain pure renderers with no per-template command surface area.
+- Callers own durability — any state-like behavior is expressed through the output file, not a sidecar.
+- Flat `--var foo=bar` calls always resolve as `{{vars.foo}}`, which is slightly more verbose than an unnamespaced design but eliminates a class of shadowing bugs.
+- Unknown `{{vars.*}}` tokens remain literal, matching existing token behavior; this silently tolerates typos.
 
-## ADR-2: Graceful Degradation Over Hard Errors for Stale Anchors
+## ADR-2: Per-Template Default Variables in Frontmatter
 
-**Context:** After squash-merge or rebase, timbers' anchor commit (the SHA linking the last entry to git history) becomes unreachable. `HasPendingCommits` returned an error, blocking hooks. `pending` dumped all reachable commits as false positives. Agents interpreted the false positives as undocumented work and attempted to re-document, creating duplicates.
+**Context:** With `--var` in place, the decision-log template needed a default `starting_number` of 1 when the caller omitted it. Options included hardcoding defaults in `internal/draft/render.go`, or letting each template declare its own defaults.
 
-**Decision:** Treat stale anchors as a recoverable state, not an error. `HasPendingCommits` returns `false` (not error) on `ErrStaleAnchor`. `pending` reports 0 actionable commits with a clear warning and guidance. The anchor self-heals on the next real `timbers log` after a commit.
-
-**Consequences:**
-- Positive: Hooks no longer deadlock agents mid-workflow after squash-merge
-- Positive: Agents stop creating duplicate entries for already-documented work
-- Positive: Self-healing means no manual intervention needed — normal workflow resumes naturally
-- Negative: Genuinely pending commits during a stale-anchor window are invisible until the anchor heals
-- Negative: Users must understand the warning message to know why pending shows zero during the gap
-
-## ADR-3: Suppress Hooks During Interactive Git Operations
-
-**Context:** Timbers hooks (pre-commit pending check, session-start prime) ran during `git rebase`, `git merge`, `git cherry-pick`, and `git revert`. This created a deadlock: the agent couldn't continue the rebase (blocked by pending check) and couldn't log (can't commit mid-rebase).
-
-**Decision:** Detect interactive git operations by checking `.git` state files (`rebase-merge/`, `rebase-apply/`, `MERGE_HEAD`, `CHERRY_PICK_HEAD`, `REVERT_HEAD`) via `git.IsInteractiveGitOp()`. All hooks early-return during these operations.
+**Decision:** Added a `vars:` map to template frontmatter for per-template defaults. Render applies caller-supplied vars first, then template defaults fill remaining `{{vars.*}}` tokens. Briefly considered a `--continue-from <file>` flag on `draft` itself, but that would embed decision-log-specific parsing logic into a generic command; the justfile recipe is the right place for that sugar.
 
 **Consequences:**
-- Positive: Agents can rebase, merge, cherry-pick, and revert without hook interference
-- Positive: Detection is filesystem-based (checking `.git` state files), so it's fast and doesn't shell out
-- Negative: Pending check is genuinely skipped during multi-step git operations — a commit during rebase won't be flagged
-- Negative: Any new hook added in the future must remember to call `IsInteractiveGitOp()` or risk the same deadlock
+- The render package stays decoupled from specific template variables — new templates can declare defaults without touching Go code.
+- Template authors have a clear, local place to document expected variables.
+- Callers can still override any default via `--var`.
+- Two layers of resolution (caller vars, then template defaults) means debugging a wrong value requires checking both sources.
 
-## ADR-4: Reachability Check Over Object Existence for Anchor Validation
+## ADR-3: Reachability Check for Stale Anchor Detection
 
-**Context:** After `git pull --rebase`, old commit SHAs linger in the object store for ~2 weeks (git's GC grace period). Stale anchor detection only fired when the SHA was completely absent. This meant `git log` succeeded with phantom results — commits reachable from the old SHA but not from HEAD — causing `pending` to show already-documented commits as undocumented. Reported by a user after rebase.
+**Context:** `GetPendingCommits` treated an anchor as stale only when the SHA was completely absent from the object store. After `git pull --rebase`, old objects linger for up to two weeks before GC, so `git log` succeeded against phantom SHAs and produced spurious "pending" commits for work already documented on the rebased branch. A user (Noam) reported this in the wild.
 
-**Decision:** Added `git merge-base --is-ancestor` check before `git log` in `GetPendingCommits`. The anchor must be reachable from HEAD, not merely present in the object store. Added `IsAncestorOf` to the `GitOps` interface.
-
-**Consequences:**
-- Positive: Catches stale anchors immediately after rebase, not after 2-week GC delay
-- Positive: Eliminates phantom pending commits entirely — no false positives from lingering objects
-- Negative: Extra git call on every `pending` check (though `merge-base --is-ancestor` is fast)
-- Negative: Expands the `GitOps` interface, adding a method that's only used for this one validation
-
-## ADR-5: Union Discovery Over Fallback for `--range` Entry Resolution
-
-**Context:** `--range` flag resolved entries by matching anchor commits to the given commit range. When anchors became stale (e.g., after rebase on a feature branch), a fallback used diff-based discovery. But the fallback only triggered when *zero* anchor matches were found. In partial-stale cases — some entries with valid anchors, some with stale feature-branch anchors — the fallback was short-circuited, silently dropping the stale entries.
-
-**Decision:** Run both anchor-based and diff-based discovery unconditionally, then union and deduplicate results by entry ID. No fallback logic — both paths always execute.
+**Decision:** Before running `git log`, check `git merge-base --is-ancestor` to verify the anchor is reachable from `HEAD`. Added `IsAncestorOf` to the `GitOps` interface. Existence alone is insufficient; reachability is the correct invariant for "the anchor is still part of this branch's history."
 
 **Consequences:**
-- Positive: Partial-stale scenarios no longer silently drop entries
-- Positive: Simpler control flow — no conditional fallback branching
-- Negative: Both discovery paths run every time, even when anchors are fully valid (minor performance cost)
-- Negative: Deduplication logic required to prevent double-counting entries found by both paths
+- Rebased/cherry-picked history no longer produces silent phantom pending lists.
+- The self-heal path now fires immediately on rebase rather than waiting weeks for GC.
+- Adds one `git` subprocess call per pending check; negligible at normal repo scales.
+- Slightly expands the `GitOps` interface surface.
 
-## ADR-6: Broadening Ledger-Only Filter to Infrastructure-Only with Configurable Prefixes
+## ADR-4: Separate Commits for Ledger Entries (Preserved by Design)
 
-**Context:** `isLedgerOnlyCommit` filtered out commits that only touched `.timbers/` files, preventing timbers from showing its own entry commits as pending work. When beads added an auto-stage hook for `.beads/issues.jsonl`, timbers entry commits started containing beads files too, breaking the filter and creating a timbers-on-timbers loop: each entry commit appeared as pending, triggering another entry.
+**Context:** Users surfaced that `timbers log` producing its own commit creates visible noise in `git log`. Alternatives evaluated across two council rounds: a side-branch for entries (rejected — breaks on clone, regressions on push), amending entries into the feature commit (rejected — <20% reliable and breaks `filterLedgerOnlyCommits`), and a stage-and-flush mechanism (viable but unnecessary).
 
-**Decision:** Renamed `isLedgerOnlyCommit` to `isInfrastructureOnlyCommit` with a configurable prefix list (`.timbers/`, `.beads/`). A commit is "infrastructure-only" if all changed files fall under one of the configured prefixes.
-
-**Consequences:**
-- Positive: Breaks the infinite loop caused by beads auto-staging into timbers commits
-- Positive: Configurable prefix list means future infrastructure tools (beyond timbers and beads) can be added without code changes
-- Negative: The filter is now a denylist — any new tool that auto-stages files into commits must be explicitly added to the prefix list or it will trigger false pending results
-- Negative: Slightly looser semantics — "infrastructure" is a broader concept than "ledger," so the filter may suppress commits that a user considers meaningful if they happen to only touch files under a configured prefix
-
-## ADR-7: Git-Native Auto-Flush Sync Over Dolt Push/Pull for Beads
-
-**Context:** Beads issue tracking previously synced via Dolt's own push/pull mechanism against a Dolt remote. This required a running Dolt server, was blocked by Claude Code's sandbox (TCP to localhost), and added a separate sync workflow orthogonal to git.
-
-**Decision:** Replaced Dolt sync with auto-flush to `.beads/issues.jsonl` — a git-tracked JSONL file that ships with every commit via pre-commit hook auto-staging. Import happens automatically after `git pull`.
+**Decision:** Keep entries as separate commits. The whole pending-detection and ledger-only filtering design depends on that separation; the noise is cosmetic and already mitigated for agents via `--invert-grep` filtering and for humans via the `git log` alias suggestion. Proactively documented the rationale in `docs/design-decisions.md`, `timbers prime` output, and `timbers log --help` to head off repeated criticism.
 
 **Consequences:**
-- Positive: Sync piggybacks on existing `git push`/`git pull` — no separate sync commands or Dolt remote needed
-- Positive: Eliminates sandbox TCP issues — no localhost connections required
-- Positive: Beads state is visible in git history and diffs, improving auditability
-- Negative: Merge conflicts in `issues.jsonl` are possible when multiple collaborators modify issues concurrently
-- Negative: Dolt's native conflict resolution (cell-level merge) is lost — conflicts fall to git's line-level merge
+- Reliable pending detection and clean filtering remain intact.
+- `git log` shows ~2x commit count in active sessions; users must learn the filter idiom.
+- The rationale is now discoverable without requiring users to open an issue.
+- Future proposals to collapse entries into feature commits face an explicit, documented bar to clear.
+
+## ADR-5: Suppress Hooks During Interactive Git Operations
+
+**Context:** During `git rebase`, `git merge`, `git cherry-pick`, and `git revert`, the pre-commit pending-check hook created a deadlock: the agent was blocked from continuing the rebase by the pending check, and could not satisfy the check by running `timbers log` because commits are forbidden mid-rebase.
+
+**Decision:** Added `git.IsInteractiveGitOp()` which inspects `.git/` state files (e.g., `rebase-merge/`, `MERGE_HEAD`, `CHERRY_PICK_HEAD`). All hooks early-return when an interactive op is in progress. Code review caught that the relative `gitDir` path had to be resolved against the repo root and that `pending.go` was still running `GetPendingCommits` before the interactive check; both were fixed before merge.
+
+**Consequences:**
+- Rebase/merge/cherry-pick/revert workflows no longer deadlock.
+- Brief blind spot: work committed mid-rebase bypasses the pending check. This is acceptable because the check re-engages on the next normal commit.
+- `GitOps` gains a filesystem-level surface (reading `.git/` state files) that must stay in sync with git internals across versions.
+
+## ADR-6: Broaden Ledger-Only Filter to Infrastructure-Only
+
+**Context:** The `beads` 0.63 auto-stage hook started including `.beads/issues.jsonl` in commits. Since `timbers log` commits now contained both `.timbers/` *and* `.beads/` files, the `isLedgerOnlyCommit` filter treated them as mixed and broke the timbers-on-timbers loop.
+
+**Decision:** Renamed and generalized the predicate to `isInfrastructureOnlyCommit` with a configurable prefix list (`.timbers/`, `.beads/`). Rather than hardcoding a second tool's directory, the prefix list is the extension point for future sibling tools that piggyback on the same commit.
+
+**Consequences:**
+- Coexistence with other git-native infrastructure tools no longer requires bespoke patches.
+- The filter's semantics shift from "ledger-only" to "infrastructure-only" — a subtle expansion that could mask legitimate mixed commits if a future tool writes there intentionally.
+- The prefix list becomes a small piece of configuration that must be maintained as the ecosystem evolves.
+
+## ADR-7: Union Anchor and Diff Discovery for `--range`
+
+**Context:** The v0.15.3 `--range` fallback to diff-based discovery only triggered when the anchor-based lookup returned zero matches. Partial-stale ranges (some valid anchors, some stale) short-circuited the fallback and silently dropped the entries behind the stale anchors.
+
+**Decision:** Always run both anchor-based and diff-based discovery and union the results by entry ID. The short-circuit optimization was unsound because the zero-match heuristic doesn't distinguish "fully resolved" from "partially resolved."
+
+**Consequences:**
+- `--range` is now correct in the partial-stale case that users actually hit after rebases.
+- Slightly more work per call (two discovery passes unconditionally), but both were already cheap.
+- Entry ID union is the right dedup key because entries are content-addressed, not position-addressed.

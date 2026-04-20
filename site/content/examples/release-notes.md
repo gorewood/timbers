@@ -1,6 +1,6 @@
 +++
 title = 'Release Notes'
-date = '2026-03-31'
+date = '2026-04-20'
 tags = ['example', 'release-notes']
 +++
 
@@ -8,16 +8,23 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ---
 
-## Bug Fixes
+## New Features
 
-- Rebase, merge, cherry-pick, and revert operations no longer deadlock — hooks now detect these in-progress git operations and stay out of the way
-- `timbers pending` no longer shows phantom commits after rebasing; stale anchors from rewritten history are caught immediately instead of lingering
-- `--range` queries no longer silently drop entries when some anchors are stale — both discovery methods now run unconditionally and results are merged
-- `timbers doctor --fix` now correctly cleans up stale hooks from global settings, not just project-local ones
-- Infrastructure files (like `.beads/` tracking data) no longer appear as undocumented pending work
+- You can now pass custom variables to draft templates with `--var key=value` for durable, caller-controlled output.
+- The `decision-log` template now supports stable ADR numbering across appends, so `ADR-12` always refers to the same decision.
+- A new `just decision-log` recipe automatically continues ADR numbering from your existing file.
 
 ## Improvements
 
-- Stale anchors degrade gracefully — `timbers pending` reports zero actionable commits with clear guidance instead of flooding you with hundreds of false positives
-- `timbers doctor` now checks your merge strategy (`pull.rebase`, `merge.ff`) and warns about configurations that tend to cause stale anchors
-- New "How It Works" section in the README explains the commit design, how to filter ledger commits from `git log`, and how batch mode covers gaps when hooks are bypassed
+- `timbers log` no longer gets confused when the `beads` auto-stage hook includes `.beads/` files in entry commits.
+- Pending-commit detection now catches phantom commits that linger after a `git pull --rebase`, so you won't see work that's already documented.
+- Hooks now stay out of your way during `git rebase`, `merge`, `cherry-pick`, and `revert` — no more deadlocks mid-operation.
+- `timbers doctor --fix` now correctly cleans up retired hooks in global settings, not just project-local ones.
+- The README now explains how Timbers works upfront, including why ledger entries get their own commits and how to filter them out of `git log`.
+- Duplicate `--var` keys now raise a clear error instead of silently picking the last one.
+
+## Bug Fixes
+
+- Fixed `--range` silently dropping entries when some anchor commits were stale and others were valid.
+- Fixed `timbers pending` showing already-documented commits after a rebase.
+- Fixed `doctor --fix` leaving stale `PreToolUse` hooks in global Claude settings.
