@@ -22,6 +22,21 @@ type draftFlags struct {
 	model           string
 	provider        string
 	withFrontmatter bool
+	vars            []string // "key=value" pairs from --var
+}
+
+// parseVars converts "key=value" strings into a map.
+// Returns an error if any entry is malformed.
+func parseVars(raw []string) (map[string]string, error) {
+	out := make(map[string]string, len(raw))
+	for _, pair := range raw {
+		key, val, ok := strings.Cut(pair, "=")
+		if !ok || key == "" {
+			return out, fmt.Errorf("invalid --var %q: expected key=value", pair)
+		}
+		out[key] = val
+	}
+	return out, nil
 }
 
 // draftSelectionFlags holds the entry selection flags for metadata.

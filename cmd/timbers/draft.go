@@ -27,6 +27,7 @@ func newDraftCmd() *cobra.Command {
 	var modelFlag string
 	var providerFlag string
 	var withFrontmatterFlag bool
+	var varsFlag []string
 
 	cmd := &cobra.Command{
 		Use:   "draft <template>",
@@ -49,6 +50,7 @@ Examples:
 				last: lastFlag, since: sinceFlag, until: untilFlag, rng: rangeFlag,
 				appendText: appendFlag, list: listFlag, show: showFlag, models: modelsFlag,
 				model: modelFlag, provider: providerFlag, withFrontmatter: withFrontmatterFlag,
+				vars: varsFlag,
 			}
 			return runDraft(cmd, args, flags)
 		},
@@ -65,6 +67,7 @@ Examples:
 	cmd.Flags().StringVarP(&modelFlag, "model", "m", "", "Model name for built-in LLM execution (e.g., haiku, sonnet, gemini-flash)")
 	cmd.Flags().StringVarP(&providerFlag, "provider", "p", "", "Provider (anthropic, openai, google, local) - inferred if omitted")
 	cmd.Flags().BoolVar(&withFrontmatterFlag, "with-frontmatter", false, "Include generation metadata as TOML frontmatter (requires --model)")
+	cmd.Flags().StringArrayVar(&varsFlag, "var", nil, "Template variable as key=value, substituted as {{vars.key}} (repeatable)")
 
 	return cmd
 }
@@ -108,26 +111,38 @@ func runDraft(cmd *cobra.Command, args []string, flags draftFlags) error {
 	return runDraftRender(cmd, printer, tmpl, templateName, flags)
 }
 
+// prepareRender validates selection flags, loads entries, parses --var, and builds the render context.
+func prepareRender(printer *output.Printer, flags draftFlags) ([]*ledger.Entry, *draft.RenderContext, error) {
+	if flags.last == "" && flags.since == "" && flags.until == "" && flags.rng == "" {
+		err := output.NewUserError("specify --last, --since, --until, or --range")
+		printer.Error(err)
+		return nil, nil, err
+	}
+
+	entries, err := getDraftEntries(printer, flags.last, flags.since, flags.until, flags.rng)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	vars, err := parseVars(flags.vars)
+	if err != nil {
+		userErr := output.NewUserError(err.Error())
+		printer.Error(userErr)
+		return nil, nil, userErr
+	}
+
+	return entries, buildRenderContext(entries, flags.appendText, vars), nil
+}
+
 // runDraftRender renders the template with entries and outputs the result.
 func runDraftRender(
 	_ *cobra.Command, printer *output.Printer,
 	tmpl *draft.Template, templateName string, flags draftFlags,
 ) error {
-	// Validate entry selection flags
-	if flags.last == "" && flags.since == "" && flags.until == "" && flags.rng == "" {
-		err := output.NewUserError("specify --last, --since, --until, or --range")
-		printer.Error(err)
-		return err
-	}
-
-	// Get entries
-	entries, err := getDraftEntries(printer, flags.last, flags.since, flags.until, flags.rng)
+	entries, renderCtx, err := prepareRender(printer, flags)
 	if err != nil {
 		return err
 	}
-
-	// Build render context
-	renderCtx := buildRenderContext(entries, flags.appendText)
 
 	// Render template
 	rendered, err := draft.Render(tmpl, renderCtx)

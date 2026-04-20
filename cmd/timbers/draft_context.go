@@ -13,7 +13,7 @@ import (
 )
 
 // buildRenderContext creates a RenderContext from entries and flags.
-func buildRenderContext(entries []*ledger.Entry, appendFlag string) *draft.RenderContext {
+func buildRenderContext(entries []*ledger.Entry, appendFlag string, vars map[string]string) *draft.RenderContext {
 	repoName := ""
 	if root, rootErr := git.RepoRoot(); rootErr == nil {
 		repoName = filepath.Base(root)
@@ -39,6 +39,7 @@ func buildRenderContext(entries []*ledger.Entry, appendFlag string) *draft.Rende
 		TotalEntries:       totalEntries,
 		IsFirstBatch:       isFirstBatch,
 		ProjectDescription: projectDesc,
+		Vars:               vars,
 	}
 }
 

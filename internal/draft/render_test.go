@@ -177,6 +177,36 @@ func TestBuildDateRange(t *testing.T) {
 	}
 }
 
+func TestRenderWithCallerVars(t *testing.T) {
+	tmpl := &Template{
+		Name:    "test",
+		Content: "Start: ADR-{{vars.starting_number}}. Count: {{entry_count}}. Missing: {{vars.nope}}.",
+	}
+
+	ctx := &RenderContext{
+		Entries: []*ledger.Entry{},
+		Vars: map[string]string{
+			"starting_number": "42",
+			"entry_count":     "999",
+		},
+	}
+
+	result, err := Render(tmpl, ctx)
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	if !strings.Contains(result, "Start: ADR-42") {
+		t.Errorf("caller var not substituted, got: %s", result)
+	}
+	if !strings.Contains(result, "Count: 0") {
+		t.Errorf("built-in {{entry_count}} must not be shadowed by vars.entry_count, got: %s", result)
+	}
+	if !strings.Contains(result, "Missing: {{vars.nope}}") {
+		t.Errorf("unknown var should remain literal, got: %s", result)
+	}
+}
+
 func TestRenderWithEntriesJSON(t *testing.T) {
 	tmpl := &Template{
 		Name:    "test",

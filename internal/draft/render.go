@@ -15,10 +15,11 @@ type RenderContext struct {
 	Entries            []*ledger.Entry
 	RepoName           string
 	Branch             string
-	AppendText         string // Optional extra instructions from --append
-	TotalEntries       int    // Total entries in repo (for detecting first batch)
-	IsFirstBatch       bool   // True if entries include the chronologically earliest
-	ProjectDescription string // Brief project description for context
+	AppendText         string            // Optional extra instructions from --append
+	TotalEntries       int               // Total entries in repo (for detecting first batch)
+	IsFirstBatch       bool              // True if entries include the chronologically earliest
+	ProjectDescription string            // Brief project description for context
+	Vars               map[string]string // Caller-supplied variables, substituted as {{vars.key}}
 }
 
 // Render substitutes variables in the template content.
@@ -31,6 +32,10 @@ func Render(tmpl *Template, ctx *RenderContext) (string, error) {
 	result := tmpl.Content
 	for key, val := range vars {
 		result = strings.ReplaceAll(result, "{{"+key+"}}", val)
+	}
+
+	for key, val := range ctx.Vars {
+		result = strings.ReplaceAll(result, "{{vars."+key+"}}", val)
 	}
 
 	// Append extra instructions if provided
