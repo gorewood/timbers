@@ -133,6 +133,21 @@ draft +args:
 draft-model model +args:
     @CLAUDECODE= go run ./cmd/timbers draft {{args}} | claude -p --model {{model}}
 
+# Append new ADRs to a decision log, continuing the existing numbering.
+# Usage: just decision-log docs/decisions.md --since 2026-03-01
+decision-log file +args:
+    #!/usr/bin/env bash
+    set -eo pipefail
+    unset CLAUDECODE
+    next=1
+    if [ -f "{{file}}" ]; then
+        max=$(grep -oE 'ADR-[0-9]+' "{{file}}" | sed 's/ADR-//' | sort -n | tail -1 || true)
+        if [ -n "$max" ]; then next=$((max + 1)); fi
+    fi
+    echo "Appending to {{file}} starting at ADR-$next..." >&2
+    go run ./cmd/timbers draft decision-log {{args}} --var starting_number="$next" \
+        | claude -p --model opus >> "{{file}}"
+
 # Regenerate all site example pages from current ledger
 examples:
     #!/usr/bin/env bash

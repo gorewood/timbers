@@ -360,6 +360,29 @@ timbers draft changelog --show
 timbers draft changelog --last 5
 ```
 
+### Template Variables (`--var`)
+
+Templates can accept caller-supplied variables via `--var key=value` (repeatable).
+References appear as `{{vars.key}}` in template content, and templates may declare
+defaults in frontmatter so the token resolves even without a caller override.
+
+The built-in `decision-log` template uses this to keep ADR numbers stable across
+runs. A fresh run defaults to ADR-1; if you're appending to an existing log, pass
+the offset explicitly:
+
+```bash
+# Compute the next ADR number from the existing file and append new decisions.
+next=$(grep -oE 'ADR-[0-9]+' docs/decisions.md | sed 's/ADR-//' | sort -n | tail -1)
+next=$((${next:-0} + 1))
+
+timbers draft decision-log --since 2026-03-01 \
+    --var starting_number=$next | claude -p --model opus >> docs/decisions.md
+```
+
+Timbers does not track an ADR counter — the file you write into is the source
+of truth. Pair `--var starting_number=...` with `--since` or `--range` so each
+run covers only new work, making the log append-only.
+
 ### Custom Templates
 
 Create project-specific templates in `.timbers/templates/`:

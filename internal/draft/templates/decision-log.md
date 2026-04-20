@@ -1,7 +1,9 @@
 ---
 name: decision-log
 description: ADR-style decision log extracted from design rationale
-version: 1
+version: 2
+vars:
+  starting_number: "1"
 ---
 Extract architectural decisions from these development log entries and format them as an ADR-style decision log.
 
@@ -30,7 +32,9 @@ Extract architectural decisions from these development log entries and format th
 - Use `backticks` for commands, flags, function names, file paths
 - Be concise but complete — each ADR should stand alone
 
-**Numbering**: Number sequentially starting from ADR-1.
+**Numbering**: Number sequentially starting from ADR-{{vars.starting_number}}. Each
+subsequent ADR increments by 1. The caller supplies the offset so numbers stay
+stable across runs — do not renumber earlier ADRs, do not reset to 1.
 
 **Filtering**:
 - If an entry's "why" field just restates what was done ("Added X because users needed X"), skip it entirely

@@ -15,9 +15,10 @@ import (
 // Template represents a prompt template with metadata and content.
 type Template struct {
 	// Metadata from frontmatter
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Version     int    `yaml:"version,omitempty"`
+	Name        string            `yaml:"name"`
+	Description string            `yaml:"description"`
+	Version     int               `yaml:"version,omitempty"`
+	Vars        map[string]string `yaml:"vars,omitempty"` // Default values for {{vars.*}} tokens
 
 	// Template content (after frontmatter)
 	Content string `yaml:"-"`

@@ -207,6 +207,39 @@ func TestRenderWithCallerVars(t *testing.T) {
 	}
 }
 
+func TestRenderTemplateVarDefaults(t *testing.T) {
+	tmpl := &Template{
+		Name: "test",
+		Vars: map[string]string{
+			"starting_number": "1",
+			"project":         "default-proj",
+		},
+		Content: "ADR-{{vars.starting_number}} in {{vars.project}}",
+	}
+
+	t.Run("uses defaults when caller omits", func(t *testing.T) {
+		result, err := Render(tmpl, &RenderContext{})
+		if err != nil {
+			t.Fatalf("Render() error = %v", err)
+		}
+		if !strings.Contains(result, "ADR-1 in default-proj") {
+			t.Errorf("template defaults not applied, got: %s", result)
+		}
+	})
+
+	t.Run("caller vars override template defaults", func(t *testing.T) {
+		result, err := Render(tmpl, &RenderContext{
+			Vars: map[string]string{"starting_number": "42"},
+		})
+		if err != nil {
+			t.Fatalf("Render() error = %v", err)
+		}
+		if !strings.Contains(result, "ADR-42 in default-proj") {
+			t.Errorf("override/default mix failed, got: %s", result)
+		}
+	})
+}
+
 func TestRenderWithEntriesJSON(t *testing.T) {
 	tmpl := &Template{
 		Name:    "test",

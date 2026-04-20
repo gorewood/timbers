@@ -34,7 +34,14 @@ func Render(tmpl *Template, ctx *RenderContext) (string, error) {
 		result = strings.ReplaceAll(result, "{{"+key+"}}", val)
 	}
 
+	// Caller-supplied vars win over template defaults.
 	for key, val := range ctx.Vars {
+		result = strings.ReplaceAll(result, "{{vars."+key+"}}", val)
+	}
+	for key, val := range tmpl.Vars {
+		if _, provided := ctx.Vars[key]; provided {
+			continue
+		}
 		result = strings.ReplaceAll(result, "{{vars."+key+"}}", val)
 	}
 
