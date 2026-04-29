@@ -13,12 +13,13 @@ import (
 )
 
 // runCoreChecks performs core infrastructure checks.
-func runCoreChecks() []checkResult {
-	checks := make([]checkResult, 0, 4)
+func runCoreChecks(flags *doctorFlags) []checkResult {
+	checks := make([]checkResult, 0, 5)
 	checks = append(checks, checkTimbersDirExists())
 	checks = append(checks, checkBinaryInPath())
 	checks = append(checks, checkVersion())
 	checks = append(checks, checkGitattributes())
+	checks = append(checks, checkLegacyFilenames(flags))
 	return checks
 }
 

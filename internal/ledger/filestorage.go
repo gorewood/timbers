@@ -86,16 +86,44 @@ func (fs *FileStorage) entryDir(id string) string {
 	return fs.dir
 }
 
-// entryPath returns the file path for an entry ID.
+// entryPath returns the file path for an entry ID using the safe (dashed)
+// filename form. This is the canonical path for new writes.
 func (fs *FileStorage) entryPath(id string) string {
+	return filepath.Join(fs.entryDir(id), IDToFilename(id)+".json")
+}
+
+// legacyEntryPath returns the pre-v0.18 colon-encoded file path for an entry ID.
+// Used as a read-side fallback so existing ledgers (before the colon-to-dash
+// migration) keep working without forcing a rewrite.
+func (fs *FileStorage) legacyEntryPath(id string) string {
 	return filepath.Join(fs.entryDir(id), id+".json")
+}
+
+// existingEntryPath returns the path to the entry file on disk, preferring the
+// canonical (dashed) filename and falling back to the legacy (colon-encoded)
+// filename. Returns the canonical path if neither exists, so callers get a
+// sensible target for error messages.
+func (fs *FileStorage) existingEntryPath(id string) string {
+	canonical := fs.entryPath(id)
+	if _, err := os.Stat(canonical); err == nil {
+		return canonical
+	}
+	legacy := fs.legacyEntryPath(id)
+	if legacy != canonical {
+		if _, err := os.Stat(legacy); err == nil {
+			return legacy
+		}
+	}
+	return canonical
 }
 
 // ReadEntry reads the entry with the given ID from the storage directory.
 // Returns a user error if the entry file does not exist.
 // Returns ErrNotTimbersNote if the file is valid JSON but not a timbers entry.
+// Reads accept both the canonical (dashed) filename and the legacy (colon)
+// filename so pre-v0.18 ledgers remain readable.
 func (fs *FileStorage) ReadEntry(id string) (*Entry, error) {
-	path := fs.entryPath(id)
+	path := fs.existingEntryPath(id)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -139,7 +167,9 @@ func (fs *FileStorage) ListEntriesWithStats() ([]*Entry, *ListStats, error) {
 		}
 
 		stats.Total++
-		id := strings.TrimSuffix(d.Name(), ".json")
+		// Filenames may be in either format (canonical dashed, post-v0.18; or
+		// legacy colon-encoded). Convert to the canonical ID for ReadEntry.
+		id := FilenameToID(strings.TrimSuffix(d.Name(), ".json"))
 		entry, readErr := fs.ReadEntry(id)
 		if readErr != nil {
 			stats.Skipped++
@@ -175,11 +205,11 @@ func (fs *FileStorage) WriteEntry(entry *Entry, force bool) error {
 
 	path := fs.entryPath(entry.ID)
 
-	// Check for existing entry if not forcing
-	if !force {
-		if _, err := os.Stat(path); err == nil {
-			return output.NewConflictError("entry already exists: " + entry.ID)
-		}
+	// Check for existing entry if not forcing — consider both canonical and
+	// legacy filename forms so we don't silently create a duplicate alongside
+	// a pre-v0.18 file.
+	if !force && fs.EntryExists(entry.ID) {
+		return output.NewConflictError("entry already exists: " + entry.ID)
 	}
 
 	data, err := entry.ToJSON()
@@ -199,6 +229,12 @@ func (fs *FileStorage) WriteEntry(entry *Entry, force bool) error {
 	if err = fs.gitAdd(path); err != nil {
 		return output.NewSystemErrorWithCause("failed to stage entry file", err)
 	}
+
+	// Transparent migration: if a legacy (colon-encoded) sibling exists for the
+	// same ID, remove it so the canonical (dashed) file is the single source of
+	// truth. WriteEntry is the one-way upgrade boundary. Done after the
+	// canonical is staged so a failure here cannot leave the new entry unstaged.
+	fs.removeLegacySibling(entry.ID, path)
 
 	if err = fs.gitCommit(path, "timbers: document "+entry.ID); err != nil {
 		return output.NewSystemErrorWithCause("failed to commit entry file", err)
@@ -231,8 +267,71 @@ func atomicWrite(path string, data []byte) error {
 	return nil
 }
 
-// EntryExists returns true if an entry file exists for the given ID.
+// removeLegacySibling deletes the pre-v0.18 colon-encoded file for an ID
+// after the canonical file has been written. Best-effort: errors are
+// ignored so a write that succeeded otherwise is not failed by a stale-file
+// cleanup. The canonical write has already happened.
+func (fs *FileStorage) removeLegacySibling(id, canonical string) {
+	legacy := fs.legacyEntryPath(id)
+	if legacy == canonical {
+		return
+	}
+	if _, err := os.Stat(legacy); err != nil {
+		return
+	}
+	if err := os.Remove(legacy); err != nil {
+		return
+	}
+	_ = fs.gitAdd(legacy)
+}
+
+// MigrateLegacyFilenames walks the storage directory and renames any
+// pre-v0.18 colon-encoded entry files to the canonical (dashed) form.
+// Returns the IDs that were migrated. Idempotent: a no-op if everything is
+// already canonical, and tolerates a canonical sibling already existing
+// (the legacy file is removed in that case).
+func (fs *FileStorage) MigrateLegacyFilenames() ([]string, error) {
+	var migrated []string
+	walkErr := filepath.WalkDir(fs.dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".json") {
+			return nil
+		}
+		base := strings.TrimSuffix(d.Name(), ".json")
+		if !strings.Contains(base, ":") {
+			return nil
+		}
+		canonicalName := IDToFilename(base) + ".json"
+		canonicalPath := filepath.Join(filepath.Dir(path), canonicalName)
+		if _, statErr := os.Stat(canonicalPath); statErr == nil {
+			// Canonical exists already — drop the legacy duplicate.
+			if rmErr := os.Remove(path); rmErr != nil {
+				return fmt.Errorf("remove duplicate legacy %s: %w", path, rmErr)
+			}
+		} else if rnErr := os.Rename(path, canonicalPath); rnErr != nil {
+			return fmt.Errorf("rename %s: %w", path, rnErr)
+		}
+		migrated = append(migrated, FilenameToID(base))
+		return nil
+	})
+	if walkErr != nil && !errors.Is(walkErr, os.ErrNotExist) {
+		return migrated, output.NewSystemErrorWithCause("filename migration walk failed", walkErr)
+	}
+	return migrated, nil
+}
+
+// EntryExists returns true if an entry file exists for the given ID,
+// in either the canonical or legacy filename format.
 func (fs *FileStorage) EntryExists(id string) bool {
-	_, err := os.Stat(fs.entryPath(id))
+	if _, err := os.Stat(fs.entryPath(id)); err == nil {
+		return true
+	}
+	legacy := fs.legacyEntryPath(id)
+	if legacy == fs.entryPath(id) {
+		return false
+	}
+	_, err := os.Stat(legacy)
 	return err == nil
 }

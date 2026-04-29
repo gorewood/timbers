@@ -102,6 +102,36 @@ func GenerateID(anchor string, timestamp time.Time) string {
 	return idPrefix + formattedTime + "_" + shortSHA
 }
 
+// IDToFilename converts a canonical entry ID (with colons in the time portion)
+// to a filesystem-safe filename without the .json extension. Colons in filenames
+// are valid on Unix but blocked by Go's module zip format and Windows, so the
+// HH:MM:SS separators in the timestamp are encoded as dashes for storage.
+// Idempotent on already-converted IDs.
+func IDToFilename(id string) string {
+	return strings.ReplaceAll(id, ":", "-")
+}
+
+// FilenameToID converts a stored filename (with dashes for time separators)
+// back to the canonical entry ID with colons. Restores only the two HH:MM:SS
+// separators (positions 16 and 19); the YYYY-MM-DD dashes are preserved.
+// Idempotent on already-canonical IDs (returns input unchanged if it doesn't
+// match the dash-encoded format).
+func FilenameToID(name string) string {
+	if !strings.HasPrefix(name, idPrefix) || len(name) < 24 {
+		return name
+	}
+	if name[13] != 'T' || name[22] != 'Z' || name[23] != '_' {
+		return name
+	}
+	if name[16] != '-' || name[19] != '-' {
+		return name
+	}
+	bytes := []byte(name)
+	bytes[16] = ':'
+	bytes[19] = ':'
+	return string(bytes)
+}
+
 // Validate checks that all required fields are present.
 // Returns a ValidationError with the list of missing fields if validation fails.
 func (e *Entry) Validate() error {

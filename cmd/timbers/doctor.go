@@ -112,7 +112,7 @@ func runDoctor(cmd *cobra.Command, flags *doctorFlags) error {
 func gatherDoctorChecks(flags *doctorFlags) *doctorResult {
 	result := &doctorResult{
 		Version:     version,
-		Core:        runCoreChecks(),
+		Core:        runCoreChecks(flags),
 		Config:      runConfigChecks(flags),
 		Workflow:    runWorkflowChecks(),
 		Integration: runIntegrationChecks(flags),

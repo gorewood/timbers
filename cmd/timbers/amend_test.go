@@ -77,15 +77,28 @@ func setupAmendTestStorage(t *testing.T, mock *mockGitOpsForAmend, entry *ledger
 }
 
 // readEntryFromDir reads and parses the entry file for the given ID from the dir.
+// Tries the canonical (dashed) filename first, falls back to the legacy
+// (colon-encoded) form so this helper works for both pre- and post-migration tests.
 func readEntryFromDir(t *testing.T, dir, id string) *ledger.Entry {
 	t.Helper()
 	entryDir := dir
 	if sub := ledger.EntryDateDir(id); sub != "" {
 		entryDir = filepath.Join(dir, sub)
 	}
-	data, err := os.ReadFile(filepath.Join(entryDir, id+".json"))
-	if err != nil {
-		t.Fatalf("failed to read entry file: %v", err)
+	candidates := []string{
+		filepath.Join(entryDir, ledger.IDToFilename(id)+".json"),
+		filepath.Join(entryDir, id+".json"),
+	}
+	var data []byte
+	var readErr error
+	for _, p := range candidates {
+		data, readErr = os.ReadFile(p)
+		if readErr == nil {
+			break
+		}
+	}
+	if readErr != nil {
+		t.Fatalf("failed to read entry file: %v", readErr)
 	}
 	entry, err := ledger.FromJSON(data)
 	if err != nil {

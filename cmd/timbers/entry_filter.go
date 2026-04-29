@@ -165,12 +165,14 @@ func getEntriesByDiff(
 		return nil, err
 	}
 
-	// Build a set of entry IDs from the diff file paths
+	// Build a set of entry IDs from the diff file paths.
+	// Filenames may be in canonical (dashed) or legacy (colon) form; convert
+	// both to the canonical ID before comparing against entry.ID.
 	idSet := make(map[string]bool, len(files))
 	for _, f := range files {
 		base := filepath.Base(f)
-		if id, ok := strings.CutSuffix(base, ".json"); ok {
-			idSet[id] = true
+		if name, ok := strings.CutSuffix(base, ".json"); ok {
+			idSet[ledger.FilenameToID(name)] = true
 		}
 	}
 

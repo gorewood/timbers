@@ -62,6 +62,70 @@ func TestGenerateID_Determinism(t *testing.T) {
 	}
 }
 
+func TestIDFilenameRoundTrip(t *testing.T) {
+	tests := []struct {
+		name     string
+		id       string
+		filename string
+	}{
+		{
+			name:     "canonical id",
+			id:       "tb_2026-01-15T15:04:05Z_8f2c1a",
+			filename: "tb_2026-01-15T15-04-05Z_8f2c1a",
+		},
+		{
+			name:     "midnight timestamp",
+			id:       "tb_2026-12-31T00:00:00Z_abcdef",
+			filename: "tb_2026-12-31T00-00-00Z_abcdef",
+		},
+		{
+			name:     "short sha",
+			id:       "tb_2026-01-01T01:02:03Z_a1b2c3",
+			filename: "tb_2026-01-01T01-02-03Z_a1b2c3",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IDToFilename(tt.id); got != tt.filename {
+				t.Errorf("IDToFilename(%q) = %q, want %q", tt.id, got, tt.filename)
+			}
+			if got := FilenameToID(tt.filename); got != tt.id {
+				t.Errorf("FilenameToID(%q) = %q, want %q", tt.filename, got, tt.id)
+			}
+		})
+	}
+}
+
+func TestIDToFilenameIdempotent(t *testing.T) {
+	already := "tb_2026-01-15T15-04-05Z_8f2c1a"
+	if got := IDToFilename(already); got != already {
+		t.Errorf("IDToFilename should be idempotent on dash form, got %q", got)
+	}
+}
+
+func TestFilenameToIDIdempotent(t *testing.T) {
+	already := "tb_2026-01-15T15:04:05Z_8f2c1a"
+	if got := FilenameToID(already); got != already {
+		t.Errorf("FilenameToID should be idempotent on colon form, got %q", got)
+	}
+}
+
+func TestFilenameToIDIgnoresUnexpectedFormats(t *testing.T) {
+	// Names that don't match the expected pattern should pass through unchanged.
+	for _, name := range []string{
+		"",
+		"random",
+		"tb_short",
+		"tb_2026-01-15_no_T_section",
+		"not-a-tb-prefix-2026-01-15T15-04-05Z_abc123",
+	} {
+		if got := FilenameToID(name); got != name {
+			t.Errorf("FilenameToID(%q) should return input unchanged, got %q", name, got)
+		}
+	}
+}
+
 func TestEntry_Validate(t *testing.T) {
 	validEntry := func() *Entry {
 		return &Entry{

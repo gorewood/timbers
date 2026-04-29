@@ -76,6 +76,145 @@ func writeRawEntryFile(t *testing.T, dir, id string, content []byte) {
 	}
 }
 
+// --- Backward-compat filename Tests ---
+
+// TestFileStorage_ReadsLegacyColonFilename verifies that ledgers written before
+// the v0.18 colon-to-dash migration remain readable. The on-disk file uses the
+// canonical ID (with colons) directly as its filename, but ReadEntry must still
+// find it.
+func TestFileStorage_ReadsLegacyColonFilename(t *testing.T) {
+	dir := t.TempDir()
+	entry := makeTestEntry("legacy01", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+
+	// Write at the legacy (colon-encoded) path on purpose.
+	data, _ := entry.ToJSON()
+	sub := EntryDateDir(entry.ID)
+	if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	legacyPath := filepath.Join(dir, sub, entry.ID+".json")
+	if err := os.WriteFile(legacyPath, data, 0o600); err != nil {
+		t.Fatalf("write legacy: %v", err)
+	}
+
+	store := NewFileStorage(dir, noopGitAdd, noopGitCommit)
+
+	// ReadEntry should find the legacy file.
+	got, err := store.ReadEntry(entry.ID)
+	if err != nil {
+		t.Fatalf("ReadEntry: %v", err)
+	}
+	if got.ID != entry.ID {
+		t.Errorf("got ID %q, want %q", got.ID, entry.ID)
+	}
+
+	// EntryExists should report true.
+	if !store.EntryExists(entry.ID) {
+		t.Error("EntryExists returned false for legacy file")
+	}
+
+	// ListEntries should include it.
+	entries, err := store.ListEntries()
+	if err != nil {
+		t.Fatalf("ListEntries: %v", err)
+	}
+	if len(entries) != 1 || entries[0].ID != entry.ID {
+		t.Errorf("ListEntries returned %v, want [%q]", entries, entry.ID)
+	}
+}
+
+// TestFileStorage_WriteRemovesLegacySibling verifies that writing an entry
+// supersedes any pre-v0.18 colon-encoded sibling for the same ID, leaving a
+// single canonical file on disk.
+func TestFileStorage_WriteRemovesLegacySibling(t *testing.T) {
+	dir := t.TempDir()
+	entry := makeTestEntry("upgrade01", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+
+	// Pre-create legacy file.
+	data, _ := entry.ToJSON()
+	sub := EntryDateDir(entry.ID)
+	if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	legacyPath := filepath.Join(dir, sub, entry.ID+".json")
+	if err := os.WriteFile(legacyPath, data, 0o600); err != nil {
+		t.Fatalf("write legacy: %v", err)
+	}
+
+	store := NewFileStorage(dir, noopGitAdd, noopGitCommit)
+	if err := store.WriteEntry(entry, true); err != nil {
+		t.Fatalf("WriteEntry: %v", err)
+	}
+
+	// Legacy file should be gone.
+	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
+		t.Errorf("legacy file should be removed after canonical write, stat err = %v", err)
+	}
+
+	// Canonical file should exist.
+	canonicalPath := filepath.Join(dir, sub, IDToFilename(entry.ID)+".json")
+	if _, err := os.Stat(canonicalPath); err != nil {
+		t.Errorf("canonical file should exist after write: %v", err)
+	}
+}
+
+// TestFileStorage_MigrateLegacyFilenames verifies the bulk migration walks
+// .timbers/, renames colon files to canonical dashed names, and reports the
+// affected IDs.
+func TestFileStorage_MigrateLegacyFilenames(t *testing.T) {
+	dir := t.TempDir()
+	store := NewFileStorage(dir, noopGitAdd, noopGitCommit)
+
+	mkLegacy := func(id string) string {
+		t.Helper()
+		entry := makeTestEntry("anchor"+id[len(id)-4:], time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+		entry.ID = id
+		data, _ := entry.ToJSON()
+		sub := EntryDateDir(id)
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		p := filepath.Join(dir, sub, id+".json")
+		if err := os.WriteFile(p, data, 0o600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		return p
+	}
+
+	legacyA := mkLegacy("tb_2026-01-15T10:00:00Z_aaaaaa")
+	legacyB := mkLegacy("tb_2026-01-15T11:00:00Z_bbbbbb")
+
+	migrated, err := store.MigrateLegacyFilenames()
+	if err != nil {
+		t.Fatalf("MigrateLegacyFilenames: %v", err)
+	}
+	if len(migrated) != 2 {
+		t.Errorf("migrated count = %d, want 2", len(migrated))
+	}
+
+	// Legacy files gone, canonical present.
+	for _, p := range []string{legacyA, legacyB} {
+		if _, statErr := os.Stat(p); !os.IsNotExist(statErr) {
+			t.Errorf("legacy %s should be removed: %v", p, statErr)
+		}
+	}
+	for _, id := range []string{"tb_2026-01-15T10:00:00Z_aaaaaa", "tb_2026-01-15T11:00:00Z_bbbbbb"} {
+		canonical := filepath.Join(dir, EntryDateDir(id), IDToFilename(id)+".json")
+		if _, statErr := os.Stat(canonical); statErr != nil {
+			t.Errorf("canonical %s missing: %v", canonical, statErr)
+		}
+	}
+
+	// Idempotent: running again is a no-op.
+	again, err := store.MigrateLegacyFilenames()
+	if err != nil {
+		t.Fatalf("MigrateLegacyFilenames (second run): %v", err)
+	}
+	if len(again) != 0 {
+		t.Errorf("second run migrated %d, want 0", len(again))
+	}
+}
+
 // --- ReadEntry Tests ---
 
 func TestFileStorage_ReadEntry(t *testing.T) {
@@ -433,7 +572,7 @@ func TestFileStorage_WriteEntry(t *testing.T) {
 
 			// Verify file exists with correct content
 			sub := EntryDateDir(tt.entry.ID)
-			path := filepath.Join(dir, sub, tt.entry.ID+".json")
+			path := filepath.Join(dir, sub, IDToFilename(tt.entry.ID)+".json")
 			data, readErr := os.ReadFile(path)
 			if readErr != nil {
 				t.Fatalf("entry file not found: %v", readErr)
@@ -490,7 +629,7 @@ func TestFileStorage_WriteEntry_GitAddError(t *testing.T) {
 
 	// File should still exist (rename succeeded before git add failed)
 	sub := EntryDateDir(entry.ID)
-	path := filepath.Join(dir, sub, entry.ID+".json")
+	path := filepath.Join(dir, sub, IDToFilename(entry.ID)+".json")
 	if _, statErr := os.Stat(path); statErr != nil {
 		t.Errorf("entry file should still exist after git add failure: %v", statErr)
 	}
@@ -555,7 +694,7 @@ func TestFileStorage_WriteEntry_CommitPathspec(t *testing.T) {
 	// The path should be the full entry file path (gitCommit receives it directly;
 	// DefaultGitCommit places it after -- in the git command)
 	sub := EntryDateDir(entry.ID)
-	wantPath := filepath.Join(dir, sub, entry.ID+".json")
+	wantPath := filepath.Join(dir, sub, IDToFilename(entry.ID)+".json")
 	if commitRecorder.paths[0] != wantPath {
 		t.Errorf("commit path = %q, want %q", commitRecorder.paths[0], wantPath)
 	}
