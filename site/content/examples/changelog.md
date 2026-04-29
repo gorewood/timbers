@@ -1,6 +1,6 @@
 +++
 title = 'Changelog'
-date = '2026-04-20'
+date = '2026-04-29'
 tags = ['example', 'changelog']
 +++
 
@@ -14,6 +14,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.18.0] - 2026-04-29
+
+### Fixed
+- Renamed ledger files to drop colons from filenames so `go install ...@latest` works on tagged versions; colons in `.timbers/*.json` broke Go's module zip format and proxy.
+
+### Added
+- `IDToFilename` and `FilenameToID` helpers that flip `HH:MM:SS` separators to dashes for filesystem encoding while preserving canonical ISO 8601 timestamps in entry IDs.
+- `FileStorage.MigrateLegacyFilenames` for bulk migration of existing entries.
+- `timbers doctor --fix` support for migrating legacy colon-named ledger files.
+
+### Changed
+- `entryPath` now emits canonical dashed filenames; reads transparently fall back to `legacyEntryPath` for colon-named files written by older binaries.
+- On-write cleanup transparently removes legacy sibling files when canonical names are written.
+
+### Technical
+- Indefinite backward-compat reads preserved so forks and downstream consumers with older entries don't need to upgrade in lockstep.
+- Migrated 146 existing entries in this repo to the new dashed filename format.
+
 
 ## [0.17.0] - 2026-04-20
 
@@ -488,3 +507,4 @@ Initial public release.
 [0.16.4]: https://github.com/gorewood/timbers/releases/tag/v0.16.4
 [0.16.5]: https://github.com/gorewood/timbers/releases/tag/v0.16.5
 [0.17.0]: https://github.com/gorewood/timbers/releases/tag/v0.17.0
+[0.18.0]: https://github.com/gorewood/timbers/releases/tag/v0.18.0
