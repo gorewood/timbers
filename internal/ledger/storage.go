@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/output"
@@ -249,14 +248,8 @@ func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 	return s.filterLedgerOnlyCommits(commits), latest, nil
 }
 
-// infrastructurePrefixes lists path prefixes for tooling-only files that should
-// not count as "pending work." Commits touching only these paths are filtered
-// from pending counts. Currently hardcoded; a future .timbersignore file would
-// make this configurable.
-var infrastructurePrefixes = []string{".timbers/", ".beads/"}
-
-// isInfrastructureOnlyCommit returns true if every file in the list is under
-// a known infrastructure prefix (.timbers/, .beads/, etc.).
+// isInfrastructureOnlyCommit returns true if every file in the list matches
+// a default housekeeping rule (see defaultSkipPatterns).
 // Returns false for empty lists (unknown = don't filter).
 func isInfrastructureOnlyCommit(files []string) bool {
 	if len(files) == 0 {
@@ -270,14 +263,9 @@ func isInfrastructureOnlyCommit(files []string) bool {
 	return true
 }
 
-// isInfrastructureFile returns true if the path is under a known infrastructure prefix.
+// isInfrastructureFile returns true if the path matches a default skip rule.
 func isInfrastructureFile(path string) bool {
-	for _, prefix := range infrastructurePrefixes {
-		if strings.HasPrefix(path, prefix) {
-			return true
-		}
-	}
-	return false
+	return matchAny(compiledDefaultSkipRules, path)
 }
 
 // filterLedgerOnlyCommits removes commits that only touch infrastructure files
