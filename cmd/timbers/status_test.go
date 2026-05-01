@@ -48,12 +48,13 @@ func TestStatusCommand(t *testing.T) {
 			name: "JSON output contains all fields",
 			args: []string{"status", "--json"},
 			wantFields: map[string]any{
-				"repo":        repoName,
-				"branch":      branch,
-				"head":        head,
-				"timbers_dir": filepath.Join(resolvedTempDir, ".timbers"),
-				"dir_exists":  false,
-				"entry_count": float64(0), // JSON numbers are float64
+				"repo":                      repoName,
+				"branch":                    branch,
+				"head":                      head,
+				"timbers_dir":               filepath.Join(resolvedTempDir, ".timbers"),
+				"dir_exists":                false,
+				"entry_count":               float64(0), // JSON numbers are float64
+				"infra_skipped_since_entry": float64(0),
 			},
 		},
 	}
@@ -172,6 +173,32 @@ func TestStatusHumanOutput(t *testing.T) {
 			if !strings.Contains(output, check) {
 				t.Errorf("human output missing %q\nOutput: %s", check, output)
 			}
+		}
+	})
+}
+
+func TestStatusVerboseShowsInfraSkipped(t *testing.T) {
+	tempDir := t.TempDir()
+	runGit(t, tempDir, "init")
+	runGit(t, tempDir, "config", "user.email", "test@test.com")
+	runGit(t, tempDir, "config", "user.name", "Test User")
+	if err := os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("x"), 0600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	runGit(t, tempDir, "add", "test.txt")
+	runGit(t, tempDir, "commit", "-m", "Initial commit")
+
+	runInDir(t, tempDir, func() {
+		var buf bytes.Buffer
+		cmd := newRootCmd()
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"status", "--verbose"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command failed: %v", err)
+		}
+		if !strings.Contains(buf.String(), "Infra-skipped since last entry") {
+			t.Errorf("verbose status missing infra-skipped line\nOutput: %s", buf.String())
 		}
 	})
 }

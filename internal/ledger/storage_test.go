@@ -659,5 +659,72 @@ func TestGetPendingCommits_FiltersLedgerOnlyCommits(t *testing.T) {
 	}
 }
 
+// --- CountInfraSkippedSinceLatest Tests ---
+
+func TestCountInfraSkippedSinceLatest(t *testing.T) {
+	tests := []struct {
+		name      string
+		entries   []*Entry
+		setupMock func(*mockGitOps)
+		want      int
+	}{
+		{
+			name:    "no entries returns zero",
+			entries: nil,
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "headsha1234"
+			},
+			want: 0,
+		},
+		{
+			name: "counts only infrastructure-only commits",
+			entries: []*Entry{
+				makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "headsha1234"
+				mock.logCommits = []git.Commit{
+					{SHA: "infra1"},
+					{SHA: "real1"},
+					{SHA: "infra2"},
+				}
+				mock.commitFiles = map[string][]string{
+					"infra1": {".timbers/2026/foo.json"},
+					"real1":  {"cmd/main.go"},
+					"infra2": {".gitignore"},
+				}
+			},
+			want: 2,
+		},
+		{
+			name: "stale anchor returns zero (not actionable)",
+			entries: []*Entry{
+				makeTestEntry("staleanchor", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "headsha1234"
+				mock.isAncestor = false
+			},
+			want: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := newMockGitOps()
+			tt.setupMock(mock)
+			store := newTestStorage(t, mock, tt.entries...)
+
+			got, err := store.CountInfraSkippedSinceLatest()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("count = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
 // Ensure our mock satisfies the interface (compile-time check).
 var _ GitOps = (*mockGitOps)(nil)

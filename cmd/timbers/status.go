@@ -16,16 +16,17 @@ import (
 
 // statusResult holds the data for status output.
 type statusResult struct {
-	Repo         string `json:"repo"`
-	Branch       string `json:"branch"`
-	Head         string `json:"head"`
-	TimbersDir   string `json:"timbers_dir"`
-	DirExists    bool   `json:"dir_exists"`
-	EntryCount   int    `json:"entry_count"`
-	FilesTotal   int    `json:"files_total,omitempty"`
-	FilesSkipped int    `json:"files_skipped,omitempty"`
-	NotTimbers   int    `json:"not_timbers,omitempty"`
-	ParseErrors  int    `json:"parse_errors,omitempty"`
+	Repo                   string `json:"repo"`
+	Branch                 string `json:"branch"`
+	Head                   string `json:"head"`
+	TimbersDir             string `json:"timbers_dir"`
+	DirExists              bool   `json:"dir_exists"`
+	EntryCount             int    `json:"entry_count"`
+	InfraSkippedSinceEntry int    `json:"infra_skipped_since_entry"`
+	FilesTotal             int    `json:"files_total,omitempty"`
+	FilesSkipped           int    `json:"files_skipped,omitempty"`
+	NotTimbers             int    `json:"not_timbers,omitempty"`
+	ParseErrors            int    `json:"parse_errors,omitempty"`
 }
 
 // newStatusCmd creates the status command.
@@ -72,12 +73,13 @@ func runStatus(cmd *cobra.Command, _ []string, verbose bool) error {
 	// Output based on mode
 	if printer.IsJSON() {
 		data := map[string]any{
-			"repo":        result.Repo,
-			"branch":      result.Branch,
-			"head":        result.Head,
-			"timbers_dir": result.TimbersDir,
-			"dir_exists":  result.DirExists,
-			"entry_count": result.EntryCount,
+			"repo":                      result.Repo,
+			"branch":                    result.Branch,
+			"head":                      result.Head,
+			"timbers_dir":               result.TimbersDir,
+			"dir_exists":                result.DirExists,
+			"entry_count":               result.EntryCount,
+			"infra_skipped_since_entry": result.InfraSkippedSinceEntry,
 		}
 		// Add verbose stats if present
 		if verbose {
@@ -154,6 +156,13 @@ func gatherStatus(verbose bool) (*statusResult, error) {
 		result.EntryCount = len(entries)
 	}
 
+	// Best-effort count of housekeeping commits filtered from pending since
+	// the latest entry. Status is not a gating command, so any error is
+	// silently treated as "no signal" rather than failing the call.
+	if skipped, skipErr := store.CountInfraSkippedSinceLatest(); skipErr == nil {
+		result.InfraSkippedSinceEntry = skipped
+	}
+
 	return result, nil
 }
 
@@ -176,6 +185,8 @@ func printHumanStatus(printer *output.Printer, status *statusResult, verbose boo
 				status.FilesSkipped, status.NotTimbers, status.ParseErrors)
 			printer.KeyValue("Skipped", skippedStr)
 		}
+		printer.KeyValue("Infra-skipped since last entry",
+			strconv.Itoa(status.InfraSkippedSinceEntry)+" commits")
 	} else {
 		printer.KeyValue("Entries", strconv.Itoa(status.EntryCount))
 	}
