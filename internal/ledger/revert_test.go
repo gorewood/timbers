@@ -25,9 +25,14 @@ func TestParseRevertedSHAs(t *testing.T) {
 			want: []string{"a4e80a72c11d2a9d8f2c1a3b4d5e6f7081234567"},
 		},
 		{
-			name: "short SHA still tolerated",
+			name: "12-char SHA tolerated (collision-safe lower bound)",
+			body: "This reverts commit a4e80a72c11d.",
+			want: []string{"a4e80a72c11d"},
+		},
+		{
+			name: "7-char SHA rejected (too short — collision risk)",
 			body: "This reverts commit a4e80a7.",
-			want: []string{"a4e80a7"},
+			want: nil,
 		},
 		{
 			name: "multiple reverts in one commit",
@@ -122,10 +127,10 @@ func TestIsDocumentedRevert(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "documented revert via short SHA",
+			name: "documented revert via 12-char SHA prefix",
 			c: git.Commit{
 				Subject: `Revert "feat: x"`,
-				Body:    "This reverts commit a4e80a7.",
+				Body:    "This reverts commit a4e80a72c11d.",
 			},
 			want: true,
 		},

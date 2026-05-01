@@ -42,41 +42,6 @@ type GitOps interface {
 	DiffNameOnly(fromRef, toRef, pathPrefix string) ([]string, error)
 }
 
-// realGitOps implements GitOps using the actual git package functions.
-type realGitOps struct{}
-
-func (realGitOps) HEAD() (string, error) {
-	return git.HEAD()
-}
-
-func (realGitOps) Log(fromRef, toRef string) ([]git.Commit, error) {
-	return git.Log(fromRef, toRef)
-}
-
-func (realGitOps) CommitsReachableFrom(sha string) ([]git.Commit, error) {
-	return git.CommitsReachableFrom(sha)
-}
-
-func (realGitOps) IsAncestorOf(ancestor, descendant string) bool {
-	return git.IsAncestorOf(ancestor, descendant)
-}
-
-func (realGitOps) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
-	return git.GetDiffstat(fromRef, toRef)
-}
-
-func (realGitOps) CommitFiles(sha string) ([]string, error) {
-	return git.CommitFiles(sha)
-}
-
-func (realGitOps) CommitFilesMulti(shas []string) (map[string][]string, error) {
-	return git.CommitFilesMulti(shas)
-}
-
-func (realGitOps) DiffNameOnly(fromRef, toRef, pathPrefix string) ([]string, error) {
-	return git.DiffNameOnly(fromRef, toRef, pathPrefix)
-}
-
 // Storage provides read/write access to ledger entries stored as files in .timbers/.
 type Storage struct {
 	git       GitOps
@@ -87,8 +52,11 @@ type Storage struct {
 // NewStorage creates a Storage with the given git operations and file storage.
 // If ops is nil, uses real git operations.
 // If files is nil, entry operations return empty results.
-// Skip rules are loaded from <files.Dir>/.timbersignore when files is non-nil;
-// loader errors are not fatal (defaults are used as a safe fallback).
+//
+// Performs disk I/O at construction: when files is non-nil, this opens
+// <files.Dir>/.timbersignore (if present) to load per-repo skip rules.
+// Loader errors are not fatal — the built-in defaults are used as a safe
+// fallback so a malformed .timbersignore never inverts the gate.
 func NewStorage(ops GitOps, files *FileStorage) *Storage {
 	if ops == nil {
 		ops = realGitOps{}
@@ -214,19 +182,23 @@ func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 		return nil, nil, err
 	}
 
-	latest, latestErr := s.GetLatestEntry()
-	if latestErr != nil && !errors.Is(latestErr, ErrNoEntries) {
-		return nil, nil, latestErr
+	// One disk scan per pending check: ListEntries is the source of both
+	// `latest` and the documented-SHA set used by revert auto-skipping.
+	entries, listErr := s.ListEntries()
+	if listErr != nil {
+		return nil, nil, listErr
 	}
+	latest := latestEntry(entries)
+	docSet := documentedSHASetFromEntries(entries)
 
 	// No entries yet — return all reachable commits with nil latest.
 	// Display callers (pending, doctor) check latest == nil to show friendly messaging.
-	if errors.Is(latestErr, ErrNoEntries) {
+	if latest == nil {
 		commits, reachErr := s.git.CommitsReachableFrom(head)
 		if reachErr != nil {
 			return nil, nil, reachErr
 		}
-		return s.filterLedgerOnlyCommits(commits), nil, nil
+		return s.filterCommits(commits, docSet), nil, nil
 	}
 
 	// Check if the anchor is reachable from HEAD. After rebase or squash merge,
@@ -239,7 +211,7 @@ func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 		if reachErr != nil {
 			return nil, nil, reachErr
 		}
-		return s.filterLedgerOnlyCommits(fallback), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
+		return s.filterCommits(fallback, docSet), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
 	}
 
 	// Get commits from anchor (exclusive) to HEAD (inclusive).
@@ -251,10 +223,25 @@ func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 		if reachErr != nil {
 			return nil, nil, reachErr
 		}
-		return s.filterLedgerOnlyCommits(fallback), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
+		return s.filterCommits(fallback, docSet), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
 	}
 
-	return s.filterLedgerOnlyCommits(commits), latest, nil
+	return s.filterCommits(commits, docSet), latest, nil
+}
+
+// latestEntry returns the entry with the most recent CreatedAt, or nil
+// when entries is empty.
+func latestEntry(entries []*Entry) *Entry {
+	if len(entries) == 0 {
+		return nil
+	}
+	latest := entries[0]
+	for _, e := range entries[1:] {
+		if e.CreatedAt.After(latest.CreatedAt) {
+			latest = e
+		}
+	}
+	return latest
 }
 
 // isInfrastructureOnlyCommit returns true if every file in the list matches
@@ -281,12 +268,14 @@ func (s *Storage) rulesOrDefault() []skipRule {
 	return s.skipRules
 }
 
-// filterLedgerOnlyCommits removes commits that don't represent pending work:
+// filterCommits removes commits that don't represent pending work:
 //   - Infrastructure-only commits (.timbers/, .beads/, .timbersignore matches)
 //   - Reverts of already-documented commits (parsed from "This reverts commit <sha>")
 //
-// On error, returns all commits unfiltered (safe default).
-func (s *Storage) filterLedgerOnlyCommits(commits []git.Commit) []git.Commit {
+// On git lookup error, returns all commits unfiltered (safe default).
+// docSet is supplied by the caller so a single ListEntries scan can feed
+// both latest-entry resolution and revert auto-skipping.
+func (s *Storage) filterCommits(commits []git.Commit, docSet map[string]bool) []git.Commit {
 	if len(commits) == 0 {
 		return commits
 	}
@@ -294,7 +283,7 @@ func (s *Storage) filterLedgerOnlyCommits(commits []git.Commit) []git.Commit {
 	if err != nil {
 		return commits
 	}
-	return s.filterByRules(commits, fileMap)
+	return s.filterByRules(commits, fileMap, docSet)
 }
 
 // HasPendingCommits checks whether undocumented commits exist.

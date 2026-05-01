@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/gorewood/timbers/internal/ledger"
 )
 
 func TestStatusCommand(t *testing.T) {
@@ -199,6 +202,81 @@ func TestStatusVerboseShowsInfraSkipped(t *testing.T) {
 		}
 		if !strings.Contains(buf.String(), "Infra-skipped since last entry") {
 			t.Errorf("verbose status missing infra-skipped line\nOutput: %s", buf.String())
+		}
+	})
+}
+
+// TestStatusVerboseCountsRealSkippedCommits exercises the full path: a real
+// .timbers entry anchored to a real commit, followed by a .gitignore-only
+// commit that the skip rules should filter. This catches regressions that
+// the label-only test would miss.
+func TestStatusVerboseCountsRealSkippedCommits(t *testing.T) {
+	tempDir := t.TempDir()
+	runGit(t, tempDir, "init")
+	runGit(t, tempDir, "config", "user.email", "test@test.com")
+	runGit(t, tempDir, "config", "user.name", "Test User")
+
+	// Initial substantive commit — this becomes the anchor.
+	if err := os.WriteFile(filepath.Join(tempDir, "main.go"), []byte("package main\n"), 0600); err != nil {
+		t.Fatalf("write main.go: %v", err)
+	}
+	runGit(t, tempDir, "add", "main.go")
+	runGit(t, tempDir, "commit", "-m", "Initial substantive commit")
+	anchor := strings.TrimSpace(runGitOutput(t, tempDir, "rev-parse", "HEAD"))
+
+	// Drop a real ledger entry that anchors at the initial commit.
+	createdAt := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	entry := &ledger.Entry{
+		Schema:    ledger.SchemaVersion,
+		Kind:      ledger.KindEntry,
+		ID:        ledger.GenerateID(anchor, createdAt),
+		CreatedAt: createdAt,
+		UpdatedAt: createdAt,
+		Workset: ledger.Workset{
+			AnchorCommit: anchor,
+			Commits:      []string{anchor},
+		},
+		Summary: ledger.Summary{What: "Initial", Why: "anchor", How: "test"},
+	}
+	data, err := entry.ToJSON()
+	if err != nil {
+		t.Fatalf("entry json: %v", err)
+	}
+	entryDir := filepath.Join(tempDir, ".timbers", ledger.EntryDateDir(entry.ID))
+	if err := os.MkdirAll(entryDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(entryDir, entry.ID+".json"), data, 0o600); err != nil {
+		t.Fatalf("write entry: %v", err)
+	}
+
+	// One housekeeping commit (.gitignore only) — must be auto-skipped.
+	if err := os.WriteFile(filepath.Join(tempDir, ".gitignore"), []byte("*.tmp\n"), 0600); err != nil {
+		t.Fatalf("write .gitignore: %v", err)
+	}
+	runGit(t, tempDir, "add", ".gitignore")
+	runGit(t, tempDir, "commit", "-m", "chore: ignore tmp files")
+
+	runInDir(t, tempDir, func() {
+		var buf bytes.Buffer
+		cmd := newRootCmd()
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"status", "--json"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command failed: %v\nOutput: %s", err, buf.String())
+		}
+
+		var result map[string]any
+		if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+			t.Fatalf("parse JSON: %v\nOutput: %s", err, buf.String())
+		}
+		got, ok := result["infra_skipped_since_entry"].(float64)
+		if !ok {
+			t.Fatalf("missing or non-numeric infra_skipped_since_entry: %v", result)
+		}
+		if int(got) != 1 {
+			t.Errorf("infra_skipped_since_entry = %d, want 1", int(got))
 		}
 	})
 }

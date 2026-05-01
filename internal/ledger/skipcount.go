@@ -7,8 +7,11 @@ import (
 )
 
 // CountInfraSkippedSinceLatest returns the number of commits between the
-// latest entry's anchor and HEAD that are filtered out as housekeeping
-// (e.g., .timbers/, .beads/, files matching .timbersignore).
+// latest entry's anchor and HEAD that pending detection auto-skips: both
+// infrastructure-only commits (.timbers/, .beads/, .timbersignore matches)
+// and reverts of already-documented commits. The count uses the same
+// predicates as filterByRules so the visibility surface and the gate stay
+// in sync.
 //
 // Returns 0 when no entries exist, when the anchor is stale, or when any
 // underlying git call fails — those cases are not actionable signal for
@@ -18,7 +21,7 @@ func (s *Storage) CountInfraSkippedSinceLatest() (int, error) {
 	if err != nil || !ok {
 		return 0, err
 	}
-	return s.countInfraOnly(commits), nil
+	return s.countAutoSkipped(commits), nil
 }
 
 // commitsSinceLatest returns commits in (latestAnchor..HEAD) when both ends
@@ -50,9 +53,10 @@ func (s *Storage) commitsSinceLatest() ([]git.Commit, bool, error) {
 	return commits, true, nil
 }
 
-// countInfraOnly returns how many of the given commits touch only files
-// matching the storage's skip rules.
-func (s *Storage) countInfraOnly(commits []git.Commit) int {
+// countAutoSkipped returns how many of the given commits would be filtered
+// from pending — covers both infrastructure-only commits and documented
+// reverts. Uses the same predicate set as filterByRules.
+func (s *Storage) countAutoSkipped(commits []git.Commit) int {
 	if len(commits) == 0 {
 		return 0
 	}
@@ -61,9 +65,14 @@ func (s *Storage) countInfraOnly(commits []git.Commit) int {
 		return 0
 	}
 	rules := s.rulesOrDefault()
+	docSet := s.documentedSHASet()
 	var count int
 	for _, commit := range commits {
 		if isInfrastructureOnlyCommit(rules, fileMap[commit.SHA]) {
+			count++
+			continue
+		}
+		if isDocumentedRevert(commit, docSet) {
 			count++
 		}
 	}
@@ -80,17 +89,21 @@ func commitSHAs(commits []git.Commit) []string {
 }
 
 // filterByRules removes infrastructure-only commits and documented reverts
-// from the input list, preserving order. Pure function over the file map
-// and the storage's rule/doc state.
-func (s *Storage) filterByRules(commits []git.Commit, fileMap map[string][]string) []git.Commit {
+// from the input list, preserving order. The docSet is supplied by the
+// caller so callers can build it once and reuse — avoids re-scanning the
+// ledger on every invocation. Pass nil to disable revert auto-skipping.
+func (s *Storage) filterByRules(
+	commits []git.Commit,
+	fileMap map[string][]string,
+	docSet map[string]bool,
+) []git.Commit {
 	rules := s.rulesOrDefault()
-	docSet := s.documentedSHASet()
 	filtered := make([]git.Commit, 0, len(commits))
 	for _, commit := range commits {
 		if isInfrastructureOnlyCommit(rules, fileMap[commit.SHA]) {
 			continue
 		}
-		if isDocumentedRevert(commit, docSet) {
+		if docSet != nil && isDocumentedRevert(commit, docSet) {
 			continue
 		}
 		filtered = append(filtered, commit)
