@@ -105,8 +105,8 @@ func TestDefaultSkipRules_Coverage(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.path, func(t *testing.T) {
-			if got := isInfrastructureFile(c.path); got != c.skip {
-				t.Errorf("isInfrastructureFile(%q) = %v, want %v", c.path, got, c.skip)
+			if got := matchAny(compiledDefaultSkipRules, c.path); got != c.skip {
+				t.Errorf("matchAny(defaults, %q) = %v, want %v", c.path, got, c.skip)
 			}
 		})
 	}

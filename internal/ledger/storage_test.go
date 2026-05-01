@@ -546,7 +546,7 @@ func TestIsInfrastructureOnlyCommit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isInfrastructureOnlyCommit(tt.files)
+			got := isInfrastructureOnlyCommit(compiledDefaultSkipRules, tt.files)
 			if got != tt.want {
 				t.Errorf("isInfrastructureOnlyCommit(%v) = %v, want %v", tt.files, got, tt.want)
 			}

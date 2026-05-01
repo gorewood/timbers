@@ -79,18 +79,27 @@ func (realGitOps) DiffNameOnly(fromRef, toRef, pathPrefix string) ([]string, err
 
 // Storage provides read/write access to ledger entries stored as files in .timbers/.
 type Storage struct {
-	git   GitOps
-	files *FileStorage
+	git       GitOps
+	files     *FileStorage
+	skipRules []skipRule
 }
 
 // NewStorage creates a Storage with the given git operations and file storage.
 // If ops is nil, uses real git operations.
 // If files is nil, entry operations return empty results.
+// Skip rules are loaded from <files.Dir>/.timbersignore when files is non-nil;
+// loader errors are not fatal (defaults are used as a safe fallback).
 func NewStorage(ops GitOps, files *FileStorage) *Storage {
 	if ops == nil {
 		ops = realGitOps{}
 	}
-	return &Storage{git: ops, files: files}
+	rules := compiledDefaultSkipRules
+	if files != nil {
+		if loaded, err := loadSkipRules(files.Dir()); err == nil {
+			rules = loaded
+		}
+	}
+	return &Storage{git: ops, files: files, skipRules: rules}
 }
 
 // NewDefaultStorage creates a Storage using real git operations
@@ -249,23 +258,27 @@ func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 }
 
 // isInfrastructureOnlyCommit returns true if every file in the list matches
-// a default housekeeping rule (see defaultSkipPatterns).
+// a skip rule (built-in defaults plus any patterns from .timbersignore).
 // Returns false for empty lists (unknown = don't filter).
-func isInfrastructureOnlyCommit(files []string) bool {
+func isInfrastructureOnlyCommit(rules []skipRule, files []string) bool {
 	if len(files) == 0 {
 		return false
 	}
 	for _, f := range files {
-		if !isInfrastructureFile(f) {
+		if !matchAny(rules, f) {
 			return false
 		}
 	}
 	return true
 }
 
-// isInfrastructureFile returns true if the path matches a default skip rule.
-func isInfrastructureFile(path string) bool {
-	return matchAny(compiledDefaultSkipRules, path)
+// rulesOrDefault returns the storage's skip rules, falling back to the
+// built-in defaults when none have been loaded (e.g., bare-bones tests).
+func (s *Storage) rulesOrDefault() []skipRule {
+	if len(s.skipRules) == 0 {
+		return compiledDefaultSkipRules
+	}
+	return s.skipRules
 }
 
 // filterLedgerOnlyCommits removes commits that only touch infrastructure files
@@ -287,9 +300,10 @@ func (s *Storage) filterLedgerOnlyCommits(commits []git.Commit) []git.Commit {
 		return commits
 	}
 
+	rules := s.rulesOrDefault()
 	filtered := make([]git.Commit, 0, len(commits))
 	for _, c := range commits {
-		if !isInfrastructureOnlyCommit(fileMap[c.SHA]) {
+		if !isInfrastructureOnlyCommit(rules, fileMap[c.SHA]) {
 			filtered = append(filtered, c)
 		}
 	}
