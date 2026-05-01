@@ -659,6 +659,81 @@ func TestGetPendingCommits_FiltersLedgerOnlyCommits(t *testing.T) {
 	}
 }
 
+// --- Revert filtering integration ---
+
+func TestGetPendingCommits_FiltersDocumentedReverts(t *testing.T) {
+	originalSHA := "a4e80a72c11d2a9d8f2c1a3b4d5e6f7081234567"
+	anchorSHA := "anchorsha12"
+	revertSHA := "rev1234abcd"
+	realSHA := "realchange1"
+
+	// Anchor entry that documents originalSHA in its workset.
+	anchor := makeTestEntry(anchorSHA, time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+	anchor.Workset.Commits = []string{anchorSHA, originalSHA}
+
+	mock := newMockGitOps()
+	mock.headSHA = "headsha1234"
+	mock.logCommits = []git.Commit{
+		{
+			SHA:     revertSHA,
+			Subject: `Revert "feat: original"`,
+			Body:    "This reverts commit " + originalSHA + ".",
+		},
+		{
+			SHA:     realSHA,
+			Subject: "feat: another change",
+		},
+	}
+	mock.commitFiles = map[string][]string{
+		revertSHA: {"src/main.go"},
+		realSHA:   {"src/other.go"},
+	}
+
+	store := newTestStorage(t, mock, anchor)
+
+	commits, _, err := store.GetPendingCommits()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(commits) != 1 {
+		t.Fatalf("expected 1 pending commit (revert filtered), got %d: %+v", len(commits), commits)
+	}
+	if commits[0].SHA != realSHA {
+		t.Errorf("expected real change to remain, got SHA %q", commits[0].SHA)
+	}
+}
+
+func TestGetPendingCommits_KeepsUndocumentedReverts(t *testing.T) {
+	anchorSHA := "anchorsha12"
+	revertSHA := "rev1234abcd"
+
+	anchor := makeTestEntry(anchorSHA, time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+	anchor.Workset.Commits = []string{anchorSHA}
+
+	mock := newMockGitOps()
+	mock.headSHA = "headsha1234"
+	mock.logCommits = []git.Commit{
+		{
+			SHA:     revertSHA,
+			Subject: `Revert "feat: original"`,
+			Body:    "This reverts commit deadbeef00000000000000000000000000000000.",
+		},
+	}
+	mock.commitFiles = map[string][]string{
+		revertSHA: {"src/main.go"},
+	}
+
+	store := newTestStorage(t, mock, anchor)
+
+	commits, _, err := store.GetPendingCommits()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(commits) != 1 {
+		t.Fatalf("expected 1 pending commit (undocumented revert kept), got %d", len(commits))
+	}
+}
+
 // --- CountInfraSkippedSinceLatest Tests ---
 
 func TestCountInfraSkippedSinceLatest(t *testing.T) {

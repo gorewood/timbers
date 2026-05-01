@@ -281,33 +281,20 @@ func (s *Storage) rulesOrDefault() []skipRule {
 	return s.skipRules
 }
 
-// filterLedgerOnlyCommits removes commits that only touch infrastructure files
-// (.timbers/, .beads/, etc.). Uses batch file lookup (single git process)
-// instead of one subprocess per commit.
+// filterLedgerOnlyCommits removes commits that don't represent pending work:
+//   - Infrastructure-only commits (.timbers/, .beads/, .timbersignore matches)
+//   - Reverts of already-documented commits (parsed from "This reverts commit <sha>")
+//
 // On error, returns all commits unfiltered (safe default).
 func (s *Storage) filterLedgerOnlyCommits(commits []git.Commit) []git.Commit {
 	if len(commits) == 0 {
 		return commits
 	}
-
-	shas := make([]string, len(commits))
-	for i, c := range commits {
-		shas[i] = c.SHA
-	}
-
-	fileMap, err := s.git.CommitFilesMulti(shas)
+	fileMap, err := s.git.CommitFilesMulti(commitSHAs(commits))
 	if err != nil {
 		return commits
 	}
-
-	rules := s.rulesOrDefault()
-	filtered := make([]git.Commit, 0, len(commits))
-	for _, c := range commits {
-		if !isInfrastructureOnlyCommit(rules, fileMap[c.SHA]) {
-			filtered = append(filtered, c)
-		}
-	}
-	return filtered
+	return s.filterByRules(commits, fileMap)
 }
 
 // HasPendingCommits checks whether undocumented commits exist.

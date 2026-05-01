@@ -56,20 +56,44 @@ func (s *Storage) countInfraOnly(commits []git.Commit) int {
 	if len(commits) == 0 {
 		return 0
 	}
-	shas := make([]string, len(commits))
-	for i, c := range commits {
-		shas[i] = c.SHA
-	}
-	fileMap, err := s.git.CommitFilesMulti(shas)
+	fileMap, err := s.git.CommitFilesMulti(commitSHAs(commits))
 	if err != nil {
 		return 0
 	}
 	rules := s.rulesOrDefault()
 	var count int
-	for _, c := range commits {
-		if isInfrastructureOnlyCommit(rules, fileMap[c.SHA]) {
+	for _, commit := range commits {
+		if isInfrastructureOnlyCommit(rules, fileMap[commit.SHA]) {
 			count++
 		}
 	}
 	return count
+}
+
+// commitSHAs extracts the SHA from each commit for batch lookups.
+func commitSHAs(commits []git.Commit) []string {
+	shas := make([]string, len(commits))
+	for i, commit := range commits {
+		shas[i] = commit.SHA
+	}
+	return shas
+}
+
+// filterByRules removes infrastructure-only commits and documented reverts
+// from the input list, preserving order. Pure function over the file map
+// and the storage's rule/doc state.
+func (s *Storage) filterByRules(commits []git.Commit, fileMap map[string][]string) []git.Commit {
+	rules := s.rulesOrDefault()
+	docSet := s.documentedSHASet()
+	filtered := make([]git.Commit, 0, len(commits))
+	for _, commit := range commits {
+		if isInfrastructureOnlyCommit(rules, fileMap[commit.SHA]) {
+			continue
+		}
+		if isDocumentedRevert(commit, docSet) {
+			continue
+		}
+		filtered = append(filtered, commit)
+	}
+	return filtered
 }
