@@ -1,7 +1,7 @@
 ---
 name: standup
 description: Daily standup from recent work
-version: 5
+version: 6
 ---
 Generate a standup update from these development log entries.
 
@@ -15,7 +15,7 @@ Generate a standup update from these development log entries.
 3. **Friction** — things that took longer than expected, surprising obstacles, time burned ("Spent 3 hours chasing a flaky test before finding the actual issue in test setup")
 4. **Completed work** — what shipped or landed
 5. **In-progress** — what's actively being worked on
-6. **Next steps** — what's planned, if entries hint at it
+6. **Next steps** — only emit when (a) the LATEST entries explicitly mention what's next, OR (b) entries identify incomplete/blocking work whose continuation is implied. Older entries' "next" plans are usually obsolete by the time standup happens — don't surface them as if they're current. When uncertain, omit this slot.
 
 **Style**:
 - Active voice, outcome-focused: "Shipped X" not "X was completed"

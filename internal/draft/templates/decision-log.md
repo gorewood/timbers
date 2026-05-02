@@ -1,7 +1,7 @@
 ---
 name: decision-log
 description: ADR-style decision log extracted from design rationale
-version: 3
+version: 4
 vars:
   starting_number: "1"
 ---
@@ -11,7 +11,7 @@ Extract architectural decisions from these development log entries and format th
 
 **Notes field**: Some entries include a `notes` field with detailed deliberation context — alternatives considered, surprises, reasoning chains, moments where a teammate (human or AI agent) reshaped the call. When present, use notes as the primary source for Context and Consequences sections. The "why" field has the verdict; "notes" has the journey.
 
-**Consolidation**: If multiple entries describe iterations on the same decision (initial call, refinement, course-correction), produce ONE ADR that captures the final shape and the path that got there. Don't emit separate ADRs for every entry that touched a decision.
+**Consolidation**: If multiple entries describe iterations on the same decision (initial call, refinement, course-correction), produce ONE ADR that captures the final shape and the path that got there. Don't emit separate ADRs for every entry that touched a decision. The ADR's **Date** in this case is the entry that established the *final accepted shape* — usually the last entry to materially change the verdict, not the first entry to broach the topic.
 
 **Format each decision as**:
 
@@ -66,7 +66,7 @@ stable across runs — do not renumber earlier ADRs, do not reset to 1.
 
 **Constraints**:
 - Only extract decisions present in the entries. Don't infer decisions not stated.
-- Consequences may go slightly beyond what's stated if they're logical implications, but don't speculate wildly.
+- Consequences must be either (a) explicitly stated in the entries, or (b) *mechanical* implications of the decision itself (e.g., "Choosing JWT means clients must handle token refresh" follows mechanically from "JWT chosen"). Do not speculate about second-order effects, future maintenance burden, or downstream impacts the entries don't establish. When in doubt, leave the consequence out — a tight ADR with three real consequences beats a padded one with seven invented ones.
 - If no entries contain genuine design decisions, say so plainly: emit "_No architectural decisions in this range._" and stop.
 
 **Output discipline**:

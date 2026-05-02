@@ -1,7 +1,7 @@
 ---
 name: devblog
 description: Narrative developer blog post reflecting on recent work
-version: 6
+version: 7
 ---
 Write a developer blog post from these development log entries. The post should read as an engaging technical essay — the story of what happened and what it meant, not a log of what changed.
 
@@ -96,6 +96,7 @@ Do NOT use `#`, `##`, or `###` headers in the output. The post flows as continuo
 - ONLY write about what's actually in the entries. Do not speculate about future work, roadmaps, or plans.
 - Do not invent metrics, performance numbers, or details not present.
 - Do not reference technologies, patterns, or concepts not mentioned in the entries.
+- **Do not fabricate emotion or affect.** The Audience and Voice sections invite emotional texture ("how the operator felt", "if something was surprising or frustrating, say so") — but only when the entries actually surface that affect, in the why, notes, or tags. Routine, mechanical work gets a clear-eyed, neutral post; manufacturing frustration or delight where none exists is a softer fabrication and reads false. A neutral post that lands the substance beats one that performs feeling.
 - If the entries are thin, write a shorter post. A tight 200-word post beats a padded 600-word one.
 
 **Output discipline**:
@@ -104,7 +105,7 @@ Do NOT use `#`, `##`, or `###` headers in the output. The post flows as continuo
 - Do not end with "Let me know..." or any sign-off.
 - The first line of your response must be part of the blog post itself.
 
-**Length**: 300-700 words. Shorter is better when entries are sparse — a tight post that lands one insight is more memorable than a complete one that catalogs everything. Cut the paragraph that just says "and then I also did X."
+**Length**: Up to 700 words. There is no floor. For a 1-3 entry hotfix or a sparse session, 150-250 words that land the central beat beats 400 words padded to feel substantial. Cut the paragraph that just says "and then I also did X." If the entries genuinely don't support a longer narrative, output a short post and stop.
 
 **Footer**: End with a brief, minimal transparency note (one line, no specific model names).
 

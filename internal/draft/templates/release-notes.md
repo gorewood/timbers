@@ -1,7 +1,7 @@
 ---
 name: release-notes
 description: User-facing release notes
-version: 4
+version: 5
 ---
 Generate user-facing release notes from these development log entries.
 
@@ -28,6 +28,11 @@ If applying these exclusions empties a section, omit it. If they empty the entir
 - "Removed `--legacy-mode` flag" — incomplete; reviewer should reject
 - For schema/config breaks: name the migration step or link to a migration note in the entry's notes field
 
+**When entries surface a break but don't supply migration steps**: do NOT silently drop the bullet (users would miss the break) and do NOT invent a migration. Emit the bullet honestly:
+- `**BREAKING:** Renamed primary key column on the `users` table. _Migration steps not detailed in release entries — see commit history or contact maintainers._`
+
+A flagged-but-incomplete break is more useful than an omitted one.
+
 **Style**:
 - Benefit-oriented language ("You can now..." not "Added support for...")
 - Stay in second person ("you", "your") for active capabilities
@@ -40,7 +45,7 @@ If applying these exclusions empties a section, omit it. If they empty the entir
 **Numbers and metrics**:
 - DO NOT cite developer metrics (lines changed, files modified, test counts)
 - Cite user-observable performance numbers ONLY when entries explicitly state them — never invent ("3× faster import" requires the entries to actually say so)
-- "Faster", "more responsive", "uses less memory" without a number is fine
+- Soft benefit language ("Faster", "more responsive", "uses less memory") is allowed ONLY when the entries themselves describe the user-observable property as having improved. A refactor entry whose notes say "kept caching layer behavior identical" cannot become "Faster searches" in the release notes — that's the same fabrication failure mode as inventing a number, just dressed in adjectives.
 
 **Constraints**:
 - Only include what's in the entries

@@ -1,7 +1,7 @@
 ---
 name: sprint-report
 description: Sprint summary with categories, carry-overs, and signals
-version: 4
+version: 5
 ---
 Generate a sprint report from these development log entries.
 
@@ -9,7 +9,7 @@ Generate a sprint report from these development log entries.
 
 **Format** (omit any section with no content):
 
-1. **Summary** — 2-3 sentences. The shape of the sprint, not just "what got done." If the sprint had a theme (a single feature, a debt paydown, a launch ramp), name it. If it didn't, say so plainly.
+1. **Summary** — 2-3 sentences. The shape of the sprint, not just "what got done." Only name a "sprint theme" when one of the following is true: an entry explicitly identifies the theme, OR a strong majority (roughly half or more) of entries share a single tag or domain area. Otherwise say plainly that the sprint was a mix — LLMs love themes, and a fabricated one obscures the actual shape of the work.
 2. **By Category** — Group by tags if present, otherwise by type (features, fixes, refactoring). Specific outcomes, not categories of effort.
 3. **Highlights** — 1-2 items the reader will remember. Optional. See criteria below.
 4. **Friction & Carry-overs** — What slowed work, what didn't land, what's blocked into next cycle. Optional but high-value when entries surface it.
@@ -53,7 +53,7 @@ Skip Highlights if nothing meets the bar. Padding with the most-recent-feature i
 **Constraints**:
 - Only report what's actually in the entries
 - Skip optional sections when nothing meets their bar
-- If entries lack tags, group by apparent type or list chronologically
+- Group entries by type or outcome (features, fixes, refactors, infra) when tags are absent. A pure chronological list is a dressed-up activity log and the audience explicitly does not want one — fall back to chronology only when entries are so few or so disparate that no grouping is meaningful.
 - A short, honest report beats a padded "complete" one
 
 **Output discipline**:

@@ -1,7 +1,7 @@
 ---
 name: changelog
 description: Conventional changelog grouped by type
-version: 6
+version: 7
 ---
 Generate a changelog from these development log entries following the [Keep a Changelog](https://keepachangelog.com/) format.
 
@@ -60,8 +60,8 @@ If applying these exclusions leaves a section empty, omit the section. If applyi
 - Include a one-line "what to do" hint when the migration isn't obvious
 
 **Grouping**:
-- Use `## [Unreleased]` as the top section by default
-- If the user appends release version info (e.g., "This is release v0.3.0"), use a versioned heading instead: `## [0.3.0] - 2026-02-10` (with today's date), and **omit the top-level header and preamble** — output only the version section starting from `## [0.3.0]`
+- Use `## [Unreleased]` as the version-section heading in default mode
+- In versioned-release mode use `## [0.3.0] - YYYY-MM-DD` (today's date)
 - If entries span multiple dates, group them under a single version section (not by date)
 
 **Output format**:
@@ -82,7 +82,10 @@ If applying these exclusions leaves a section empty, omit the section. If applyi
 **Constraints**:
 - Only include what's in the entries. Don't infer additional changes.
 - If an entry doesn't clearly fit a category, use your best judgment or skip it (preferring skip over force-fit).
-- Always include the Keep a Changelog header — this is non-negotiable.
+
+**Header rule** (resolves the "always include header" / "omit for versioned" tension):
+- Default mode (Unreleased): emit the full top-level `# Changelog` header AND the preamble AND the `## [Unreleased]` section.
+- Versioned-release mode (caller appends version info, e.g. "This is release v0.3.0"): emit ONLY the version section starting at `## [0.3.0] - YYYY-MM-DD`. The caller is appending to an existing CHANGELOG.md that already has the top-level header.
 
 **Output discipline**:
 - Output the document ONLY. No preamble, commentary, acknowledgment, or meta-discussion.

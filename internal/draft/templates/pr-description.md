@@ -1,7 +1,7 @@
 ---
 name: pr-description
 description: PR body focused on intent, decisions, and risk areas
-version: 5
+version: 6
 ---
 Generate a pull request description from these development log entries.
 
@@ -14,6 +14,14 @@ how was it built.
 - Tiny / single-purpose PR (one entry, one obvious fix): output just `## Why` and `## Test Plan` — no need for the full skeleton.
 - Standard PR: use all relevant sections from the format below.
 - Large or cross-cutting PR: include `## Migration / Rollback` if entries hint at config, schema, feature flag, or staged-rollout work.
+
+**Risk override for tiny PRs**: even when applying the tiny-PR shortcut, INCLUDE `## Risk & Reviewer Attention` if the entries indicate any of:
+- Security work (auth, authz, secrets, crypto, input validation)
+- Production hotfix or incident response
+- Behavior change in code that runs on every request / startup / migration
+- Tags like `security`, `incident`, `hotfix`, `production`
+
+A 5-line auth fix needs reviewer attention even though the diff is small. Don't let size suppress safety signaling.
 
 **Format**:
 ```
@@ -28,7 +36,13 @@ a review comment), say so.]
 
 [Bullet list of key trade-offs, alternatives considered, and choices made.
 Pull from --why and --notes fields. Only include decisions that a reviewer
-would find non-obvious or worth knowing. Omit if entries lack design context.]
+would find non-obvious or worth knowing. Omit if entries lack design context.
+
+When a decision was reshaped by collaboration — agent surfaced an edge case,
+operator overrode a first plan, reviewer pushed back — name that inline with
+the decision itself. ("Picked B over A after the agent flagged A's caching
+collision with the existing Redis layer.") The collaboration belongs WITH the
+decision it shaped, not only in the separate process paragraph below.]
 
 ## How This Was Built
 
