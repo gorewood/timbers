@@ -85,6 +85,23 @@ func TestDefaultSkipRules_Coverage(t *testing.T) {
 		{"renovate.json", true},
 		{"dependabot.yml", true},
 
+		// Lockfiles across the major ecosystems
+		{"package-lock.json", true},
+		{"packages/web/package-lock.json", true},
+		{"pnpm-lock.yaml", true},
+		{"apps/admin/pnpm-lock.yaml", true},
+		{"yarn.lock", true},
+		{"go.sum", true},
+		{"packages/api/go.sum", true},
+		{"Cargo.lock", true},
+		{"crates/foo/Cargo.lock", true},
+		{"Gemfile.lock", true},
+
+		// Lockfile-adjacent but NOT lockfiles
+		{"package.json", false}, // manifest stays substantive
+		{"packages/api/go.mod", false},
+		{"Cargo.toml", false},
+
 		// Should NOT be skipped (the latent-bug regression cases)
 		{".gitignores", false},
 		{".gitattributes.bak", false},

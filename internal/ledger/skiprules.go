@@ -51,9 +51,17 @@ func (r skipRule) match(path string) bool {
 // from pending detection without configuration. These are the cases where a
 // commit touching only these files carries zero design intent: ledger churn
 // (.timbers/), beads sync (.beads/), tooling metadata (.gitignore family,
-// .editorconfig), narrowly-scoped GitHub metadata files, and dependency-bot
-// configuration. .github/ as a directory is intentionally NOT included —
-// .github/workflows/ changes are substantive.
+// .editorconfig), narrowly-scoped GitHub metadata files, dependency-bot
+// configuration, and lockfiles for the major package ecosystems.
+//
+// .github/ as a directory is intentionally NOT included — .github/workflows/
+// changes are substantive.
+//
+// Lockfile patterns use suffix matching (leading "*"). When a lockfile is
+// part of a meaningful dependency change, the manifest (package.json, go.mod,
+// Cargo.toml, etc.) is in the same commit and the file-level filter keeps
+// it pending. Only isolated lockfile-only commits — usually manual conflict
+// resolution or auto-rebases — get auto-skipped.
 var defaultSkipPatterns = []string{
 	".timbers/",
 	".beads/",
@@ -66,6 +74,12 @@ var defaultSkipPatterns = []string{
 	".github/pull_request_template.md",
 	"renovate.json",
 	"dependabot.yml",
+	"*package-lock.json",
+	"*pnpm-lock.yaml",
+	"*yarn.lock",
+	"*go.sum",
+	"*Cargo.lock",
+	"*Gemfile.lock",
 }
 
 // compiledDefaultSkipRules is the parsed default ruleset, computed once.
