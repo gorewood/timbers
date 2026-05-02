@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2026-05-02
+
+### Added
+- Added per-repo `.timbersignore` at the repo root that extends the built-in skip-rule set with prefix, exact-path, and suffix patterns for housekeeping files like `vendor/` and `*.lock`.
+- Added auto-skip for revert commits whose original SHA is already documented in an existing entry, avoiding ledger noise for revert-of-documented work.
+- Added `infra_skipped_since_entry` to `timbers status --json` and a matching line in `timbers status --verbose` to surface how many commits were skipped since the latest entry.
+
+### Changed
+- Expanded the default skip-rule set to relax pending checks on housekeeping files (`.gitignore`, `.editorconfig`, narrowly-scoped `.github/` metadata) and added default suffix skips for major-ecosystem lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `go.sum`, `Cargo.lock`, `Gemfile.lock`); manifest changes (`package.json`, `go.mod`, `Cargo.toml`) remain pending.
+- Fixed an exact-path matching bug where `.gitignore` would incorrectly match `.gitignores` due to prefix-only comparison.
+- Tuned the seven built-in `draft` templates (changelog, decision-log, devblog, pr-description, release-notes, sprint-report, standup) for artifact-appropriate signal — including ADR `Status`/`Date`/supersession fields, changelog Added-vs-Changed disambiguation and consolidation rules, PR-description size adaptation and test-plan honesty, release-notes user-observable filtering with breaking-change migration hints, and devblog operator/collaborator voice with anti-fabrication guards.
+- Coached `timbers prime` to nudge agents toward operator-voice in narrative drafts and to draft PR bodies from ledger entries via the `pr-description` template by default when entries cover the branch range.
+- Refined six templates after second-opinion review to harden them against soft fabrication (emotion, theme, vague benefit) while preserving literary scaffolding.
+
+
 ## [0.18.0] - 2026-04-29
 
 ### Fixed
@@ -498,3 +513,4 @@ Initial public release.
 [0.16.5]: https://github.com/gorewood/timbers/releases/tag/v0.16.5
 [0.17.0]: https://github.com/gorewood/timbers/releases/tag/v0.17.0
 [0.18.0]: https://github.com/gorewood/timbers/releases/tag/v0.18.0
+[0.19.0]: https://github.com/gorewood/timbers/releases/tag/v0.19.0
