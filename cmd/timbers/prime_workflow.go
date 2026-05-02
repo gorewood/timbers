@@ -172,6 +172,44 @@ Sync:
 - Entries are committed files in .timbers/ — use standard git push/pull
 </commands>
 
+<pr-authoring>
+# Authoring Pull Requests with Ledger Context
+
+When you (the agent) are about to open a PR and the operator has NOT given
+you specific instructions for the PR body, default to drafting it from the
+timbers ledger via the pr-description template. The entries you wrote
+through the session ARE the PR description's source material — using them
+keeps intent, design decisions, and risk areas consistent between what the
+operator told you and what reviewers see.
+
+When this applies:
+- Operator says "open a PR" / "ship the PR" / "create the PR" without
+  dictating body contents
+- The branch has timbers entries committed in its range
+- You're not in plan/dry-run mode
+
+When this does NOT apply:
+- Operator dictates the PR body directly ("PR title X, description Y")
+- Operator pastes a template they want filled in verbatim
+- The branch has zero timbers entries in range (no source material)
+- Documentation-only or trivial single-line PRs (the template's tiny-PR
+  path is fine, but operator may prefer something even shorter)
+
+Recommended flow:
+
+  timbers draft pr-description --range $(git merge-base main HEAD)..HEAD \
+    | claude -p --model opus
+
+Pipe the output through your standard PR-creation tool (gh pr create,
+your harness, etc.). The pr-description template adapts to PR size and
+omits sections that lack source material — it will not pad an empty body.
+
+If a draft section comes back empty (e.g., no Design Decisions because
+entries were thin on --why content), that's signal: either the entries
+need beefing up before the PR opens, or the section genuinely doesn't
+apply to this change. Don't manufacture content to fill it.
+</pr-authoring>
+
 <git-log>
 # Git Log & Separate Commits
 
