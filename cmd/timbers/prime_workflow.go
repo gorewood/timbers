@@ -40,7 +40,14 @@ When work is blocked, slow, or frustrating — say so in --why or --notes.
 "Spent 2h debugging flaky CI before finding the actual issue" is valuable
 standup context that --why "Fixed auth test" alone doesn't capture.
 
-Ask yourself: what's the one-sentence trade-off?
+When the operator (human or agent driving the call) made a judgment that
+wasn't obvious — overriding a default, going against a teammate's first
+suggestion, picking the harder path for a reason — name it. The verdict
+isn't just "what was decided" but "what the deciding party chose to
+prioritize." That framing is what makes downstream artifacts (ADRs,
+devblogs, PR descriptions) sound human instead of mechanical.
+
+Ask yourself: what's the one-sentence trade-off, and whose call was it?
 </why-coaching>
 
 <notes-coaching>
@@ -76,8 +83,51 @@ GOOD (short):
   --notes "Considered AND vs OR for multi-tag queries. AND felt correct
   formally but real usage is 'show me anything tagged security or auth.'"
 
-What would help someone revisiting this decision in 6 months?
+GOOD (collaboration texture):
+  --notes "Agent's first pass added a config flag for AND-vs-OR. I pushed
+  back — flag-driven defaults usually mean we didn't pick. We talked through
+  who actually filters by all-tags-required (no one we could name) and
+  dropped the flag. The single-mode default is the verdict; the flag would
+  have been the cop-out."
+
+What would help someone revisiting this decision in 6 months? And — when
+a teammate (human, agent, or reviewer) reshaped the call — what did they
+catch that the first pass missed?
 </notes-coaching>
+
+<operator-voice>
+# Operator Voice and Collaboration
+
+Timbers entries become source material for changelogs, ADRs, devblogs, and
+PR descriptions. The drier the entry, the drier the downstream artifact.
+
+Two lightweight habits inject real signal:
+
+**1. Operator intent over technical motivation.** "Why" answers the
+trade-off, but it can also answer "why this work landed on the table at
+all." A reader who isn't in the repo wants to know the human angle: what
+the operator was trying to accomplish, what frustration prompted it, what
+bet they're making. If the work was reactive (a bug a user hit, a metric
+that drifted, a complaint), say so. If it was proactive (a hunch, an
+architectural bet), say that too.
+
+**2. Surface collaboration when it changed the outcome.** Modern repos
+are co-authored — humans, AI agents, reviewers — often in the same
+session. When a teammate (any flavor) pushed back, surfaced a missed
+case, or proposed something better than the first plan, capture it. The
+moment of correction is high-value narrative; without it, the entry
+reads as "I was right all along," which is rarely the truth.
+
+Examples:
+  --why "Renamed across the pricing module after the agent flagged drift
+        between API and UI naming — caught a stale assumption I was about
+        to ship."
+  --why "Spent the morning fighting flaky CI before the actual fix landed
+        — the real bug was in test setup, not the feature."
+
+Skip this when the work was genuinely solo and uneventful. Don't fabricate
+collaboration that didn't happen — that's worse than dry.
+</operator-voice>
 
 <content-safety>
 # Content Safety
