@@ -54,7 +54,8 @@ type Storage struct {
 // If files is nil, entry operations return empty results.
 //
 // Performs disk I/O at construction: when files is non-nil, this opens
-// <files.Dir>/.timbersignore (if present) to load per-repo skip rules.
+// <repoRoot>/.timbersignore (if present) to load per-repo skip rules.
+// The repo root is derived as the parent of files.Dir (which is .timbers/).
 // Loader errors are not fatal — the built-in defaults are used as a safe
 // fallback so a malformed .timbersignore never inverts the gate.
 func NewStorage(ops GitOps, files *FileStorage) *Storage {
@@ -63,7 +64,7 @@ func NewStorage(ops GitOps, files *FileStorage) *Storage {
 	}
 	rules := compiledDefaultSkipRules
 	if files != nil {
-		if loaded, err := loadSkipRules(files.Dir()); err == nil {
+		if loaded, err := loadSkipRules(filepath.Dir(files.Dir())); err == nil {
 			rules = loaded
 		}
 	}

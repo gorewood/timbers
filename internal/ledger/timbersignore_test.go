@@ -7,8 +7,8 @@ import (
 )
 
 func TestLoadSkipRules_NoFile(t *testing.T) {
-	dir := t.TempDir()
-	rules, err := loadSkipRules(dir)
+	repoRoot := t.TempDir()
+	rules, err := loadSkipRules(repoRoot)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -17,7 +17,7 @@ func TestLoadSkipRules_NoFile(t *testing.T) {
 	}
 }
 
-func TestLoadSkipRules_EmptyTimbersDir(t *testing.T) {
+func TestLoadSkipRules_EmptyRepoRoot(t *testing.T) {
 	rules, err := loadSkipRules("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -28,7 +28,7 @@ func TestLoadSkipRules_EmptyTimbersDir(t *testing.T) {
 }
 
 func TestLoadSkipRules_MergesWithDefaults(t *testing.T) {
-	dir := t.TempDir()
+	repoRoot := t.TempDir()
 	contents := `# project-specific extensions
 vendor/
 *.lock
@@ -37,11 +37,11 @@ third_party/
 # blank line above is fine
 docs/generated/   # inline comment
 `
-	if err := os.WriteFile(filepath.Join(dir, ".timbersignore"), []byte(contents), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repoRoot, ".timbersignore"), []byte(contents), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
-	rules, err := loadSkipRules(dir)
+	rules, err := loadSkipRules(repoRoot)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -72,12 +72,12 @@ docs/generated/   # inline comment
 }
 
 func TestLoadSkipRules_OnlyComments(t *testing.T) {
-	dir := t.TempDir()
+	repoRoot := t.TempDir()
 	contents := "# nothing here\n\n# just comments\n"
-	if err := os.WriteFile(filepath.Join(dir, ".timbersignore"), []byte(contents), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repoRoot, ".timbersignore"), []byte(contents), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	rules, err := loadSkipRules(dir)
+	rules, err := loadSkipRules(repoRoot)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

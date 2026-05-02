@@ -10,27 +10,28 @@ import (
 	"strings"
 )
 
-// timbersIgnoreFilename is the per-repo skip-rule extension file,
-// loaded from the .timbers/ directory at storage initialization.
+// timbersIgnoreFilename is the per-repo skip-rule extension file. It lives
+// at the repo root (peer to .timbers/) following the convention established
+// by .gitignore, .dockerignore, .npmignore, etc.
 const timbersIgnoreFilename = ".timbersignore"
 
-// loadSkipRules returns the effective skip-rule set for a given .timbers/ directory.
+// loadSkipRules returns the effective skip-rule set for a given repo root.
 // It returns the built-in defaults merged with any patterns declared in
-// .timbers/.timbersignore (if the file exists). A missing file is not an error.
+// <repoRoot>/.timbersignore (if the file exists). A missing file is not an error.
 //
 // File format: one pattern per line. Lines starting with "#" are comments.
 // Trailing whitespace and blank lines are ignored. Patterns follow the
 // skipRule grammar: trailing "/" = directory prefix, leading "*" = suffix
 // match, otherwise exact path.
-func loadSkipRules(timbersDir string) ([]skipRule, error) {
+func loadSkipRules(repoRoot string) ([]skipRule, error) {
 	rules := make([]skipRule, 0, len(compiledDefaultSkipRules))
 	rules = append(rules, compiledDefaultSkipRules...)
 
-	if timbersDir == "" {
+	if repoRoot == "" {
 		return rules, nil
 	}
 
-	patterns, err := readTimbersIgnore(filepath.Join(timbersDir, timbersIgnoreFilename))
+	patterns, err := readTimbersIgnore(filepath.Join(repoRoot, timbersIgnoreFilename))
 	if err != nil {
 		return rules, err
 	}
