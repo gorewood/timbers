@@ -51,8 +51,14 @@ Desktop.ini
 !CHANGELOG.md
 !CONTRIBUTING.md
 !AGENTS.md
+!.claudeignore
 !docs/
 !docs/**
+
+# Claude/Codex team rules
+!.claude/
+!.claude/rules/
+!.claude/rules/*.md
 
 # Build system
 !justfile
