@@ -172,25 +172,25 @@ func TestResolveModelAlias(t *testing.T) {
 	}{
 		// Anthropic aliases
 		{name: "anthropic haiku alias", model: "haiku", provider: ProviderAnthropic, wantModel: "claude-haiku-4-5-20251001"},
-		{name: "anthropic sonnet alias", model: "sonnet", provider: ProviderAnthropic, wantModel: "claude-sonnet-4-5-20250929"},
-		{name: "anthropic opus alias", model: "opus", provider: ProviderAnthropic, wantModel: "claude-opus-4-6"},
+		{name: "anthropic sonnet alias", model: "sonnet", provider: ProviderAnthropic, wantModel: "claude-sonnet-4-6"},
+		{name: "anthropic opus alias", model: "opus", provider: ProviderAnthropic, wantModel: "claude-opus-4-7"},
 
 		// OpenAI aliases
-		{name: "openai nano alias", model: "nano", provider: ProviderOpenAI, wantModel: "gpt-5-nano"},
-		{name: "openai mini alias", model: "mini", provider: ProviderOpenAI, wantModel: "gpt-5-mini"},
-		{name: "openai gpt alias", model: "gpt", provider: ProviderOpenAI, wantModel: "gpt-5.2"},
+		{name: "openai nano alias", model: "nano", provider: ProviderOpenAI, wantModel: "gpt-5.4-nano"},
+		{name: "openai mini alias", model: "mini", provider: ProviderOpenAI, wantModel: "gpt-5.4-mini"},
+		{name: "openai gpt alias", model: "gpt", provider: ProviderOpenAI, wantModel: "gpt-5.5"},
 
 		// Google aliases
 		{name: "google flash alias", model: "flash", provider: ProviderGoogle, wantModel: "gemini-3-flash-preview"},
-		{name: "google flash-lite alias", model: "flash-lite", provider: ProviderGoogle, wantModel: "gemini-2.5-flash-lite"},
-		{name: "google pro alias", model: "pro", provider: ProviderGoogle, wantModel: "gemini-3-pro-preview"},
+		{name: "google flash-lite alias", model: "flash-lite", provider: ProviderGoogle, wantModel: "gemini-3.1-flash-lite"},
+		{name: "google pro alias", model: "pro", provider: ProviderGoogle, wantModel: "gemini-3.1-pro-preview"},
 
 		// Local aliases
 		{name: "local alias", model: "local", provider: ProviderLocal, wantModel: "default"},
 
 		// Case insensitive lookup
 		{name: "uppercase alias", model: "HAIKU", provider: ProviderAnthropic, wantModel: "claude-haiku-4-5-20251001"},
-		{name: "mixed case alias", model: "Sonnet", provider: ProviderAnthropic, wantModel: "claude-sonnet-4-5-20250929"},
+		{name: "mixed case alias", model: "Sonnet", provider: ProviderAnthropic, wantModel: "claude-sonnet-4-6"},
 
 		// Pass through unknown models
 		{name: "unknown anthropic model", model: "claude-3-opus-20240229", provider: ProviderAnthropic, wantModel: "claude-3-opus-20240229"},

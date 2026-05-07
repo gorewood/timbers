@@ -291,7 +291,7 @@ timbers draft changelog --since 7d | claude -p --model opus
 
 # Gemini CLI (auto-detects piped input, -m selects model)
 timbers draft standup --since 1d | gemini
-timbers draft standup --since 1d | gemini -m gemini-2.5-pro
+timbers draft standup --since 1d | gemini -m gemini-3.1-pro-preview
 
 # Codex CLI (exec - reads prompt from stdin, -m selects model)
 timbers draft pr-description --range main..HEAD | codex exec -

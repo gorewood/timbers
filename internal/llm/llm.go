@@ -164,18 +164,18 @@ func inferProvider(model string) Provider {
 var modelAliases = map[Provider]map[string]string{
 	ProviderAnthropic: {
 		"haiku":  "claude-haiku-4-5-20251001",
-		"sonnet": "claude-sonnet-4-5-20250929",
-		"opus":   "claude-opus-4-6",
+		"sonnet": "claude-sonnet-4-6",
+		"opus":   "claude-opus-4-7",
 	},
 	ProviderOpenAI: {
-		"nano": "gpt-5-nano",
-		"mini": "gpt-5-mini",
-		"gpt":  "gpt-5.2",
+		"nano": "gpt-5.4-nano",
+		"mini": "gpt-5.4-mini",
+		"gpt":  "gpt-5.5",
 	},
 	ProviderGoogle: {
 		"flash":      "gemini-3-flash-preview",
-		"flash-lite": "gemini-2.5-flash-lite",
-		"pro":        "gemini-3-pro-preview",
+		"flash-lite": "gemini-3.1-flash-lite",
+		"pro":        "gemini-3.1-pro-preview",
 	},
 	ProviderLocal: {
 		"local": "default",
