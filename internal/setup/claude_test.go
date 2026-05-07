@@ -462,6 +462,7 @@ func TestIsTimbersCommand(t *testing.T) {
 	}{
 		{"resilient prime command", timbersHookCommand, true},
 		{"legacy prime command", legacyHookCommand, true},
+		{"legacy resilient prime command", legacyPrimeHookCommand, true},
 		{"legacy post-tool-use env command", legacyPostToolUseBashCommand, true},
 		{"legacy post-tool-use stdin command", legacyPostToolUseStdinCommand, true},
 		{"stop hook command", stopHookCommand, true},

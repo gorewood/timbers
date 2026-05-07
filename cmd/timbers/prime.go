@@ -16,14 +16,24 @@ import (
 // errNotInitialized indicates timbers is not set up in this repo.
 var errNotInitialized = errors.New("timbers not initialized")
 
+// errNotGitRepo indicates prime was run outside a git repository.
+var errNotGitRepo = errors.New("not in a git repository")
+
+const (
+	primeCompactMode = "compact v2"
+	primeFullMode    = "full"
+)
+
 // primeResult holds the data for prime output.
 type primeResult struct {
+	Mode          string            `json:"mode"`
 	Repo          string            `json:"repo"`
 	Branch        string            `json:"branch"`
 	Head          string            `json:"head"`
 	TimbersDir    string            `json:"timbers_dir"`
 	EntryCount    int               `json:"entry_count"`
 	Pending       primePending      `json:"pending"`
+	StaleAnchor   bool              `json:"stale_anchor,omitempty"`
 	RecentEntries []primeEntry      `json:"recent_entries"`
 	Health        []primeHealthItem `json:"health,omitempty"`
 	Workflow      string            `json:"workflow"`
@@ -55,6 +65,9 @@ func newPrimeCmd() *cobra.Command {
 func newPrimeCmdInternal(storage *ledger.Storage) *cobra.Command {
 	var lastFlag int
 	var verboseFlag bool
+	var fullFlag bool
+	var guideFlag bool
+	var hookFlag bool
 	var exportFlag bool
 
 	cmd := &cobra.Command{
@@ -65,13 +78,15 @@ func newPrimeCmdInternal(storage *ledger.Storage) *cobra.Command {
 This command gathers repository info, recent ledger entries, and pending
 commits to give agents and developers a quick overview of the current state.
 
-Workflow instructions are included to guide agents through the session close
-protocol. These can be customized by creating .timbers/PRIME.md in the repo root.
+The default output is compact for agent context injection. Use --full to include
+the full workflow guide, which can be customized with .timbers/PRIME.md.
 
 Examples:
-  timbers prime              # Show session context with last 3 entries
+  timbers prime              # Show compact session context with last 3 entries
+  timbers prime --hook       # Show hook-optimized compact context
   timbers prime --last 5     # Show session context with last 5 entries
   timbers prime --verbose    # Include why/how in recent entries
+  timbers prime --full       # Include full workflow guide
   timbers prime --json       # Output structured context as JSON
   timbers prime --export     # Output default workflow content for customization`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -79,28 +94,33 @@ Examples:
 				cmd.Print(defaultWorkflowContent)
 				return nil
 			}
-			return runPrime(cmd, storage, lastFlag, verboseFlag)
+			full := fullFlag || guideFlag
+			_ = hookFlag // --hook is an explicit name for the compact default.
+			return runPrime(cmd, storage, lastFlag, verboseFlag, full)
 		},
 	}
 
 	cmd.Flags().IntVar(&lastFlag, "last", 3, "Number of recent entries to show")
 	cmd.Flags().BoolVar(&verboseFlag, "verbose", false, "Include why/how details in recent entries")
+	cmd.Flags().BoolVar(&fullFlag, "full", false, "Include full workflow guide")
+	cmd.Flags().BoolVar(&guideFlag, "guide", false, "Alias for --full")
+	cmd.Flags().BoolVar(&hookFlag, "hook", false, "Output compact hook-friendly context")
 	cmd.Flags().BoolVar(&exportFlag, "export", false, "Output default workflow content for customization")
 
 	return cmd
 }
 
 // resolveStorage checks if we're in an initialized timbers repo and returns storage.
-// Returns (nil, nil) if the repo is not initialized (silent skip).
-// Returns (nil, error) on failures.
+// Returns errNotInitialized if the repo is not initialized.
+// Returns errNotGitRepo when run outside a git repository.
 // Returns (storage, nil) on success.
-func resolveStorage(storage *ledger.Storage, verbose bool, printer *output.Printer) (*ledger.Storage, error) {
+func resolveStorage(storage *ledger.Storage) (*ledger.Storage, error) {
 	if storage != nil {
 		return storage, nil
 	}
 
 	if !git.IsRepo() {
-		return nil, output.NewSystemError("not in a git repository")
+		return nil, errNotGitRepo
 	}
 
 	root, err := git.RepoRoot()
@@ -110,9 +130,6 @@ func resolveStorage(storage *ledger.Storage, verbose bool, printer *output.Print
 
 	timbersDir := filepath.Join(root, ".timbers")
 	if _, statErr := os.Stat(timbersDir); os.IsNotExist(statErr) {
-		if verbose {
-			printer.Stderr("timbers not initialized in this repo; run 'timbers init' to activate")
-		}
 		return nil, errNotInitialized
 	}
 
@@ -120,12 +137,15 @@ func resolveStorage(storage *ledger.Storage, verbose bool, printer *output.Print
 }
 
 // runPrime executes the prime command.
-func runPrime(cmd *cobra.Command, storage *ledger.Storage, lastN int, verbose bool) error {
+func runPrime(cmd *cobra.Command, storage *ledger.Storage, lastN int, verbose bool, full bool) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
 
-	resolved, err := resolveStorage(storage, verbose, printer)
+	resolved, err := resolveStorage(storage)
 	if errors.Is(err, errNotInitialized) {
-		return nil // uninitiated repo, silent skip
+		return outputPrimeUnavailable(printer, "ledger not initialized", "timbers init")
+	}
+	if errors.Is(err, errNotGitRepo) {
+		return outputPrimeUnavailable(printer, "not in a git repository", "cd <repo>")
 	}
 	if err != nil {
 		printer.Error(err)
@@ -142,7 +162,12 @@ func runPrime(cmd *cobra.Command, storage *ledger.Storage, lastN int, verbose bo
 	if printer.IsJSON() {
 		return printer.WriteJSON(result)
 	}
-	outputPrimeHuman(printer, result)
+	if full {
+		result.Mode = primeFullMode
+		outputPrimeFullHuman(printer, result)
+		return nil
+	}
+	outputPrimeCompactHuman(printer, result)
 	return nil
 }
 
@@ -173,6 +198,10 @@ func gatherPrimeContext(storage *ledger.Storage, lastN int, verbose bool) (*prim
 	if pendingErr != nil && !errors.Is(pendingErr, ledger.ErrStaleAnchor) {
 		return nil, pendingErr
 	}
+	staleAnchor := errors.Is(pendingErr, ledger.ErrStaleAnchor)
+	if staleAnchor {
+		pendingCommits = nil
+	}
 
 	recentEntries, err := storage.GetLastNEntries(lastN)
 	if err != nil {
@@ -183,12 +212,14 @@ func gatherPrimeContext(storage *ledger.Storage, lastN int, verbose bool) (*prim
 	health := runQuickHealthCheck()
 
 	return &primeResult{
+		Mode:          primeCompactMode,
 		Repo:          repoName,
 		Branch:        branch,
 		Head:          head,
 		TimbersDir:    filepath.Join(root, ".timbers"),
 		EntryCount:    len(allEntries),
 		Pending:       buildPrimePending(pendingCommits),
+		StaleAnchor:   staleAnchor,
 		RecentEntries: buildPrimeEntries(recentEntries, verbose),
 		Health:        health,
 		Workflow:      workflow,
@@ -253,8 +284,8 @@ func truncateNotes(notes string, maxLen int) string {
 	return notes[:maxLen] + "..."
 }
 
-// outputPrimeHuman outputs the result in human-readable format.
-func outputPrimeHuman(printer *output.Printer, result *primeResult) {
+// outputPrimeFullHuman outputs the full guide in human-readable format.
+func outputPrimeFullHuman(printer *output.Printer, result *primeResult) {
 	printer.Println("Timbers Session Context")
 	printer.Println("=======================")
 	printer.Println()
@@ -268,9 +299,12 @@ func outputPrimeHuman(printer *output.Printer, result *primeResult) {
 	printer.Println("Ledger Status")
 	printer.Println("-------------")
 	printer.Print("  Entries: %d\n", result.EntryCount)
-	if result.Pending.Count == 0 {
+	switch {
+	case result.StaleAnchor:
+		printer.Println("  Pending: 0 actionable (stale anchor)")
+	case result.Pending.Count == 0:
 		printer.Println("  Pending: all work documented")
-	} else {
+	default:
 		printer.Print("  Pending: %d undocumented commit", result.Pending.Count)
 		if result.Pending.Count != 1 {
 			printer.Print("s")

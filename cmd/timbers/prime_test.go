@@ -104,9 +104,10 @@ func TestPrimeCommand(t *testing.T) {
 			files: nil,
 			lastN: 3,
 			wantContains: []string{
-				"Timbers Session Context", "2 undocumented", "(no entries)",
-				"Session Protocol", "Writing Good Why Fields",
+				"Timbers Prime: compact v2", "Pending: 2 (action required)", "- none",
+				"Pending commits:", `Next: timbers log "what" --why "why" --how "how"`,
 			},
+			wantNotContain: []string{"Session Protocol", "Writing Good Why Fields"},
 		},
 		{
 			name: "has entries and pending",
@@ -124,9 +125,10 @@ func TestPrimeCommand(t *testing.T) {
 			},
 			lastN: 3,
 			wantContains: []string{
-				"Timbers Session Context", "Entries: 2", "1 undocumented commit",
-				"Fixed bug", "Added feature", "Essential Commands", "commit code first",
+				"Timbers Prime: compact v2", "Ledger: 2 entries", "Pending: 1 (action required)",
+				"Fixed bug", "Added feature", "Commands:",
 			},
+			wantNotContain: []string{"Essential Commands", "commit code first"},
 		},
 		{
 			name: "no pending commits",
@@ -137,8 +139,9 @@ func TestPrimeCommand(t *testing.T) {
 			files: func(t *testing.T) *ledger.FileStorage {
 				return writeEntries(t, makePrimeTestEntry("abc123def456", now, "Latest work"))
 			},
-			lastN:        3,
-			wantContains: []string{"all work documented", "Latest work", "Session Protocol"},
+			lastN:          3,
+			wantContains:   []string{"Pending: 0 (clear)", "Latest work", "Rules:"},
+			wantNotContain: []string{"Session Protocol"},
 		},
 		{
 			name: "respects lastN flag",
@@ -202,9 +205,10 @@ func TestPrimeCommand(t *testing.T) {
 			},
 			lastN: 3,
 			wantContains: []string{
-				"Timbers Session Context", "Entries: 1", "2 undocumented",
-				"Previous work", "Session Protocol",
+				"Timbers Prime: compact v2", "Ledger: 1 entries", "Pending: 0 actionable (stale anchor)",
+				"Previous work", "Stale anchor", "No action needed",
 			},
+			wantNotContain: []string{"Latest commit", "Earlier commit", "Session Protocol"},
 		},
 		{
 			name: "stale anchor - json output still works",
@@ -222,7 +226,7 @@ func TestPrimeCommand(t *testing.T) {
 			},
 			lastN:        3,
 			jsonOutput:   true,
-			wantContains: []string{`"entry_count": 1`, `"count": 1`, `"recent_entries":`, `"workflow":`},
+			wantContains: []string{`"entry_count": 1`, `"count": 0`, `"stale_anchor": true`, `"recent_entries":`, `"workflow":`},
 		},
 	}
 
@@ -430,6 +434,45 @@ func TestPrimeExportFlag(t *testing.T) {
 	}
 }
 
+func TestPrimeFullFlag(t *testing.T) {
+	now := time.Now()
+	mock := &mockGitOpsForPrime{
+		head:    "abc123def456",
+		commits: []git.Commit{},
+	}
+	entry := makePrimeTestEntry("abc123def456", now, "Latest work")
+	dir := t.TempDir()
+	data, _ := entry.ToJSON()
+	entryDir := filepath.Join(dir, ledger.EntryDateDir(entry.ID))
+	if err := os.MkdirAll(entryDir, 0o755); err != nil {
+		t.Fatalf("failed to create entry dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(entryDir, entry.ID+".json"), data, 0o600); err != nil {
+		t.Fatalf("failed to write entry file: %v", err)
+	}
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
+	storage := ledger.NewStorage(mock, files)
+
+	cmd := newPrimeCmdInternal(storage)
+	if err := cmd.Flags().Set("full", "true"); err != nil {
+		t.Fatalf("failed to set full flag: %v", err)
+	}
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{"Timbers Session Context", "Session Protocol", "Writing Good Why Fields"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("full output missing expected content %q\noutput: %s", want, output)
+		}
+	}
+}
+
 func TestPrimeVerboseFlag(t *testing.T) {
 	now := time.Now()
 
@@ -490,36 +533,60 @@ func TestPrimeVerboseFlag(t *testing.T) {
 	}
 }
 
-func TestPrimeSilentInUninitRepo(t *testing.T) {
-	tempDir := t.TempDir()
+func TestPrimeMinimalSetupGuidance(t *testing.T) {
+	t.Run("uninitialized git repo", func(t *testing.T) {
+		tempDir := t.TempDir()
 
-	runGit(t, tempDir, "init")
-	runGit(t, tempDir, "config", "user.email", "test@test.com")
-	runGit(t, tempDir, "config", "user.name", "Test User")
+		runGit(t, tempDir, "init")
+		runGit(t, tempDir, "config", "user.email", "test@test.com")
+		runGit(t, tempDir, "config", "user.name", "Test User")
 
-	testFile := filepath.Join(tempDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test"), 0o600); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
-	}
-	runGit(t, tempDir, "add", ".")
-	runGit(t, tempDir, "commit", "-m", "initial")
-
-	// No timbers init — .timbers/ directory does not exist
-	runInDir(t, tempDir, func() {
-		cmd := newPrimeCmdInternal(nil)
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		err := cmd.Execute()
-		if err != nil {
-			t.Fatalf("prime should not error in uninitiated repo: %v", err)
+		testFile := filepath.Join(tempDir, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test"), 0o600); err != nil {
+			t.Fatalf("failed to write test file: %v", err)
 		}
+		runGit(t, tempDir, "add", ".")
+		runGit(t, tempDir, "commit", "-m", "initial")
 
-		// Should produce no stdout output (silent exit)
-		if buf.Len() > 0 {
-			t.Errorf("prime should be silent in uninitiated repo, got: %s", buf.String())
-		}
+		// No timbers init — .timbers/ directory does not exist
+		runInDir(t, tempDir, func() {
+			cmd := newPrimeCmdInternal(nil)
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+
+			err := cmd.Execute()
+			if err != nil {
+				t.Fatalf("prime should not error in uninitiated repo: %v", err)
+			}
+
+			output := buf.String()
+			if !strings.Contains(output, "Timbers Prime: compact v2") {
+				t.Errorf("expected compact marker, got: %s", output)
+			}
+			if !strings.Contains(output, "ledger not initialized") {
+				t.Errorf("expected setup guidance, got: %s", output)
+			}
+		})
+	})
+
+	t.Run("non-git dir", func(t *testing.T) {
+		runInDir(t, t.TempDir(), func() {
+			cmd := newPrimeCmdInternal(nil)
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+
+			err := cmd.Execute()
+			if err != nil {
+				t.Fatalf("prime should not error outside git repos: %v", err)
+			}
+
+			output := buf.String()
+			if !strings.Contains(output, "not in a git repository") {
+				t.Errorf("expected non-git guidance, got: %s", output)
+			}
+		})
 	})
 }
 

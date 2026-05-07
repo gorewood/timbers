@@ -31,10 +31,15 @@ type timbersHookConfig struct {
 // when timbers is not installed: prints a helpful message instead of erroring.
 //
 //nolint:lll // shell one-liner, splitting would reduce readability
-const timbersHookCommand = `command -v timbers >/dev/null 2>&1 && timbers prime || echo "timbers: not installed (https://github.com/gorewood/timbers)"`
+const timbersHookCommand = `command -v timbers >/dev/null 2>&1 && timbers prime --hook || echo "timbers: not installed (https://github.com/gorewood/timbers)"`
 
 // legacyHookCommand is the old non-resilient format, kept for backward-compat detection and removal.
 const legacyHookCommand = "timbers prime"
+
+// legacyPrimeHookCommand is the old resilient SessionStart/PreCompact command.
+//
+//nolint:lll // shell one-liner
+const legacyPrimeHookCommand = `command -v timbers >/dev/null 2>&1 && timbers prime || echo "timbers: not installed (https://github.com/gorewood/timbers)"`
 
 // legacyPreToolUseCommand was the first structured-JSON approach for blocking git commit.
 // Replaced by git pre-commit hook blocking, which works for all git clients.
@@ -209,7 +214,7 @@ func isTimbersCommand(cmd string) bool {
 			return true
 		}
 	}
-	return cmd == legacyHookCommand || cmd == legacyStopCommand ||
+	return cmd == legacyHookCommand || cmd == legacyPrimeHookCommand || cmd == legacyStopCommand ||
 		cmd == legacyPreToolUseCommand ||
 		cmd == legacyPostToolUseBashCommand || cmd == legacyPostToolUseStdinCommand
 }
