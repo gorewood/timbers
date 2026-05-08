@@ -26,17 +26,18 @@ const (
 
 // primeResult holds the data for prime output.
 type primeResult struct {
-	Mode          string            `json:"mode"`
-	Repo          string            `json:"repo"`
-	Branch        string            `json:"branch"`
-	Head          string            `json:"head"`
-	TimbersDir    string            `json:"timbers_dir"`
-	EntryCount    int               `json:"entry_count"`
-	Pending       primePending      `json:"pending"`
-	StaleAnchor   bool              `json:"stale_anchor,omitempty"`
-	RecentEntries []primeEntry      `json:"recent_entries"`
-	Health        []primeHealthItem `json:"health,omitempty"`
-	Workflow      string            `json:"workflow"`
+	Mode           string            `json:"mode"`
+	Repo           string            `json:"repo"`
+	Branch         string            `json:"branch"`
+	Head           string            `json:"head"`
+	TimbersDir     string            `json:"timbers_dir"`
+	EntryCount     int               `json:"entry_count"`
+	Pending        primePending      `json:"pending"`
+	StaleAnchor    bool              `json:"stale_anchor,omitempty"`
+	RecentEntries  []primeEntry      `json:"recent_entries"`
+	Health         []primeHealthItem `json:"health,omitempty"`
+	Workflow       string            `json:"workflow"`
+	CustomWorkflow bool              `json:"custom_workflow,omitempty"`
 }
 
 // primePending holds pending commit information.
@@ -159,11 +160,13 @@ func runPrime(cmd *cobra.Command, storage *ledger.Storage, lastN int, verbose bo
 		return gatherErr
 	}
 
+	if full {
+		result.Mode = primeFullMode
+	}
 	if printer.IsJSON() {
 		return printer.WriteJSON(result)
 	}
 	if full {
-		result.Mode = primeFullMode
 		outputPrimeFullHuman(printer, result)
 		return nil
 	}
@@ -208,32 +211,35 @@ func gatherPrimeContext(storage *ledger.Storage, lastN int, verbose bool) (*prim
 		return nil, err
 	}
 
-	workflow := loadWorkflowContent(root)
+	workflow, custom := loadWorkflowContent(root)
 	health := runQuickHealthCheck()
 
 	return &primeResult{
-		Mode:          primeCompactMode,
-		Repo:          repoName,
-		Branch:        branch,
-		Head:          head,
-		TimbersDir:    filepath.Join(root, ".timbers"),
-		EntryCount:    len(allEntries),
-		Pending:       buildPrimePending(pendingCommits),
-		StaleAnchor:   staleAnchor,
-		RecentEntries: buildPrimeEntries(recentEntries, verbose),
-		Health:        health,
-		Workflow:      workflow,
+		Mode:           primeCompactMode,
+		Repo:           repoName,
+		Branch:         branch,
+		Head:           head,
+		TimbersDir:     filepath.Join(root, ".timbers"),
+		EntryCount:     len(allEntries),
+		Pending:        buildPrimePending(pendingCommits),
+		StaleAnchor:    staleAnchor,
+		RecentEntries:  buildPrimeEntries(recentEntries, verbose),
+		Health:         health,
+		Workflow:       workflow,
+		CustomWorkflow: custom,
 	}, nil
 }
 
-// loadWorkflowContent loads workflow content from .timbers/PRIME.md or returns default.
-func loadWorkflowContent(repoRoot string) string {
+// loadWorkflowContent loads workflow content from .timbers/PRIME.md.
+// Returns (defaultWorkflowContent, false) when no override file exists,
+// or (override, true) when .timbers/PRIME.md is present and readable.
+func loadWorkflowContent(repoRoot string) (string, bool) {
 	overridePath := filepath.Join(repoRoot, ".timbers", "PRIME.md")
 	data, err := os.ReadFile(overridePath)
 	if err != nil {
-		return defaultWorkflowContent
+		return defaultWorkflowContent, false
 	}
-	return string(data)
+	return string(data), true
 }
 
 // buildPrimePending constructs the pending section from commits.

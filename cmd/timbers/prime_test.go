@@ -659,6 +659,168 @@ func TestPrimeVerboseJSON(t *testing.T) {
 	}
 }
 
+// TestPrimeCompactFullEntryID verifies compact output uses full entry IDs so
+// agents can paste them straight into `timbers show <id>` without expansion.
+func TestPrimeCompactFullEntryID(t *testing.T) {
+	now := time.Now()
+	mock := &mockGitOpsForPrime{head: "abc123def456", commits: []git.Commit{}}
+	entry := makePrimeTestEntry("anchor1234", now, "Fixed auth bug")
+
+	dir := t.TempDir()
+	data, _ := entry.ToJSON()
+	entryDir := dir
+	if sub := ledger.EntryDateDir(entry.ID); sub != "" {
+		entryDir = filepath.Join(dir, sub)
+	}
+	if err := os.MkdirAll(entryDir, 0o755); err != nil {
+		t.Fatalf("failed to create entry dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(entryDir, entry.ID+".json"), data, 0o600); err != nil {
+		t.Fatalf("failed to write entry file: %v", err)
+	}
+	files := ledger.NewFileStorage(dir, func(_ string) error { return nil }, func(_, _ string) error { return nil })
+	storage := ledger.NewStorage(mock, files)
+
+	cmd := newPrimeCmdInternal(storage)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, entry.ID) {
+		t.Errorf("compact output missing full entry ID %q\noutput:\n%s", entry.ID, out)
+	}
+	if strings.Contains(out, "tb_..._") {
+		t.Errorf("compact output still contains ellipsized ID prefix tb_..._\noutput:\n%s", out)
+	}
+}
+
+// TestPrimeCustomWorkflowHint exercises the .timbers/PRIME.md surfacing in
+// compact mode and the custom_workflow JSON field.
+func TestPrimeCustomWorkflowHint(t *testing.T) {
+	mock := &mockGitOpsForPrime{head: "abc123def456", commits: []git.Commit{}}
+	files := ledger.NewFileStorage(t.TempDir(), func(_ string) error { return nil }, func(_, _ string) error { return nil })
+	storage := ledger.NewStorage(mock, files)
+
+	t.Run("no PRIME.md - no hint, custom_workflow omitted from JSON", func(t *testing.T) {
+		repoDir := setupTempGitRepo(t)
+		runInDir(t, repoDir, func() {
+			cmd := newPrimeCmdInternal(storage)
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			if strings.Contains(buf.String(), "Custom workflow") {
+				t.Errorf("expected no custom workflow hint, got:\n%s", buf.String())
+			}
+		})
+	})
+
+	t.Run("PRIME.md present - hint shown, custom_workflow=true in JSON", func(t *testing.T) {
+		repoDir := setupTempGitRepo(t)
+		timbersDir := filepath.Join(repoDir, ".timbers")
+		if err := os.MkdirAll(timbersDir, 0o755); err != nil {
+			t.Fatalf("failed to create .timbers dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(timbersDir, "PRIME.md"), []byte("# Custom"), 0o600); err != nil {
+			t.Fatalf("failed to write PRIME.md: %v", err)
+		}
+
+		runInDir(t, repoDir, func() {
+			cmd := newPrimeCmdInternal(storage)
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			if !strings.Contains(buf.String(), "Custom workflow") {
+				t.Errorf("expected custom workflow hint, got:\n%s", buf.String())
+			}
+
+			cmdJSON := newPrimeCmdInternal(storage)
+			cmdJSON.PersistentFlags().Bool("json", false, "")
+			_ = cmdJSON.PersistentFlags().Set("json", "true")
+			var jsonBuf bytes.Buffer
+			cmdJSON.SetOut(&jsonBuf)
+			cmdJSON.SetErr(&jsonBuf)
+			if err := cmdJSON.Execute(); err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			var result primeResult
+			if err := json.Unmarshal(jsonBuf.Bytes(), &result); err != nil {
+				t.Fatalf("failed to parse JSON: %v\n%s", err, jsonBuf.String())
+			}
+			if !result.CustomWorkflow {
+				t.Errorf("expected custom_workflow=true in JSON, got %+v", result)
+			}
+		})
+	})
+}
+
+// TestPrimeJSONModeReflectsFullFlag ensures `--full --json` reports mode=full
+// rather than always emitting the compact mode marker.
+func TestPrimeJSONModeReflectsFullFlag(t *testing.T) {
+	mock := &mockGitOpsForPrime{head: "abc123def456", commits: []git.Commit{}}
+	files := ledger.NewFileStorage(t.TempDir(), func(_ string) error { return nil }, func(_, _ string) error { return nil })
+	storage := ledger.NewStorage(mock, files)
+
+	tests := []struct {
+		name     string
+		full     bool
+		wantMode string
+	}{
+		{"json default - compact mode", false, primeCompactMode},
+		{"json with --full - full mode", true, primeFullMode},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := newPrimeCmdInternal(storage)
+			cmd.PersistentFlags().Bool("json", false, "")
+			_ = cmd.PersistentFlags().Set("json", "true")
+			if tt.full {
+				if err := cmd.Flags().Set("full", "true"); err != nil {
+					t.Fatalf("failed to set full flag: %v", err)
+				}
+			}
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			var result primeResult
+			if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+				t.Fatalf("failed to parse JSON: %v\n%s", err, buf.String())
+			}
+			if result.Mode != tt.wantMode {
+				t.Errorf("mode = %q, want %q", result.Mode, tt.wantMode)
+			}
+		})
+	}
+}
+
+// setupTempGitRepo creates a fresh git repo in a temp dir for prime tests that
+// need a real working directory rather than just an injected storage.
+func setupTempGitRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	runGit(t, dir, "init")
+	runGit(t, dir, "config", "user.email", "test@test.com")
+	runGit(t, dir, "config", "user.name", "Test User")
+	if err := os.WriteFile(filepath.Join(dir, "seed.txt"), []byte("seed"), 0o600); err != nil {
+		t.Fatalf("failed to seed repo: %v", err)
+	}
+	runGit(t, dir, "add", ".")
+	runGit(t, dir, "commit", "-m", "initial")
+	return dir
+}
+
 func TestTruncateNotes(t *testing.T) {
 	tests := []struct {
 		name   string

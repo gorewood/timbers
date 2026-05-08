@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/gorewood/timbers/internal/output"
 )
@@ -29,6 +28,10 @@ func outputPrimeCompactHuman(printer *output.Printer, result *primeResult) {
 	printer.Println(`- timbers log "..." --why "..." --how "..."`)
 	printer.Println("- timbers query --last 5")
 	printer.Println("- timbers draft pr-description --range <base>..HEAD")
+	if result.CustomWorkflow {
+		printer.Println()
+		printer.Println("Custom workflow: .timbers/PRIME.md present — run timbers prime --full to view.")
+	}
 }
 
 func outputPrimeCompactRecent(printer *output.Printer, entries []primeEntry) {
@@ -39,7 +42,7 @@ func outputPrimeCompactRecent(printer *output.Printer, entries []primeEntry) {
 		return
 	}
 	for _, entry := range entries {
-		printer.Print("- %s %s\n", compactEntryID(entry.ID), truncateText(entry.What, 96))
+		printer.Print("- %s %s\n", entry.ID, truncateText(entry.What, 96))
 		if entry.Why != "" {
 			printer.Print("  Why: %s\n", truncateText(entry.Why, 96))
 		}
@@ -85,7 +88,7 @@ func outputPrimeCompactHealth(printer *output.Printer, health []primeHealthItem)
 	printer.Println("Health:")
 	limit := min(len(health), 3)
 	for _, item := range health[:limit] {
-		printer.Print("- %s\n", truncateText(item.Message, 92))
+		printer.Print("- %s\n", truncateText(item.Message, 96))
 	}
 	if len(health) > limit {
 		printer.Print("- ... %d more; run timbers doctor\n", len(health)-limit)
@@ -118,18 +121,6 @@ func compactPendingStatus(result *primeResult) string {
 		return "1 (action required)"
 	}
 	return fmt.Sprintf("%d (action required)", result.Pending.Count)
-}
-
-func compactEntryID(id string) string {
-	parts := strings.Split(id, "_")
-	if len(parts) == 0 {
-		return id
-	}
-	suffix := parts[len(parts)-1]
-	if suffix == "" {
-		return id
-	}
-	return "tb_..._" + suffix
 }
 
 func truncateText(text string, maxLen int) string {
