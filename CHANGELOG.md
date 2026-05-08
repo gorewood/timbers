@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] - 2026-05-07
+
+### Added
+- Added `.timbersignore` support, expanded skip-rule configurability, and a revert auto-skip behavior to relax enforcement on a per-repo basis (v0.19.0 batch).
+- Added a PR-authoring nudge to `timbers prime` output.
+
+### Changed
+- **BREAKING:** `timbers prime` now emits compact session-start output by default; the full operating guide moved behind `--full`/`guide`. Run `timbers prime --full` (or update Claude hooks to use the new hook mode) to restore prior verbosity.
+- Compact `timbers prime` now prints full `tb_<ts>_<sha>` entry IDs (resolvable by `timbers show`), surfaces a hint when `PRIME.md` overrides workflow content, and aligns health-line truncation to 96 chars to match entries.
+- `timbers prime --json` now honors the requested mode (no longer hardcoded to compact) and exposes a `custom_workflow` field when `PRIME.md` is present.
+- Aligned stale-anchor `prime` output with `pending` for consistent reporting.
+- Sharpened all seven built-in `draft` templates with anti-fabrication guards (v0.19.0 batch).
+- Refreshed Anthropic, OpenAI, and Gemini provider model aliases to current official IDs; corrected Gemini Flash-Lite to the stable 3.1 model.
+- Surfaced `status` visibility improvements (v0.19.0 batch).
+
+### Internal
+- Dropped the unused Dolt remote in favor of the embedded JSONL transport; `AGENTS.md` now documents the single sync channel, JSONL drift-recovery via `bd export | diff`, and removes `bd dolt push` from the session-close workflow.
+- Replaced the minimal agent note with the full operating guide and made `CLAUDE.md` a symlink to `AGENTS.md` to reduce drift across agent environments.
+
+
 ## [0.19.0] - 2026-05-02
 
 ### Added
@@ -514,3 +534,4 @@ Initial public release.
 [0.17.0]: https://github.com/gorewood/timbers/releases/tag/v0.17.0
 [0.18.0]: https://github.com/gorewood/timbers/releases/tag/v0.18.0
 [0.19.0]: https://github.com/gorewood/timbers/releases/tag/v0.19.0
+[0.20.0]: https://github.com/gorewood/timbers/releases/tag/v0.20.0

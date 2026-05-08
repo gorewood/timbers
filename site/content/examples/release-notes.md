@@ -1,6 +1,6 @@
 +++
 title = 'Release Notes'
-date = '2026-05-02'
+date = '2026-05-07'
 tags = ['example', 'release-notes']
 +++
 
@@ -8,31 +8,28 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ---
 
-# Release Notes
-
 ## New Features
 
-- A new `.timbersignore` file at your repo root lets you extend the built-in skip rules with custom patterns (vendor directories, lockfiles, etc.) without code changes.
-- `timbers status --verbose` now reports how many infrastructure-only commits have been skipped since the latest entry, so you can spot when your skip rules are over-filtering. The count is always present in `--json` output as `infra_skipped_since_entry`.
-- Reverts of already-documented commits are now automatically excluded from pending — the original entry serves as the audit trail. Multi-revert commits with any undocumented SHA stay pending to avoid silently dropping context.
-- `timbers draft` accepts a repeatable `--var key=value` flag for caller-supplied template variables, accessible inside templates as `{{vars.key}}`.
-- The `decision-log` template now supports durable ADR numbering via `{{vars.starting_number}}` so ADR-12 always means the same decision across regenerations. The `just decision-log` recipe finds the next number from your existing file and passes it through.
-- Draft templates can declare default values for variables in their frontmatter under `vars:`.
+- A `.timbersignore` file at your repo root now extends the built-in skip rules — list path prefixes, exact paths, or suffix patterns to keep pending detection quiet on housekeeping commits.
+- Reverts of already-documented commits are now skipped from `timbers pending` automatically. The original entry remains the audit trail.
+- `timbers status --verbose` now reports how many commits since your last entry were skipped by infrastructure rules; the same count is available as `infra_skipped_since_entry` in `--json`.
+- `timbers doctor --fix` migrates legacy colon-encoded ledger filenames to the new dashed format. Run it once on existing repos to update entries written by older binaries.
 
 ## Improvements
 
-- Lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `go.sum`, `Cargo.lock`, `Gemfile.lock`) are now skipped from pending detection by default when committed alone. Lockfile changes paired with manifest changes still surface normally.
-- Default skip rules now also cover housekeeping files like `.gitignore`, `.editorconfig`, and narrowly-scoped `.github/` metadata that carry no design intent.
-- A latent bug where `.gitignore` would also match files like `.gitignores` is fixed — exact-path skip rules now match exactly.
-- Built-in draft templates (`changelog`, `decision-log`, `devblog`, `pr-description`, `release-notes`, `sprint-report`, `standup`) have been substantially refined — clearer structure, anti-fabrication guardrails, and artifact-appropriate signal. ADR entries now include `Status` and `Date` fields with supersession support.
-- `timbers prime` now coaches agents to draft PR descriptions from your ledger entries by default (when entries exist for the branch range), and includes operator-voice guidance for devblog drafting.
-- `timbers prime --verbose` continues to surface the why/how of recent entries.
+- `timbers prime` now produces compact session-start output by default, preserving operational ledger safeguards without re-injecting the full guide every session. Use `timbers prime --full` (or `guide`) to print the complete workflow.
+- Compact `timbers prime` output prints full entry IDs (so you can paste them straight into `timbers show`), hints when a custom `PRIME.md` is in use, exposes `custom_workflow` in JSON output, and correctly reports `mode: full` when `--full` is passed.
+- Default skip rules now cover lockfile-only commits across major ecosystems: `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `go.sum`, `Cargo.lock`, and `Gemfile.lock`. Lockfile changes paired with manifest updates still appear as pending.
+- Default skip rules also cover additional housekeeping files (`.gitignore`, `.editorconfig`, and similar), reducing pending-check noise.
+- The seven built-in `timbers draft` templates (changelog, decision-log, devblog, pr-description, release-notes, sprint-report, standup) have been retuned for clearer output and stricter anti-fabrication guards. Drafts are less likely to invent emotions, themes, metrics, or test plans the entries don't actually support.
+- The decision-log (ADR) template now produces entries with explicit `Status` and `Date` fields and supports supersession.
+- The release-notes template now flags incomplete migration steps in breaking-change bullets rather than silently dropping them.
+- `timbers prime` now coaches agents to draft PR descriptions from your ledger entries when you ask them to open a PR without a dictated body.
+- Provider shorthand model aliases for Anthropic, OpenAI, and Gemini have been refreshed to current official model IDs, including a fix for the Gemini Flash-Lite alias to point at the stable 3.1 model. `timbers draft` and `timbers generate` now resolve to supported defaults.
 
 ## Bug Fixes
 
-- **`go install github.com/.../timbers/cmd/timbers@latest` now works on tagged releases.** Previously, colons in ledger filenames broke Go's module proxy. Existing entries remain readable; run `timbers doctor --fix` to migrate your ledger to the colon-free filenames.
-- Fixed a "timbers-on-timbers" loop where repos with the beads auto-stage hook would have `.beads/issues.jsonl` appear in timbers entry commits, breaking pending detection. `.beads/` is now treated as infrastructure alongside `.timbers/`.
-
-## Breaking Changes
-
-- **`.timbersignore` moved from `.timbers/.timbersignore` to the repo root.** If you created one in the inner location during pre-release, move it to your repo root. This aligns with `.gitignore`, `.dockerignore`, and other ecosystem conventions.
+- `go install github.com/.../timbers@latest` now works on tagged releases. Colons in ledger filenames previously broke Go's module zip format and blocked installation for v0.16.x and v0.17.x. Older entries written with colon filenames are still read transparently.
+- Skip-rule matching no longer treats `.gitignore` as a prefix that would match files like `.gitignores`.
+- The infrastructure-skipped count surfaced by `timbers status` now uses the same filter as pending detection, so the number you see matches what actually gets skipped.
+- Revert detection tightened its SHA match to 12+ characters to avoid short-SHA collisions when auto-skipping documented reverts.
