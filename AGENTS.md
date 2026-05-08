@@ -144,9 +144,11 @@ Repo-wide conventions worth stating once (not covered by injections):
 
 - **Bead-first workflow:** when ad hoc work appears (bug, feature, task) without an existing bead, create one before implementing. Every code change should trace back to a bead.
 - **Bead detail discipline:** every bead has an imperative title, a description that lets a cold session start work, explicit dependencies, and a complexity estimate (xs/s/m/l/xl). M+ beads link to a plan doc and call out architectural decisions.
-- **Sync model:** beads 1.0+ uses embedded Dolt + git+JSONL transport — `.beads/issues.jsonl` is the source of truth (committed); `.beads/dolt/` is a local cache (gitignored); sync runs through pre-commit / post-merge hooks. `bd dolt push/pull` are safe to run in either configuration: with a Dolt remote they sync against it; without one they exit 0 with an informational message (per fix #3194 in 1.0.3).
+- **Sync model — embedded Dolt + JSONL transport, no Dolt remote:** beads 1.0+ runs an embedded Dolt server locally. `.beads/dolt/` is the working DB and is gitignored (local cache). `.beads/issues.jsonl` is the *single* shared source of truth and is committed. There is **no Dolt remote**; `bd dolt push/pull` are no-ops (they exit 0 with "Push/Pull complete" per fix #3194 but transfer nothing).
+- **Always commit `.beads/issues.jsonl` after any `bd` mutation.** `bd` auto-stages it via the pre-commit hook (`export.auto = true`, `export.git-add = true`). The on-disk shape is bd 1.0.x's normalized form: each line begins with `{"_type":"issue",...}` and records are ordered by bd's internal sort, not alphabetically. Records may be reordered or rewritten on every export — that is correct behavior, not corruption. **Do not revert auto-staged JSONL changes.** If you skip the commit, your bead lifecycle lives only in your local `.beads/dolt/` and is invisible to other clones until the next mutation triggers another export.
+- **JSONL drift recovery:** if the JSONL looks "wrong" or you suspect bd state is out of sync with what's committed, verify with `bd export -o /tmp/check.jsonl && diff /tmp/check.jsonl .beads/issues.jsonl`. Identical output means the file matches the local DB and is safe to commit. Differences mean either (a) bd has uncommitted mutations to flush — commit them, or (b) someone hand-edited the file — let bd's next mutation overwrite it.
 - **Worktrees:** always use `bd worktree create`, never `git worktree add`. The `bd` version sets up `.beads/redirect` so worktrees share the main repo's Dolt database.
-- **Destructive commands — DO NOT USE**: `bd init --force`, `bd admin reset --force`.
+- **Destructive commands — DO NOT USE**: `bd init --force`, `bd admin reset --force`, `bd dolt remote add` (would re-introduce the remote we removed).
 
 ---
 
@@ -502,10 +504,10 @@ For more details, see README.md and docs/QUICKSTART.md.
 5. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
-   bd dolt push
    git push
    git status  # MUST show "up to date with origin"
    ```
+   Do not run `bd dolt push` — this repo has no Dolt remote, so the JSONL committed via `git push` is the only sync channel.
 6. **Clean up** - Clear stashes, prune remote branches
 7. **Verify** - All changes committed AND pushed
 8. **Hand off** - Provide context for next session
