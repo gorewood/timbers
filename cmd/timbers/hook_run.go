@@ -53,6 +53,47 @@ func runHookRun(cmd *cobra.Command, args []string) error {
 	}
 }
 
+// hasActionablePending reports whether pre/post-commit hooks should take
+// action — i.e., whether there is at least one undocumented commit that
+// survives the default skip rules and .timbersignore filtering.
+//
+// Returns false for every infrastructure failure (not a git repo, mid-rebase,
+// no .timbers/, storage error, pending-detection error) so that hooks never
+// break git operations. The pre-commit hook turns this into a block; the
+// post-commit hook turns this into a reminder. Both share the same definition
+// of "actionable" so that pending, log, and the hooks always agree.
+func hasActionablePending() bool {
+	if !git.IsRepo() {
+		return false
+	}
+	// During rebase/merge/cherry-pick, hooks fire for each replayed commit.
+	// The work is already documented (or will be once the operation finishes
+	// and the anchor self-heals) — don't block and don't nudge.
+	if git.IsInteractiveGitOp() {
+		return false
+	}
+	// Skip when .timbers/ is absent at the worktree root. This handles
+	// infrastructure worktrees (e.g., beads backup branches) where git hooks
+	// are shared but timbers isn't initialized.
+	root, err := git.RepoRoot()
+	if err != nil {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(root, ".timbers"))
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	storage, err := ledger.NewDefaultStorage()
+	if err != nil {
+		return false
+	}
+	pending, err := storage.HasPendingCommits()
+	if err != nil {
+		return false
+	}
+	return pending
+}
+
 // runPreCommitHook executes the pre-commit hook logic.
 // Blocks the commit when undocumented commits exist, forcing the user/agent
 // to run 'timbers log' before committing again. This prevents stacking
@@ -61,46 +102,11 @@ func runHookRun(cmd *cobra.Command, args []string) error {
 // Errors during the check silently allow the commit (hooks must never break
 // git operations due to timbers infrastructure failures).
 func runPreCommitHook(cmd *cobra.Command) error {
+	if !hasActionablePending() {
+		return nil
+	}
+
 	printer := output.NewPrinter(cmd.OutOrStdout(), false, useColor(cmd))
-
-	if !git.IsRepo() {
-		return nil
-	}
-
-	// During rebase/merge/cherry-pick, the pre-commit hook fires for each
-	// replayed commit. Don't block — the work is already documented (or will
-	// be after the operation completes and the anchor self-heals).
-	if git.IsInteractiveGitOp() {
-		return nil
-	}
-
-	// Skip if .timbers/ doesn't exist at the worktree root. This handles
-	// infrastructure worktrees (e.g., beads backup branches) where git hooks
-	// are shared but timbers isn't initialized. The implicit path through
-	// NewDefaultStorage → HasPendingCommits also handles this, but an
-	// explicit check makes the intent clear and avoids unnecessary git ops.
-	root, rootErr := git.RepoRoot()
-	if rootErr != nil {
-		return nil //nolint:nilerr // hook must not block on infrastructure failure
-	}
-	if info, err := os.Stat(filepath.Join(root, ".timbers")); err != nil || !info.IsDir() {
-		return nil //nolint:nilerr // missing .timbers/ means not initialized — skip
-	}
-
-	storage, storageErr := ledger.NewDefaultStorage()
-	if storageErr != nil {
-		return nil //nolint:nilerr // hook must not block on infrastructure failure
-	}
-
-	pending, err := storage.HasPendingCommits()
-	if err != nil {
-		return nil //nolint:nilerr // hook must not block on infrastructure failure
-	}
-
-	if !pending {
-		return nil
-	}
-
 	printer.Println()
 	printer.Print("[timbers] Commit blocked: undocumented commit(s) exist\n")
 	printer.Print("[timbers] Run 'timbers log \"what\" --why \"why\" --how \"how\"' first\n")
@@ -111,26 +117,21 @@ func runPreCommitHook(cmd *cobra.Command) error {
 }
 
 // runPostCommitHook executes the post-commit hook logic.
-// It reminds users/agents to document the commit with timbers log.
-// This is non-blocking - it never returns an error.
+// It reminds users/agents to document the commit with timbers log, but only
+// when there is at least one actionable pending commit. Infrastructure-only
+// commits (.timbers/, .beads/, lockfiles, .timbersignore matches) are skipped
+// so the reminder agrees with `timbers pending` and `timbers log`.
+//
+// This is non-blocking — it never returns an error.
 func runPostCommitHook(cmd *cobra.Command) error {
-	if !git.IsRepo() {
-		return nil
-	}
-
-	// Suppress per-commit reminders during rebase — they're noise for
-	// replayed commits and confuse agents into thinking they need to log each one.
-	if git.IsInteractiveGitOp() {
+	if !hasActionablePending() {
 		return nil
 	}
 
 	printer := output.NewPrinter(cmd.OutOrStdout(), false, useColor(cmd))
-
 	printer.Println(
 		"[timbers] document this commit — " +
 			"timbers log \"what\" --why \"why\" --how \"how\"",
 	)
-
-	// Always succeed - this is a nudge, not a blocker
 	return nil
 }
