@@ -1,6 +1,6 @@
 +++
 title = 'Changelog'
-date = '2026-05-07'
+date = '2026-05-10'
 tags = ['example', 'changelog']
 +++
 
@@ -14,6 +14,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.20.1] - 2026-05-10
+
+### Fixed
+- Fixed post-commit hook nudging users to document commits that `timbers log` would refuse (e.g. `.beads/issues.jsonl`-only commits), by routing both pre-commit and post-commit hooks through a shared actionable-pending check.
+
 
 ## [0.20.0] - 2026-05-07
 
@@ -545,3 +551,4 @@ Initial public release.
 [0.18.0]: https://github.com/gorewood/timbers/releases/tag/v0.18.0
 [0.19.0]: https://github.com/gorewood/timbers/releases/tag/v0.19.0
 [0.20.0]: https://github.com/gorewood/timbers/releases/tag/v0.20.0
+[0.20.1]: https://github.com/gorewood/timbers/releases/tag/v0.20.1
