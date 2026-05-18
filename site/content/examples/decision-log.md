@@ -1,6 +1,6 @@
 +++
 title = 'Decision Log'
-date = '2026-05-10'
+date = '2026-05-17'
 tags = ['example', 'decision-log']
 +++
 
@@ -8,122 +8,123 @@ Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
 
 ---
 
-## ADR-1: Expand default infrastructure skip rules with typed grammar
+## ADR-1: Per-repo `.timbersignore` for skip-rule extension, placed at repo root
+
+**Status:** Accepted
+**Date:** 2026-05-02
+
+**Context:** The hardcoded default skip list (built into the binary) could not cover every repo's housekeeping needs — vendor directories, lockfiles, custom dependency paths vary by ecosystem. Operators needed a way to opt-out additional patterns without code changes, while keeping the defaults safe and unconfigurable. The initial location for the config file (`.timbers/.timbersignore`) was a dotfile inside a dot-directory — nonstandard relative to `.gitignore`, `.dockerignore`, `.npmignore`, all of which sit at the repo root.
+
+**Decision:** Add a `.timbersignore` file using the existing skipRule grammar from the built-in defaults, loaded once at `NewStorage` construction and merged with `compiledDefaultSkipRules`. Place the file at the repo root rather than inside `.timbers/`, deriving the path in `NewStorage` as `filepath.Dir(files.Dir())`. Rejected TOML (would have added a parser dep for one feature) and doublestar globs (`**` support unnecessary when prefix+suffix covers vendor/, *.lock, third_party/). Rejected dropping the leading dot (`.timbers/timbersignore`) because the `*ignore` convention IS the leading dot.
+
+**Consequences:**
+- Per-repo configuration extends defaults without modifying the binary.
+- File discoverability matches every other ignore-file in the ecosystem.
+- Loader errors fall back to defaults silently — a malformed `.timbersignore` cannot block enforcement (would invert the gate).
+- `NewStorage` now does I/O at construction time (opens the ignorefile); documented in godoc rather than refactoring to lazy-load, on the grounds that lazy paths hide state behind first-use side effects.
+- No `**` glob support; users with deeper structural needs must wait for explicit demand.
+
+---
+
+## ADR-2: Surface infra-skipped commit count in `timbers status` as visibility, not enforcement
 
 **Status:** Accepted
 **Date:** 2026-05-01
 
-**Context:** The default-deny pending checker was nagging on housekeeping commits (`.gitignore`, `.editorconfig`, narrow `.github/` metadata) that carry no design intent. The existing matcher was a `strings.HasPrefix` over a flat `infrastructurePrefixes` list — both too narrow (no exact-path or suffix matching) and silently buggy (`.gitignore` would match `.gitignores`). Design review wanted to relax defaults *and* set up a grammar reusable by the per-repo extension feature coming next.
+**Context:** Relaxing skip rules (per ADR-1) created a new failure mode: an over-broad `.timbersignore` could silently drop substantive commits from pending detection without the operator noticing. The team needed a feedback channel before shipping the relaxation, but did not want to build anti-abuse machinery — just enough visibility to catch drift.
 
-**Decision:** Replace prefix-only matching with a typed `skipRule` (prefix / exact / suffix) in a new `skiprules.go`. Expand the default set to cover dotfile housekeeping, but reject reviewer-proposed entries that would over-skip: `.github/` (workflows are substantive), `CHANGELOG.md` (project-specific convention — belongs in user `.timbersignore`), and `.claude/` (slash commands are substantive). The new exact-path rule type fixes the latent `HasPrefix` bug as a side effect.
+**Decision:** Add `Storage.CountInfraSkippedSinceLatest` walking `(latestAnchor..HEAD)` through the same skipRule set used for pending. `timbers status --verbose` adds a key/value line; JSON always includes `infra_skipped_since_entry` per snake_case convention. Reviewer requested `--verbose`-only for human display to avoid surprising latency — complied. Errors and stale-anchor cases collapse to 0 silently.
 
 **Consequences:**
-- Eliminates ~10–15% of pending-check friction with no user opt-in required.
-- The typed grammar is the foundation for `.timbersignore` (ADR-2) and lockfile defaults (ADR-5) — both reuse `skipRule` directly.
-- Exact-path semantics close a real correctness bug in prefix matching.
-- Substantive-vs-housekeeping boundary still requires judgment per addition; the curated default list is deliberately conservative.
+- Operators can detect over-skipping by reading status output, without enforcement firing.
+- JSON consumers always get the field; human readers see it only when asking for verbose output.
+- No correctness signal — a high count is informational, not an error condition.
+- Required splitting `skipcount.go` out of `storage.go` to stay under 350-line file budget.
 
 ---
 
-## ADR-2: Per-repo `.timbersignore` at repo root extends built-in skip rules
-
-**Status:** Accepted
-**Date:** 2026-05-02
-
-**Context:** The hardcoded default skip list (ADR-1) cannot cover every repo's housekeeping — `vendor/`, `*.lock`, project-specific dep dirs vary widely. Some mechanism for per-repo extension was needed, but the choice of format and location had downstream cost: a config-system would be premature for one feature, and a non-standard location would be undiscoverable.
-
-**Decision:** Add `.timbersignore` at the repo root, parsed with the `skipRule` grammar from ADR-1 (newline-delimited, `#` comments). Rules merge with defaults at `NewStorage` construction. Loader errors fall back to defaults silently — a malformed ignorefile must never block enforcement, since that would invert the gate. Reject TOML (would add a parser dep for one feature) and `**` globs (prefix+suffix covers the bulk of demand). Location originally landed inside `.timbers/.timbersignore`; moved to repo root before any release tag because every other `*ignore` file in the ecosystem (`.gitignore`, `.dockerignore`, `.npmignore`) lives at the root and users would never look inside `.timbers/`.
-
-**Consequences:**
-- Repos can opt out of arbitrary patterns without code changes.
-- Defaults remain safe and unconfigurable for the common case — extension is additive only.
-- `NewStorage` now does I/O at construction (one `os.Open` of a tiny file); documented in godoc rather than refactored to lazy-load, because lazy paths hide state behind first-use side effects.
-- `**` globs deferred; can layer in later if real demand emerges.
-
----
-
-## ADR-3: Auto-skip reverts of already-documented commits
+## ADR-3: Auto-skip reverts of already-documented commits from pending detection
 
 **Status:** Accepted
 **Date:** 2026-05-01
 
-**Context:** Revert commits add no new design intent when the reverted commit is already documented — the original entry IS the audit trail. Requiring a fresh entry for every revert inflates ledger noise without adding signal. But auto-skipping is risky: squashed reverts, GC'd SHAs, undocumented originals, and multi-revert commits with mixed coverage all need careful handling.
+**Context:** Revert commits add no new design intent when the reverted commit is already documented — the original entry IS the audit trail. Requiring a fresh entry for every revert inflates ledger noise without capturing information that isn't already present.
 
-**Decision:** Detect `Revert "..."` subjects with `This reverts commit <sha>` body trailers via regex, cross-reference the SHA against every entry's `Workset.Commits`, and skip when documented. Integrate alongside infrastructure filtering in a shared `filterByRules` helper. Take the conservative path on every failure mode: any undocumented SHA in a multi-revert keeps the commit pending; squashed reverts and GC'd SHAs fall back to normal pending. Defer the symmetric `--revert` flag for new entries — auto-skip alone covers the common case.
+**Decision:** Detect `Revert "..."` subject + `This reverts commit <sha>` body trailer via regex in `internal/ledger/revert.go`, cross-reference the SHA against every entry's `Workset.Commits`, and skip the revert when documented. Integrated alongside infrastructure filtering in `filterLedgerOnlyCommits` via a shared `filterByRules` helper. All failure modes (squashed reverts, GC'd SHAs, undocumented originals, multi-revert with mixed coverage) fall back to "normal pending" — for multi-revert, any undocumented SHA keeps the revert pending. A `--revert` flag for new entries was deliberately deferred — auto-skip alone covers the common case.
 
 **Consequences:**
-- Eliminates a class of "fresh entry just to say undo" friction.
-- SHA matching uses prefix match for short-SHA tolerance even though `git revert` defaults to 40-char SHAs.
-- Code review later required raising the short-SHA minimum to 12 chars to avoid collision risk — accepted; matcher tightened.
-- Manual `--revert` opt-in stays available as a future bead if demand emerges.
+- Reverts of documented work no longer require fresh entries.
+- Conservative fallback means undocumented reverts still surface in pending.
+- SHA matching uses prefix match for short-SHA tolerance; minimum length raised to 12 chars (per code-review feedback) to make collisions vanishingly unlikely.
+- Manual `--revert` flow remains absent; will need a separate bead if real demand emerges.
 
 ---
 
-## ADR-4: Surface infrastructure-skipped count in `status --verbose`
-
-**Status:** Accepted
-**Date:** 2026-05-01
-
-**Context:** Relaxing skip rules (ADR-1, ADR-2, ADR-5) creates a new failure mode: users can't tell when their `.timbersignore` is over-skipping. Without a feedback channel, drift accumulates silently. But adding heavy anti-abuse machinery would invert the goal of frictionless skipping.
-
-**Decision:** Add `Storage.CountInfraSkippedSinceLatest`, which walks `(latestAnchor..HEAD)` through the same `skipRule` set used for pending and returns the count. Surface in `status --verbose` only for human display (reviewer flagged latency surprise on the default path); always emit `infra_skipped_since_entry` in JSON for machine consumers. Collapse errors and stale-anchor cases to `0` silently — status is visibility, not enforcement, and a noisy error here would invert the goal.
-
-**Consequences:**
-- Cheap one-line visibility catches skip-rule drift without building enforcement.
-- `--verbose`-only on human path keeps default `status` fast.
-- JSON always carries the field so MCP/automation can monitor without per-call flags.
-- Code review caught a divergence between the count helper and the actual filter; unified later via `filterCommits` so visibility tracks reality.
-
----
-
-## ADR-5: Default-skip lockfiles across major ecosystems
+## ADR-4: Default-skip lockfiles across six major ecosystems
 
 **Status:** Accepted
 **Date:** 2026-05-02
 
-**Context:** Isolated lockfile-only commits — manual conflict resolution, auto-rebase byproducts — carry zero design intent. The file-level filter from ADR-1 means lockfiles paired with a manifest change stay pending automatically, so default-skipping is structurally safe for the lockfile-only case. The question was scope: how many ecosystems to cover.
+**Context:** Isolated lockfile-only commits (manual conflict resolution, auto-rebase byproducts) carry zero design intent. The existing file-level filter already keeps lockfile changes pending when paired with a manifest change, making the structural addition safe. A survey of osprey-strike commits grounded the choice in real-world friction patterns.
 
-**Decision:** Add six suffix patterns to `defaultSkipPatterns`: `*package-lock.json`, `*pnpm-lock.yaml`, `*yarn.lock`, `*go.sum`, `*Cargo.lock`, `*Gemfile.lock`. These cover the bulk of agent-driven repos; the long tail (`poetry.lock`, `Pipfile.lock`, `composer.lock`, `mix.lock`, `pubspec.lock`) can opt in via `.timbersignore`. Tests cover both the lockfile cases and the manifests that must stay pending (`package.json`, `go.mod`, `Cargo.toml`).
+**Decision:** Add six suffix patterns (`*package-lock.json`, `*pnpm-lock.yaml`, `*yarn.lock`, `*go.sum`, `*Cargo.lock`, `*Gemfile.lock`) to `defaultSkipPatterns`. The existing `skipSuffix` matcher handles them with no matcher changes. Excluded the long tail (poetry.lock, Pipfile.lock, composer.lock, mix.lock, pubspec.lock) — the six included cover the bulk of agent-driven repos, and the long tail can opt in via `.timbersignore` (per ADR-1).
 
 **Consequences:**
-- Removes a common class of agent-driven friction for the six biggest ecosystems.
-- Accepts a residual risk: a lockfile change unaccompanied by a manifest CAN be substantive (manual transitive override, security patch). Mitigated by (a) the file-level filter only triggering on lockfile-only commits, which are rare, and (b) the `infra_skipped_since_entry` visibility surface (ADR-4).
-- Long-tail ecosystems must opt in per-repo — explicit non-coverage.
+- Lockfile-only commits stop triggering pending nudges in the common case.
+- A genuinely substantive lockfile-only change (manual transitive override, security patch) becomes invisible to the gate — accepted because (a) the file-level filter only triggers when no other files change and (b) `timbers status --verbose` (per ADR-2) catches drift.
+- Long-tail ecosystems must configure manually.
 
 ---
 
-## ADR-6: Calibrate draft template signal per-artifact rather than uniformly
+## ADR-5: Tune draft templates per-artifact, rejecting uniform operator-voice
 
 **Status:** Accepted
 **Date:** 2026-05-02
 
-**Context:** A read of a real custom-template devblog from a sister repo surfaced a default-on bias toward solo-developer hero voice — invisible agents, tour-guide pacing, resolution-voice on every beat. The instinct was to inject operator-voice and collaboration awareness uniformly across all seven `draft` templates. But the underlying audiences differ: changelog and release-notes readers want neutral facts at a specific abstraction level, while PR descriptions, ADRs, sprint reports, and standups have readers (reviewers, maintainers, PMs, teammates) who calibrate differently when they know how the work was built.
+**Context:** The default devblog template was producing dry, hero-voice prose that erased the human-agent collaboration shape of how work actually gets done. The fix could have been applied uniformly across all seven builtin templates, but each artifact has different signal needs — readers of a changelog or release notes want neutral facts at a specific abstraction level, not operator commentary.
 
-**Decision:** Reject uniform operator-voice. Per-template diagnosis instead: devblog gets an explicit Collaborator voice, operator-intent rows, and length budget tightened 800 → 700. Six other templates get template-specific tuning — Added/Changed disambiguation for changelog; Status/Date/supersession for decision-log (no decision tracking without it); size adaptation and test-plan honesty for PR description; user-observable filter for release-notes; Friction/Carry-overs/Highlights criteria for sprint-report; Asks-for-help and time-burn texture for standup. After a Codex second-opinion review, accept the framing that "soft fabrication" (emotion, theme, vague benefit) is the same failure mode as test-plan invention at lower visibility — add per-template anti-fabrication clauses for soft content targets. Reject Codex's suggestion to soften literary-scaffolding voices (Atwood, Fowler, Orosz) — they're directional guidance the LLM reads as voice, not mandatory mood.
+**Decision:** For the devblog template, add an Audience section, a fourth Collaborator voice, tone-calibration rows, and anti-patterns for hero/tour-guide voice. Add a `<operator-voice>` section to `prime_workflow.go` with two habits (intent + collaboration) and a "don't fabricate" guardrail. For the remaining six templates, diagnose per-artifact and tune individually: changelog gets Added/Changed disambiguation + strict exclusion list; decision-log gets Status/Date/supersession + operator-intent in Context; pr-description gets size adaptation + collaboration callout + test-plan honesty; release-notes gets strict "user-observable" filter + breaking-change instructions; sprint-report gets Friction/Carry-overs + Highlights criteria; standup gets Asks for help + time-burn texture. Explicitly rejected injecting operator-voice uniformly. Also rejected a structured `agent_involvement: high|medium|low` field — too much taxonomy, encourages fabrication; the existing notes field handles it when used well.
 
 **Consequences:**
-- Each template now carries audience-aware coaching matched to its readers.
-- ADR Status field is the most structurally significant change — without it, decision logs accumulated with no scaffolding for noting reversals.
-- "Empty section signals thin entries, not a license to fabricate" rule converts a fabrication risk into a feedback loop.
-- Operator-voice does NOT propagate to changelog or release-notes; those stay neutral.
-- A structured `agent_involvement` field on entries was considered and rejected — too much taxonomy, encourages fabrication; the existing `notes` field handles it when used well.
+- Each template now produces signal calibrated to its reader (reviewer, end user, PM, teammate).
+- The ADR `Status` field is the most structurally significant change — without it, decision logs accumulated with no scaffolding for reversals.
+- Test-plan honesty in PR description pushes back on the "Tests pass" fake-verified-claim failure mode.
+- Templates that share concerns (collaboration awareness in PR/ADR/sprint/standup) now repeat similar guidance — accepted over consolidating into prime workflow.
+- Length budget for devblog moved 800 → 700; expect shorter generated posts.
 
 ---
 
-## ADR-7: Coach agents to draft PR descriptions from timbers entries by default
+## ADR-6: Default PR descriptions to timbers entries when present
 
 **Status:** Accepted
 **Date:** 2026-05-02
 
-**Context:** Agents opening PRs without explicit body instructions were defaulting to ad-hoc summaries that drift from the session's documented intent. When entries exist for the branch range, the `pr-description` template is the natural source of truth — but a blanket "always draft from ledger" rule would override operators who want a one-line body for trivial work.
+**Context:** Agents opening PRs without explicit body instructions were defaulting to ad-hoc summaries that drift from the session's documented intent. When entries exist for the branch, the `pr-description` template is the natural source-of-truth and produces a more consistent body than ad-hoc agent reasoning. The risk was over-aggression — forcing template use when the operator wanted a one-line PR body for trivial work.
 
-**Decision:** Add an `<pr-authoring>` section to `defaultWorkflowContent` in `prime_workflow.go` with explicit when-applies / when-not lists: applies when there's an open-PR ask without a dictated body and entries exist in the branch range; does not apply when the operator dictates the body, no entries exist, or the PR is trivial. Recommend the `timbers draft pr-description | claude -p --model opus` pipe. Include an empty-section signal — missing Design Decisions means thin entries, not a license to fabricate. Place this in prime workflow rather than the `pr-description` template itself because the guidance is about WHEN to invoke, not HOW the template works.
+**Decision:** Add a `<pr-authoring>` section to `defaultWorkflowContent` in `prime_workflow.go` listing when this default applies (open-PR ask without dictated body, entries exist in branch range), when it does not (operator dictates body, no entries, trivial PR), the recommended pipe-through-claude flow, and an empty-section signal — missing Design Decisions means thin entries, not a license to fabricate. PR-authoring guidance lives in prime workflow rather than the pr-description template itself because it concerns WHEN to invoke the template, not HOW the template works.
 
 **Consequences:**
-- PRs default to draft-from-ledger when ledger material exists, producing more consistent bodies than agents reasoning from scratch.
-- Operators retain override authority for trivial or dictated-body cases.
-- The empty-section signal converts a known LLM failure mode (filling Design Decisions with vague restatements) into a feedback loop on entry quality.
-- WHEN vs HOW separation keeps the template surface clean and the trigger guidance discoverable from `timbers prime` output.
+- PRs default to the ledger when it has content, drift-free.
+- Operators with explicit body instructions retain control.
+- The empty-section signal converts a fabrication risk (LLM filling Design Decisions with vague restatements) into a feedback loop (entries were thin; beef them up or accept the section doesn't apply).
+- Trivial PRs (typo fixes) are explicitly carved out — no machinery forces template use.
+
+---
+
+## ADR-7: Treat soft-content fabrication as the same risk as test-plan fabrication
+
+**Status:** Accepted
+**Date:** 2026-05-02
+
+**Context:** An independent codex-review pass on the seven builtin templates flagged 14 issues. The unifying observation: fabrication risk had been treated as binary (test-plan invention, metric invention) when the softer kind (emotion, theme, vague benefit) is the same failure mode at lower visibility. The team needed to harden against soft fabrication without forcing templates into stilted compliance.
+
+**Decision:** Triage the 14 review points and accept 9 hardening clauses: changelog header rule; ADR consequences tightening + date semantics; devblog emotion anti-fabrication + dropped word floor; PR tiny-PR risk override + design-decision collaboration; release-notes incomplete-migration handling + soft-benefit tightening; sprint-report theme threshold + chronology-last-resort; standup stale-next-steps. Reject 2: weakening devblog literary scaffolding (the named voices like Atwood/Fowler/Orosz do directional work the LLM reads as guidance, not mandatory mood) and merging extension-author audience. Bump template versions only where changes are material. Treat the codex agent as sparring, not adjudicating — being explicit about rejections is part of the value.
+
+**Consequences:**
+- Every accepted patch is a hardened anti-fabrication clause for a specific soft-content target.
+- Literary scaffolding (named voices) preserved in devblog despite review pressure.
+- Templates carry version bumps where they materially changed, leaving unchanged templates at prior versions.
+- The framing — fabrication risk as a spectrum, not binary — becomes part of how future template work gets reviewed.
 
 ---
 
@@ -132,46 +133,64 @@ Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
 **Status:** Accepted
 **Date:** 2026-05-08
 
-**Context:** Default `timbers prime` injection was spending session-start context on repeated coaching that experienced agents had already internalized. Every session paid the full token cost regardless of whether the agent needed the full operating guide. The compact-by-default move had to preserve agent affordances (resolvable IDs, custom-workflow visibility) — early compact output dropped them.
+**Context:** Default prime injection was spending session context on repeated coaching content that established agents had already absorbed. The session-start payload needed to shrink, but compact output could not strip operational safeguards (ledger gates, pending hints) or break agent affordances (resolvable IDs, custom-workflow visibility).
 
-**Decision:** Add a compact v2 renderer as the new default; move the full guide behind `--full`/`guide`. Update Claude hooks to use hook mode. Compact must preserve: full `tb_<ts>_<sha>` entry IDs (the ellipsis form was unresolvable when pasted into `timbers show`); a PRIME.md hint when custom workflow content overrides the default (rather than auto-merging custom content into compact output); JSON `Mode=full` reported honestly when requested; 96-char health-line truncation aligned with entry truncation. Set the JSON-mode flag *before* the JSON branch — earlier code path hardcoded it ahead of flag interpretation, which would have leaked stale `Mode` into MCP/JSON consumers.
+**Decision:** Add a compact v2 renderer as the default, move the full guide behind `--full`/`guide`, update Claude hooks to use hook mode, and align stale-anchor prime output with pending. Follow-up adjustments: keep full `tb_<ts>_<sha>` IDs in compact (the ellipsis form was unresolvable for `timbers show`); have `loadWorkflowContent` return whether `PRIME.md` was overridden so compact emits a hint and JSON exposes `custom_workflow`; set `Mode=full` before the JSON branch in `runPrime` (was structurally hardcoded before flag interpretation, would have leaked into MCP/JSON consumers); align compact health truncation to 96 chars to match entries.
 
 **Consequences:**
-- Per-session prime cost drops materially; the smaller payload is what 0.20.0 ships to external installs.
-- Full guide still reachable when needed via `--full`.
-- Custom PRIME.md customization stays visible (hint) without bloating compact output (auto-merge).
-- Recovered ergonomics: paste-into-`timbers-show` works again with full IDs.
+- Smaller session-context payload as the default; coaching available on request.
+- Full IDs cost ~50 bytes per session (3 entries) but preserve paste-into-`timbers show` ergonomics.
+- Custom `PRIME.md` content is signaled via hint rather than auto-merged into compact — keeps compact tight while flagging that customization exists.
+- JSON consumers now report the requested mode honestly.
 
 ---
 
-## ADR-9: Drop Dolt remote; embedded Dolt + JSONL transport as single sync channel
+## ADR-9: Beads sync via committed JSONL, no Dolt remote
 
 **Status:** Accepted
 **Date:** 2026-05-08
 
-**Context:** A prior agent session had skipped committing auto-staged `.beads/issues.jsonl` because they didn't trust bd 1.0.x's one-time JSONL schema flip (records gained a `_type` discriminator and reordering). Their fresh export matched HEAD, but the dual sync model — embedded Dolt + JSONL transport AND a configured Dolt SQL remote — gave them a plausible-looking alternative channel to second-guess against. The Dolt remote had been unused since 2026-04-29 and `bd dolt push/pull` no-op without one.
+**Context:** A prior agent skipped committing auto-staged `.beads/issues.jsonl` because a one-time bd 1.0.x schema flip (records gained `_type` discriminator and reordering) made the export look "wrong". The Dolt remote had been unused since 2026-04-29, and `bd dolt push/pull` no-op without one anyway. Keeping the unused remote was creating a misread without providing value.
 
-**Decision:** Remove the bd SQL remote (`origin → git+ssh://...gorewood/timbers.git`). Patch `AGENTS.md` to call out embedded-only mode, tell agents to commit bd 1.0.x's `_type`-prefixed JSONL rewrites without reverting, add a `bd export | diff` drift-recovery recipe, drop `bd dolt push` from session-close workflow. Verified correctness with `bd export -o /tmp/x.jsonl && diff` against `.beads/issues.jsonl` — identical. Reject keeping the remote "just in case" — the gitignored `.beads/dolt/` working DB plus the committed JSONL gives full reconstruction, and a future remote can be re-added with one command if multi-machine federation is ever needed.
+**Decision:** Remove the bd SQL remote (`origin → git+ssh://...gorewood/timbers.git`) and patch `AGENTS.md` to call out embedded-only mode. Instruct agents to commit bd 1.0.x's `_type`-prefixed JSONL rewrites without reverting. Add a `bd export | diff` drift-recovery recipe. Drop `bd dolt push` from the session-close workflow. The gitignored `.beads/dolt/` working DB plus the committed JSONL gives full reconstruction; a future Dolt remote can be re-added with one command if multi-machine federation is ever needed.
 
 **Consequences:**
-- Single sync channel removes the misread that caused the prior skipped-commit incident.
-- `.beads/issues.jsonl` is the unambiguous source of truth; agents have a clear drift-recovery recipe.
-- `bd dolt push` is now a documented no-op in this repo's session-close — one less mandatory step.
-- Multi-machine federation, if ever needed, requires re-adding the remote (one-command cost).
+- Single sync channel — `git push` of `.beads/issues.jsonl` is authoritative.
+- No more "Push/Pull complete" output that transfers nothing.
+- Schema rewrites in `.beads/issues.jsonl` are correct behavior, not corruption — documented for future agents.
+- Multi-machine federation requires re-adding the remote (one command, but a deliberate step).
 
 ---
 
-## ADR-10: Gate post-commit hook on actionable pending work via shared helper
+## ADR-10: Unify hook gating via `hasActionablePending` helper
 
 **Status:** Accepted
 **Date:** 2026-05-10
 
-**Context:** A real bug in a sister repo (gorewood/vellum) showed `.beads/issues.jsonl`-only commits triggering the post-commit "log this" nudge, even though `timbers log` would refuse to document them. Pending, log, and the post-commit hook had drifted into three different definitions of "actionable" — the hook never called `HasPendingCommits` before printing. Divergence between these gates produces contradictory signals for agents: the hook nudges to log a commit that `timbers log` then refuses.
+**Context:** A real bug in gorewood/vellum surfaced where `.beads/issues.jsonl`-only commits were triggering the post-commit hook's "log this commit" nudge — but `timbers log` itself refused to document the commit because the pending gate already filtered it out. The pre-commit hook, post-commit hook, and `timbers pending` all needed one definition of "actionable" or agents would receive contradictory signals.
 
-**Decision:** Extract a `hasActionablePending()` helper that combines `IsRepo`, `IsInteractiveGitOp`, `.timbers/` existence, storage construction, and `HasPendingCommits` checks. Route both pre-commit and post-commit hooks through it so they share one definition of actionable. Reject the narrower fix (inline the `HasPendingCommits` gate in `runPostCommitHook` only) — the helper eliminates the divergence at its root and any third hook added later (post-rewrite?) inherits the gate for free. Add `cmd/timbers/hook_run_test.go` with table-driven cases covering `.beads/`-only, `.timbers/`-only, lockfile-only, `.timbersignore`-skipped, substantive, missing-`.timbers/`, and pre-commit parity.
+**Decision:** Extract `hasActionablePending()` combining `IsRepo`, `IsInteractiveGitOp`, `.timbers/` existence, storage construction, and `HasPendingCommits` checks. Route both pre-commit and post-commit hooks through it. Reject the narrower fix (inline the `HasPendingCommits` gate in `runPostCommitHook` only) — the helper extraction eliminates the divergence root cause and any third hook added later (post-rewrite?) gets the same gate for free. Add `cmd/timbers/hook_run_test.go` with table-driven cases plus a pre-commit parity test.
 
 **Consequences:**
-- Hook nudges and `timbers log` enforcement agree by construction.
-- Future hooks (post-rewrite, etc.) get correct gating without separate plumbing.
-- Test harness now has a `seedFile` escape hatch so `.timbersignore` can be baked into the initial commit — needed because adding it as a separate commit makes IT actionable.
-- The "actionable" definition is now a single point of truth; changes propagate to every hook automatically.
+- One source of truth for "is there work to document?"
+- Future hooks get correct gating by default.
+- Required a `seedFile` test-harness escape hatch so `.timbersignore` can be baked into the initial commit — otherwise adding it as a separate commit makes IT actionable.
+- Parity test reads as one assertion, catching future divergence cheaply.
+
+---
+
+## ADR-11: Scope cross-agent timbers gate to first-parent line + env-var escape hatch
+
+**Status:** Accepted
+**Date:** 2026-05-18
+
+**Context:** Parallel agents share `.timbers/` via merges. The original full-DAG gate blocked agent A on commits that agent B had made and not yet documented — firing on the wrong actor. The team considered two options: author-based attribution (filter by git identity) or git-native first-parent scoping. All agents in this user's setup commit as the same git identity, so author filter would no-op.
+
+**Decision:** Add `LogFirstParent` to the git layer and refactor `GetPendingCommits` behind a `firstParent` bool. Add `GetGatePendingCommits` + `gateStrict` `dropEmptyFileChanges` filter. Route `HasPendingCommits` through the gate path. Add an `envTruthy` short-circuit in `hasActionablePending` for `TIMBERS_SKIP_CROSS_AGENT_DEBT`. The original plan was first-parent + env var only, but regression testing exposed that `git merge --no-ff` creates a merge commit M on the first-parent line that was still blocking; `dropEmptyFileChanges` was added as a gate-only filter because clean merges and `--allow-empty` commits have empty file lists from `git diff-tree`'s default combined diff. The display path (`timbers pending`) keeps the conservative empty=unknown rule for awareness. The env var remains as escape hatch for the narrower case where the merge commit itself touched source (conflict resolution).
+
+**Consequences:**
+- Agent A no longer blocks on agent B's undocumented commits on side branches.
+- Clean `--no-ff` merges and `--allow-empty` commits stop blocking the gate while still appearing in `timbers pending`.
+- Conflict-resolution merges (where the merge commit touched files) still block — escape hatch is intentional.
+- Builds on ADR-10's unified gating: the env-var short-circuit lives in `hasActionablePending`.
+- Reviewer flagged misleading env-var docs and a contradictory test name — both corrected before commit.
