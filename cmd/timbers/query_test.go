@@ -23,6 +23,10 @@ func (m *mockGitOpsForQuery) Log(fromRef, toRef string) ([]git.Commit, error) {
 	return nil, nil
 }
 
+func (m *mockGitOpsForQuery) LogFirstParent(fromRef, toRef string) ([]git.Commit, error) {
+	return nil, nil
+}
+
 func (m *mockGitOpsForQuery) CommitsReachableFrom(sha string) ([]git.Commit, error) {
 	return nil, nil
 }

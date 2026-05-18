@@ -24,6 +24,10 @@ func (m *mockGitOpsForExport) Log(_, _ string) ([]git.Commit, error) {
 	return nil, nil
 }
 
+func (m *mockGitOpsForExport) LogFirstParent(_, _ string) ([]git.Commit, error) {
+	return nil, nil
+}
+
 func (m *mockGitOpsForExport) CommitsReachableFrom(_ string) ([]git.Commit, error) {
 	return nil, nil
 }

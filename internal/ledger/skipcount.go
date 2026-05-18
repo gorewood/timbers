@@ -110,3 +110,47 @@ func (s *Storage) filterByRules(
 	}
 	return filtered
 }
+
+// filterCommits removes commits that don't represent pending work:
+//   - Infrastructure-only commits (.timbers/, .beads/, .timbersignore matches)
+//   - Reverts of already-documented commits (parsed from "This reverts commit <sha>")
+//   - When gateStrict is true: also clean merge commits (no first-parent file
+//     changes) and empty commits. These are safely dropped from the gate
+//     because they add no new work to this branch's first-parent line.
+//
+// On git lookup error, returns all commits unfiltered (safe default).
+// docSet is supplied by the caller so a single ListEntries scan can feed
+// both latest-entry resolution and revert auto-skipping.
+func (s *Storage) filterCommits(commits []git.Commit, docSet map[string]bool, gateStrict bool) []git.Commit {
+	if len(commits) == 0 {
+		return commits
+	}
+	fileMap, err := s.git.CommitFilesMulti(commitSHAs(commits))
+	if err != nil {
+		return commits
+	}
+	filtered := s.filterByRules(commits, fileMap, docSet)
+	if !gateStrict {
+		return filtered
+	}
+	// Gate-strict pass: drop commits with no file changes. For non-merge
+	// commits this never happens (git rejects empty commits without
+	// --allow-empty), so the only realistic match is a clean merge whose
+	// combined diff against its parents collapses to nothing — i.e., the
+	// merge added no work on this branch's first-parent line. Treating it
+	// as "not the current actor's debt" matches the gate's intent.
+	return dropEmptyFileChanges(filtered, fileMap)
+}
+
+// dropEmptyFileChanges removes commits whose file map entry is nil or empty.
+// Order-preserving.
+func dropEmptyFileChanges(commits []git.Commit, fileMap map[string][]string) []git.Commit {
+	out := make([]git.Commit, 0, len(commits))
+	for _, commit := range commits {
+		if len(fileMap[commit.SHA]) == 0 {
+			continue
+		}
+		out = append(out, commit)
+	}
+	return out
+}

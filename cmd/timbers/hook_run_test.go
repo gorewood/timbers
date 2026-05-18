@@ -214,4 +214,80 @@ func TestPreCommitHookGating(t *testing.T) {
 			t.Errorf("pre-commit did not announce block; output: %s", out)
 		}
 	})
+
+	// TIMBERS_SKIP_CROSS_AGENT_DEBT escape hatch: when set, the gate must
+	// stand down even if there is undocumented work on the current branch.
+	// Intended for parallel-agent flows where one agent will run timbers
+	// catchup later; not a replacement for documenting work.
+	t.Run("env var bypasses the gate", func(t *testing.T) {
+		repo := newHookRepo(t)
+		repo.commitFile(t, "internal/feature.go", "package internal\n", "feat: new code")
+
+		t.Setenv("TIMBERS_SKIP_CROSS_AGENT_DEBT", "1")
+		out, err := repo.runHook(t, "pre-commit")
+		if err != nil {
+			t.Fatalf("pre-commit must not error when env var is set: %v\noutput: %s", err, out)
+		}
+		if strings.Contains(out, "Commit blocked") {
+			t.Errorf("pre-commit blocked despite env var; output: %s", out)
+		}
+	})
+
+	t.Run("env var accepts case-insensitive truthy values", func(t *testing.T) {
+		for _, val := range []string{"true", "YES", "On", "1"} {
+			t.Run(val, func(t *testing.T) {
+				repo := newHookRepo(t)
+				repo.commitFile(t, "internal/feature.go", "package internal\n", "feat: new code")
+				t.Setenv("TIMBERS_SKIP_CROSS_AGENT_DEBT", val)
+				out, err := repo.runHook(t, "pre-commit")
+				if err != nil || strings.Contains(out, "Commit blocked") {
+					t.Errorf("pre-commit must bypass for %q; err=%v output=%s", val, err, out)
+				}
+			})
+		}
+	})
+
+	t.Run("env var with falsy value still blocks", func(t *testing.T) {
+		repo := newHookRepo(t)
+		repo.commitFile(t, "internal/feature.go", "package internal\n", "feat: new code")
+
+		t.Setenv("TIMBERS_SKIP_CROSS_AGENT_DEBT", "0")
+		out, err := repo.runHook(t, "pre-commit")
+		if err == nil {
+			t.Fatalf("pre-commit must still block with TIMBERS_SKIP_CROSS_AGENT_DEBT=0; output: %s", out)
+		}
+		if !strings.Contains(out, "Commit blocked") {
+			t.Errorf("expected block message; got: %s", out)
+		}
+	})
+}
+
+// TestPreCommitHookGating_SiblingMerge is the end-to-end regression for the
+// parallel-agent scenario: agent B authored undocumented commits on branch Y,
+// agent A is on branch X and merges Y in. Before the first-parent fix, the
+// gate fired on B's commits even though A had no work to document. With the
+// fix, A's gate stays silent — B owns B's documentation.
+func TestPreCommitHookGating_SiblingMerge(t *testing.T) {
+	repo := newHookRepo(t)
+
+	// Branch X is the current branch (where A is committing). Branch Y
+	// receives B's undocumented work, then gets merged back into X.
+	currentBranch := strings.TrimSpace(runGitOutput(t, repo.dir, "rev-parse", "--abbrev-ref", "HEAD"))
+
+	// Create branch Y from the anchor and add two undocumented code commits.
+	runGit(t, repo.dir, "checkout", "-b", "branch-y")
+	repo.commitFile(t, "frontend/app.tsx", "// frontend agent work\n", "fix(web): v6.x first pass")
+	repo.commitFile(t, "frontend/lib.ts", "// more frontend agent work\n", "fix(web): v6.x second pass")
+
+	// Back to branch X and merge Y in (no-ff to guarantee a merge commit).
+	runGit(t, repo.dir, "checkout", currentBranch)
+	runGit(t, repo.dir, "merge", "--no-ff", "-m", "Merge branch-y", "branch-y")
+
+	out, err := repo.runHook(t, "pre-commit")
+	if err != nil {
+		t.Fatalf("pre-commit must not block on sibling-branch debt brought in via merge: %v\noutput: %s", err, out)
+	}
+	if strings.Contains(out, "Commit blocked") {
+		t.Errorf("pre-commit blocked despite first-parent scope; output: %s", out)
+	}
 }

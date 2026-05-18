@@ -34,6 +34,7 @@ type ListStats struct {
 type GitOps interface {
 	HEAD() (string, error)
 	Log(fromRef, toRef string) ([]git.Commit, error)
+	LogFirstParent(fromRef, toRef string) ([]git.Commit, error)
 	CommitsReachableFrom(sha string) ([]git.Commit, error)
 	IsAncestorOf(ancestor, descendant string) bool
 	GetDiffstat(fromRef, toRef string) (git.Diffstat, error)
@@ -177,7 +178,38 @@ func (s *Storage) GetLastNEntries(count int) ([]*Entry, error) {
 // If no entries exist, returns all commits reachable from HEAD (latest will be nil).
 // Callers that display pending counts should check latest == nil to distinguish
 // "no entries yet" from "all caught up" and show appropriate messaging.
+//
+// Walks the full DAG — commits brought into HEAD via merge are included.
+// This is the right answer for display commands (timbers pending, prime,
+// status, catchup) that surface total documentation debt. The hook gate
+// uses GetGatePendingCommits instead, which excludes merged-in work.
 func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
+	return s.getPendingCommits(false)
+}
+
+// GetGatePendingCommits returns commits that should gate a new commit —
+// i.e., undocumented work on the current branch's first-parent line since
+// the latest entry's anchor.
+//
+// Unlike GetPendingCommits, this skips commits brought in by merges. The
+// motivation is parallel-agent flows: when an agent on branch X merges main
+// in (and main carries undocumented commits authored by a sibling agent on
+// branch Y), those merged-in commits should not block A from committing on
+// X. The sibling agent owns documenting their own work; this agent's gate
+// should only fire on their own branch's first-parent history.
+//
+// For single-actor flows on linear history, first-parent collapses to the
+// same answer as the full DAG walk, so behavior is unchanged.
+func (s *Storage) GetGatePendingCommits() ([]git.Commit, *Entry, error) {
+	return s.getPendingCommits(true)
+}
+
+// getPendingCommits is the shared implementation of GetPendingCommits and
+// GetGatePendingCommits. When firstParent is true, the anchor..HEAD walk
+// uses --first-parent so merged-in commits are excluded; in addition,
+// commits with no first-parent file changes (clean merges or empty commits)
+// are dropped, since they add no new work to this branch's line.
+func (s *Storage) getPendingCommits(firstParent bool) ([]git.Commit, *Entry, error) {
 	head, err := s.git.HEAD()
 	if err != nil {
 		return nil, nil, err
@@ -199,7 +231,7 @@ func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 		if reachErr != nil {
 			return nil, nil, reachErr
 		}
-		return s.filterCommits(commits, docSet), nil, nil
+		return s.filterCommits(commits, docSet, firstParent), nil, nil
 	}
 
 	// Check if the anchor is reachable from HEAD. After rebase or squash merge,
@@ -212,22 +244,26 @@ func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 		if reachErr != nil {
 			return nil, nil, reachErr
 		}
-		return s.filterCommits(fallback, docSet), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
+		return s.filterCommits(fallback, docSet, firstParent), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
 	}
 
 	// Get commits from anchor (exclusive) to HEAD (inclusive).
 	// If the anchor no longer exists (GC'd), fall back to all reachable
 	// commits from HEAD and wrap ErrStaleAnchor.
-	commits, logErr := s.git.Log(anchor, head)
+	logFn := s.git.Log
+	if firstParent {
+		logFn = s.git.LogFirstParent
+	}
+	commits, logErr := logFn(anchor, head)
 	if logErr != nil {
 		fallback, reachErr := s.git.CommitsReachableFrom(head)
 		if reachErr != nil {
 			return nil, nil, reachErr
 		}
-		return s.filterCommits(fallback, docSet), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
+		return s.filterCommits(fallback, docSet, firstParent), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
 	}
 
-	return s.filterCommits(commits, docSet), latest, nil
+	return s.filterCommits(commits, docSet, firstParent), latest, nil
 }
 
 // latestEntry returns the entry with the most recent CreatedAt, or nil
@@ -269,33 +305,20 @@ func (s *Storage) rulesOrDefault() []skipRule {
 	return s.skipRules
 }
 
-// filterCommits removes commits that don't represent pending work:
-//   - Infrastructure-only commits (.timbers/, .beads/, .timbersignore matches)
-//   - Reverts of already-documented commits (parsed from "This reverts commit <sha>")
+// HasPendingCommits checks whether undocumented commits exist on the current
+// branch's first-parent line — the gate's notion of "this agent's debt."
 //
-// On git lookup error, returns all commits unfiltered (safe default).
-// docSet is supplied by the caller so a single ListEntries scan can feed
-// both latest-entry resolution and revert auto-skipping.
-func (s *Storage) filterCommits(commits []git.Commit, docSet map[string]bool) []git.Commit {
-	if len(commits) == 0 {
-		return commits
-	}
-	fileMap, err := s.git.CommitFilesMulti(commitSHAs(commits))
-	if err != nil {
-		return commits
-	}
-	return s.filterByRules(commits, fileMap, docSet)
-}
-
-// HasPendingCommits checks whether undocumented commits exist.
-// Delegates to GetPendingCommits which filters out ledger-only commits
-// (commits that only touch .timbers/ files). Returns false when no
-// entries exist (fresh repos never trigger blocking).
-// Returns false on stale anchor (squash/rebase) — the commits shown
-// in the fallback are not actionable, and blocking on them causes
-// agents to create duplicate entries.
+// Delegates to GetGatePendingCommits so that commits brought in by a merge
+// (typically authored by a sibling agent on another branch) do not block
+// commits on this branch. Display commands (timbers pending) use
+// GetPendingCommits, which keeps the full-DAG view for total debt awareness.
+//
+// Returns false when no entries exist (fresh repos never trigger blocking).
+// Returns false on stale anchor (squash/rebase) — the commits shown in the
+// fallback are not actionable, and blocking on them causes agents to create
+// duplicate entries.
 func (s *Storage) HasPendingCommits() (bool, error) {
-	commits, latest, err := s.GetPendingCommits()
+	commits, latest, err := s.GetGatePendingCommits()
 	if err != nil {
 		if errors.Is(err, ErrStaleAnchor) {
 			return false, nil // stale anchor is not actionable pending

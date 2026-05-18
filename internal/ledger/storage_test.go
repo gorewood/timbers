@@ -13,14 +13,17 @@ import (
 
 // mockGitOps implements GitOps for testing (git operations only, no storage).
 type mockGitOps struct {
-	headSHA       string
-	headErr       error
-	logCommits    []git.Commit
-	logErr        error
-	reachableFrom []git.Commit
-	reachableErr  error
-	isAncestor    bool
-	commitFiles   map[string][]string // SHA -> files; nil map = unknown (no filtering)
+	headSHA            string
+	headErr            error
+	logCommits         []git.Commit
+	logErr             error
+	firstParentCommits []git.Commit // returned by LogFirstParent; falls back to logCommits when nil
+	firstParentErr     error        // returned by LogFirstParent; falls back to logErr when nil
+	firstParentCalled  bool         // true if LogFirstParent was called (asserts gate path)
+	reachableFrom      []git.Commit
+	reachableErr       error
+	isAncestor         bool
+	commitFiles        map[string][]string // SHA -> files; nil map = unknown (no filtering)
 }
 
 func newMockGitOps() *mockGitOps {
@@ -35,6 +38,26 @@ func (m *mockGitOps) HEAD() (string, error) {
 }
 
 func (m *mockGitOps) Log(fromRef, toRef string) ([]git.Commit, error) {
+	if m.logErr != nil {
+		return nil, m.logErr
+	}
+	return m.logCommits, nil
+}
+
+// LogFirstParent simulates first-parent traversal. By default it mirrors
+// Log (handy for tests that don't care about the merge case); tests that
+// need to distinguish the two paths set firstParentCommits/firstParentErr
+// explicitly.
+func (m *mockGitOps) LogFirstParent(fromRef, toRef string) ([]git.Commit, error) {
+	m.firstParentCalled = true
+	if m.firstParentErr != nil {
+		return nil, m.firstParentErr
+	}
+	if m.firstParentCommits != nil {
+		return m.firstParentCommits, nil
+	}
+	// Fall back to Log's mock data so the most common case ("first-parent
+	// is the same as Log for these inputs") doesn't need duplicated setup.
 	if m.logErr != nil {
 		return nil, m.logErr
 	}
@@ -803,3 +826,121 @@ func TestCountInfraSkippedSinceLatest(t *testing.T) {
 
 // Ensure our mock satisfies the interface (compile-time check).
 var _ GitOps = (*mockGitOps)(nil)
+
+// --- Gate-specific pending tests ---
+
+// TestHasPendingCommits_UsesFirstParentPath confirms that the gate path
+// (HasPendingCommits -> GetGatePendingCommits) consults LogFirstParent
+// rather than Log. The test wires the two paths to different results so
+// any regression that re-routes the gate through the full DAG walk fails
+// loudly.
+func TestHasPendingCommits_UsesFirstParentPath(t *testing.T) {
+	tests := []struct {
+		name               string
+		fullDAGCommits     []git.Commit
+		firstParentCommits []git.Commit
+		commitFiles        map[string][]string
+		wantPending        bool
+	}{
+		{
+			name: "sibling-merge case: code on side branch is invisible to gate",
+			fullDAGCommits: []git.Commit{
+				{SHA: "sidecommit1", Short: "side1"}, // brought in via merge
+				{SHA: "sidecommit2", Short: "side2"}, // brought in via merge
+			},
+			firstParentCommits: []git.Commit{}, // first-parent line is empty
+			commitFiles: map[string][]string{
+				"sidecommit1": {"frontend/app.tsx"},
+				"sidecommit2": {"frontend/lib.ts"},
+			},
+			wantPending: false,
+		},
+		{
+			name: "in-branch debt still blocks the gate",
+			fullDAGCommits: []git.Commit{
+				{SHA: "mycommit01", Short: "mine"},
+			},
+			firstParentCommits: []git.Commit{
+				{SHA: "mycommit01", Short: "mine"},
+			},
+			commitFiles: map[string][]string{
+				"mycommit01": {"cmd/feature.go"},
+			},
+			wantPending: true,
+		},
+		{
+			name: "merge commit that itself touches files on first-parent line blocks the gate",
+			fullDAGCommits: []git.Commit{
+				{SHA: "mergecmt01", Short: "merge"},
+				{SHA: "sidecommit", Short: "side"},
+			},
+			firstParentCommits: []git.Commit{
+				{SHA: "mergecmt01", Short: "merge"},
+			},
+			commitFiles: map[string][]string{
+				// A merge whose own diff against the first parent is non-empty —
+				// typically a conflict resolution that introduced source changes.
+				// dropEmptyFileChanges keeps it; the gate fires correctly.
+				"mergecmt01": {"cmd/main.go"},
+				"sidecommit": {"frontend/app.tsx"},
+			},
+			wantPending: true,
+		},
+	}
+
+	anchor := makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := newMockGitOps()
+			mock.headSHA = "headsha1234"
+			mock.logCommits = tt.fullDAGCommits
+			mock.firstParentCommits = tt.firstParentCommits
+			mock.commitFiles = tt.commitFiles
+
+			store := newTestStorage(t, mock, anchor)
+
+			got, err := store.HasPendingCommits()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.wantPending {
+				t.Errorf("HasPendingCommits() = %v, want %v", got, tt.wantPending)
+			}
+			if !mock.firstParentCalled {
+				t.Error("HasPendingCommits should route through LogFirstParent, but it was not called")
+			}
+		})
+	}
+}
+
+// TestGetPendingCommits_StillUsesFullDAG confirms that the display path
+// (GetPendingCommits) keeps the full DAG view so total documentation debt
+// stays visible to `timbers pending` even when first-parent would hide it.
+func TestGetPendingCommits_StillUsesFullDAG(t *testing.T) {
+	mock := newMockGitOps()
+	mock.headSHA = "headsha1234"
+	mock.logCommits = []git.Commit{
+		{SHA: "sidecommit1", Short: "side1"},
+		{SHA: "sidecommit2", Short: "side2"},
+	}
+	mock.firstParentCommits = []git.Commit{} // gate would say zero
+	mock.commitFiles = map[string][]string{
+		"sidecommit1": {"frontend/app.tsx"},
+		"sidecommit2": {"frontend/lib.ts"},
+	}
+
+	anchor := makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+	store := newTestStorage(t, mock, anchor)
+
+	commits, _, err := store.GetPendingCommits()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(commits) != 2 {
+		t.Errorf("display path should show both commits, got %d", len(commits))
+	}
+	if mock.firstParentCalled {
+		t.Error("GetPendingCommits must not use LogFirstParent (would hide debt from displays)")
+	}
+}

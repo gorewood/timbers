@@ -887,6 +887,18 @@ Use this checklist when designing agent-oriented CLIs:
   - CONFIG checks: config dir, env files, API keys, custom templates, version staleness
   - `--fix` auto-remediates: config dir, Claude hooks (project-level)
 - `timbers hooks install` — Opt-in pre-commit warning for undocumented work
+  - The gate walks the **current branch's first-parent line** (not the full DAG),
+    so undocumented commits authored on sibling branches and pulled in via merge
+    do not block the current agent. Display commands (`timbers pending`,
+    `prime`, `status`) still show the full picture for debt awareness.
+  - The gate also drops commits with no first-parent file changes (clean merge
+    commits, `--allow-empty` commits), so a routine `git merge --no-ff branch-y`
+    that only brings in sibling work does not gate either.
+  - **Escape hatch:** set `TIMBERS_SKIP_CROSS_AGENT_DEBT=1` to bypass the gate
+    for a single shell. Reserved for narrower edge cases — e.g., a merge commit
+    that itself introduced source-file changes on this branch's line (typically
+    a conflict resolution) but the current agent considers that work "not
+    theirs." Cheaper than `--no-verify` because it doesn't disable other hooks.
 - `timbers setup claude` — Session-start prime injection (project-level by default, `--global` available)
 - `timbers onboard` — Minimal CLAUDE.md/AGENTS.md snippet
 - `timbers init` — Full setup: `.timbers/` directory, optional Claude integration; git hooks via `--hooks`

@@ -39,7 +39,25 @@ const fieldSeparator = "---FIELD---"
 
 // Log returns commits in the given range (fromRef..toRef).
 // The 'fromRef' ref is exclusive, 'toRef' is inclusive.
+// Walks the full DAG — merge commits are visited and their second parents
+// are followed, so commits brought in by a merge appear in the result.
 func Log(fromRef, toRef string) ([]Commit, error) {
+	return logRange(fromRef, toRef, false)
+}
+
+// LogFirstParent returns commits in the given range (fromRef..toRef) using
+// first-parent traversal. The 'fromRef' ref is exclusive, 'toRef' is inclusive.
+//
+// First-parent traversal follows only the first parent of each merge commit,
+// so commits brought in by a merge are NOT visited. This corresponds to the
+// linear history of the current branch — useful for "what work happened on
+// this branch?" without picking up commits authored elsewhere and merged in.
+func LogFirstParent(fromRef, toRef string) ([]Commit, error) {
+	return logRange(fromRef, toRef, true)
+}
+
+// logRange is the shared implementation for Log and LogFirstParent.
+func logRange(fromRef, toRef string, firstParent bool) ([]Commit, error) {
 	// Use custom format to parse commits reliably
 	// Format: SHA, Short, Subject, Body, Author, AuthorEmail, Date (Unix timestamp)
 	format := strings.Join([]string{
@@ -53,7 +71,13 @@ func Log(fromRef, toRef string) ([]Commit, error) {
 	}, fieldSeparator) + commitSeparator
 
 	rangeSpec := fromRef + ".." + toRef
-	out, err := Run("log", "--pretty=format:"+format, rangeSpec)
+	args := []string{"log", "--pretty=format:" + format}
+	if firstParent {
+		args = append(args, "--first-parent")
+	}
+	args = append(args, rangeSpec)
+
+	out, err := Run(args...)
 	if err != nil {
 		return nil, output.NewSystemErrorWithCause("failed to get git log for range "+rangeSpec, err)
 	}

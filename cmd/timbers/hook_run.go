@@ -4,6 +4,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -11,6 +12,25 @@ import (
 	"github.com/gorewood/timbers/internal/ledger"
 	"github.com/gorewood/timbers/internal/output"
 )
+
+// envSkipCrossAgentDebt, when set to a truthy value ("1", "true", "yes", "on"),
+// short-circuits the pre/post-commit gate. Intended as an escape hatch for
+// parallel-agent flows where first-parent traversal alone still over-fires
+// (e.g., a merge commit on the first-parent line that the current agent
+// considers "not theirs"). Mirrors existing bypass conventions and is
+// cheaper than --no-verify because it doesn't disable other hooks.
+const envSkipCrossAgentDebt = "TIMBERS_SKIP_CROSS_AGENT_DEBT"
+
+// envTruthy reports whether the named env var is set to a recognized
+// truthy value. Case-insensitive; whitespace-trimmed.
+func envTruthy(name string) bool {
+	val := strings.TrimSpace(strings.ToLower(os.Getenv(name)))
+	switch val {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
 
 // newHookCmd creates the hidden hook parent command for internal hook execution.
 func newHookCmd() *cobra.Command {
@@ -72,6 +92,14 @@ func hasActionablePending() bool {
 	if git.IsInteractiveGitOp() {
 		return false
 	}
+	// Cross-agent escape hatch: when the user has explicitly opted out of
+	// the gate (typically because multiple agents are working in parallel
+	// and one of them is about to run timbers catchup), skip both the
+	// block and the nudge. Cheaper than --no-verify because it doesn't
+	// disable other hooks.
+	if envTruthy(envSkipCrossAgentDebt) {
+		return false
+	}
 	// Skip when .timbers/ is absent at the worktree root. This handles
 	// infrastructure worktrees (e.g., beads backup branches) where git hooks
 	// are shared but timbers isn't initialized.
@@ -110,7 +138,7 @@ func runPreCommitHook(cmd *cobra.Command) error {
 	printer.Println()
 	printer.Print("[timbers] Commit blocked: undocumented commit(s) exist\n")
 	printer.Print("[timbers] Run 'timbers log \"what\" --why \"why\" --how \"how\"' first\n")
-	printer.Print("[timbers] Or use --no-verify to bypass\n")
+	printer.Print("[timbers] Or TIMBERS_SKIP_CROSS_AGENT_DEBT=1 (parallel-agent flows), or --no-verify\n")
 	printer.Println()
 
 	return output.NewUserError("undocumented commits exist — run 'timbers log' first")

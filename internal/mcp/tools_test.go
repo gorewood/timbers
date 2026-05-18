@@ -30,6 +30,10 @@ func (m *mockGitOps) Log(_, _ string) ([]git.Commit, error) {
 	return m.logCommits, m.logErr
 }
 
+func (m *mockGitOps) LogFirstParent(_, _ string) ([]git.Commit, error) {
+	return m.logCommits, m.logErr
+}
+
 func (m *mockGitOps) CommitsReachableFrom(_ string) ([]git.Commit, error) {
 	return m.reachableFrom, nil
 }
