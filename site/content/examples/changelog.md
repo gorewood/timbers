@@ -1,6 +1,6 @@
 +++
 title = 'Changelog'
-date = '2026-05-17'
+date = '2026-05-20'
 tags = ['example', 'changelog']
 +++
 
@@ -14,6 +14,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.22.0] - 2026-05-20
+
+### Added
+- Added `timbers ack` command to honestly skip commits with a stored reason under `.timbers/YYYY/MM/DD/ack_*.json`, replacing fabricated entries or `--no-verify` workarounds.
+- Added `author:<glob>` lines to `.timbersignore` for skipping commits by author (supports exact names, email domains, and prefix-wildcards for bot accounts like q-redshifted).
+- Added `TIMBERS_DEBUG=1` environment variable to emit a trace of pending-detection skip decisions.
+
+### Changed
+- `timbers log` now warns when the documented commit has already been pushed to upstream, catching push-before-log races that previously stranded entries locally.
+- `timbers pending` no longer displays empty-file merge commits, removing noise from merge SHAs with no actionable next step.
+- Rewrote the session protocol text to explicitly order commit → log → push with a "never push between commit and log" callout.
+
+### Internal
+- Extracted shared protocol and stale-anchor text into `internal/protocol` so `timbers prime` and the MCP server compose from a single source.
+
 
 ## [0.21.0] - 2026-05-17
 
@@ -562,3 +578,4 @@ Initial public release.
 [0.20.0]: https://github.com/gorewood/timbers/releases/tag/v0.20.0
 [0.20.1]: https://github.com/gorewood/timbers/releases/tag/v0.20.1
 [0.21.0]: https://github.com/gorewood/timbers/releases/tag/v0.21.0
+[0.22.0]: https://github.com/gorewood/timbers/releases/tag/v0.22.0
