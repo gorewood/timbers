@@ -205,7 +205,9 @@ func (e *Entry) ToJSON() ([]byte, error) {
 }
 
 // FromJSON deserializes an entry from JSON.
-// Returns ErrNotTimbersNote if the JSON is valid but doesn't have the timbers schema.
+// Returns ErrNotTimbersNote if the JSON is valid but doesn't have the timbers schema,
+// or if the kind field is set to something other than "entry" (e.g., "ack" — those
+// share the schema family and should be loaded via FromJSONAck instead).
 func FromJSON(data []byte) (*Entry, error) {
 	if len(data) == 0 {
 		return nil, errors.New("empty JSON data")
@@ -218,6 +220,14 @@ func FromJSON(data []byte) (*Entry, error) {
 
 	// Validate this is a timbers note by checking schema prefix
 	if !strings.HasPrefix(entry.Schema, "timbers.devlog/") {
+		return nil, ErrNotTimbersNote
+	}
+
+	// Symmetric with FromJSONAck: reject non-entry kinds. Without this, a
+	// direct GetEntryByID("ack_...") would deserialize into a half-populated
+	// Entry struct instead of failing cleanly. The walkEntryFile prefix guard
+	// already keeps ListEntries safe; this catches direct-read paths.
+	if entry.Kind != "" && entry.Kind != KindEntry {
 		return nil, ErrNotTimbersNote
 	}
 

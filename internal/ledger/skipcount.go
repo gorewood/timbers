@@ -2,9 +2,33 @@ package ledger
 
 import (
 	"errors"
+	"fmt"
+	"io"
+	"os"
+	"strings"
 
 	"github.com/gorewood/timbers/internal/git"
 )
+
+// debugEnvVar enables structured trace output from pending-detection
+// paths when set to a truthy value. Useful for diagnosing "why is this
+// commit pending / not pending" without modifying the call site.
+const debugEnvVar = "TIMBERS_DEBUG"
+
+// debugEnabled reports whether TIMBERS_DEBUG is set to a recognized truthy
+// value (1, true, yes, on — case-insensitive, whitespace-trimmed).
+func debugEnabled() bool {
+	val := strings.TrimSpace(strings.ToLower(os.Getenv(debugEnvVar)))
+	switch val {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
+// debugWriter returns the stderr target for debug traces, indirected so
+// tests can substitute a buffer. Real production code uses os.Stderr.
+var debugWriter = func() io.Writer { return os.Stderr }
 
 // CountInfraSkippedSinceLatest returns the number of commits between the
 // latest entry's anchor and HEAD that pending detection auto-skips: both
@@ -54,8 +78,9 @@ func (s *Storage) commitsSinceLatest() ([]git.Commit, bool, error) {
 }
 
 // countAutoSkipped returns how many of the given commits would be filtered
-// from pending — covers both infrastructure-only commits and documented
-// reverts. Uses the same predicate set as filterByRules.
+// from pending — covers infrastructure-only commits, author-glob matches,
+// acked commits, and documented reverts. Uses the same predicate set as
+// filterByRules.
 func (s *Storage) countAutoSkipped(commits []git.Commit) int {
 	if len(commits) == 0 {
 		return 0
@@ -66,9 +91,18 @@ func (s *Storage) countAutoSkipped(commits []git.Commit) int {
 	}
 	rules := s.rulesOrDefault()
 	docSet := s.documentedSHASet()
+	ackedSet := s.AckedSet()
 	var count int
 	for _, commit := range commits {
 		if isInfrastructureOnlyCommit(rules, fileMap[commit.SHA]) {
+			count++
+			continue
+		}
+		if matchesSkipAuthor(s.skipAuthors, commit.AuthorEmail, commit.Author) {
+			count++
+			continue
+		}
+		if ackedSet[commit.SHA] {
 			count++
 			continue
 		}
@@ -88,19 +122,52 @@ func commitSHAs(commits []git.Commit) []string {
 	return shas
 }
 
-// filterByRules removes infrastructure-only commits and documented reverts
-// from the input list, preserving order. The docSet is supplied by the
-// caller so callers can build it once and reuse — avoids re-scanning the
-// ledger on every invocation. Pass nil to disable revert auto-skipping.
+// isInfrastructureOnlyCommit returns true if every file in the list matches
+// a skip rule (built-in defaults plus any patterns from .timbersignore).
+// Returns false for empty lists (unknown = don't filter).
+func isInfrastructureOnlyCommit(rules []skipRule, files []string) bool {
+	if len(files) == 0 {
+		return false
+	}
+	for _, f := range files {
+		if !matchAny(rules, f) {
+			return false
+		}
+	}
+	return true
+}
+
+// rulesOrDefault returns the storage's skip rules, falling back to the
+// built-in defaults when none have been loaded (e.g., bare-bones tests).
+func (s *Storage) rulesOrDefault() []skipRule {
+	if len(s.skipRules) == 0 {
+		return compiledDefaultSkipRules
+	}
+	return s.skipRules
+}
+
+// filterByRules removes infrastructure-only commits, author-glob-matched
+// commits, acked commits, and documented reverts from the input list,
+// preserving order. The docSet and ackedSet are supplied by the caller
+// so callers can build them once and reuse — avoids re-scanning the
+// ledger on every invocation. Pass nil docSet to disable revert
+// auto-skipping; pass nil ackedSet to disable ack-based skipping.
 func (s *Storage) filterByRules(
 	commits []git.Commit,
 	fileMap map[string][]string,
 	docSet map[string]bool,
+	ackedSet map[string]bool,
 ) []git.Commit {
 	rules := s.rulesOrDefault()
 	filtered := make([]git.Commit, 0, len(commits))
 	for _, commit := range commits {
 		if isInfrastructureOnlyCommit(rules, fileMap[commit.SHA]) {
+			continue
+		}
+		if matchesSkipAuthor(s.skipAuthors, commit.AuthorEmail, commit.Author) {
+			continue
+		}
+		if ackedSet != nil && ackedSet[commit.SHA] {
 			continue
 		}
 		if docSet != nil && isDocumentedRevert(commit, docSet) {
@@ -111,17 +178,106 @@ func (s *Storage) filterByRules(
 	return filtered
 }
 
+// classifyCommit reports the first applicable skip reason for the commit
+// under the current rules, or "" if the commit is kept. Used for both
+// filtering (when the caller doesn't care about the reason) and the
+// TIMBERS_DEBUG trace (where the reason is the whole point).
+func (s *Storage) classifyCommit(
+	commit git.Commit,
+	fileMap map[string][]string,
+	docSet map[string]bool,
+	ackedSet map[string]bool,
+	gateStrict bool,
+) string {
+	rules := s.rulesOrDefault()
+	files := fileMap[commit.SHA]
+	if isInfrastructureOnlyCommit(rules, files) {
+		return "infra"
+	}
+	if matchesSkipAuthor(s.skipAuthors, commit.AuthorEmail, commit.Author) {
+		return "author"
+	}
+	if ackedSet != nil && ackedSet[commit.SHA] {
+		return "ack"
+	}
+	if docSet != nil && isDocumentedRevert(commit, docSet) {
+		return "revert"
+	}
+	if len(files) == 0 {
+		if commit.IsMerge() {
+			return "merge-empty"
+		}
+		if gateStrict {
+			return "empty"
+		}
+	}
+	return ""
+}
+
+// traceFilterDecisions prints per-commit keep/skip classification to
+// stderr when TIMBERS_DEBUG is enabled. Called from filterCommits after
+// the fileMap has been fetched so the trace and the production filter
+// see the same data.
+func (s *Storage) traceFilterDecisions(
+	commits []git.Commit,
+	fileMap map[string][]string,
+	docSet map[string]bool,
+	ackedSet map[string]bool,
+	gateStrict bool,
+) {
+	if !debugEnabled() {
+		return
+	}
+	path := "display"
+	if gateStrict {
+		path = "gate"
+	}
+	w := debugWriter()
+	_, _ = fmt.Fprintf(w, "[timbers] debug: path=%s raw=%d\n", path, len(commits))
+	counts := map[string]int{}
+	for _, commit := range commits {
+		reason := s.classifyCommit(commit, fileMap, docSet, ackedSet, gateStrict)
+		if reason == "" {
+			_, _ = fmt.Fprintf(w, "[timbers] debug:   %s keep\n", commit.Short)
+		} else {
+			_, _ = fmt.Fprintf(w, "[timbers] debug:   %s skip %s\n", commit.Short, reason)
+			counts[reason]++
+		}
+	}
+	if len(counts) > 0 {
+		_, _ = fmt.Fprintf(w, "[timbers] debug: dropped=%s\n", formatDropCounts(counts))
+	}
+}
+
+// formatDropCounts renders a map of reason→count as "reason:N,reason:N"
+// in a stable order for parseability.
+func formatDropCounts(counts map[string]int) string {
+	order := []string{"infra", "author", "ack", "revert", "merge-empty", "empty"}
+	parts := make([]string, 0, len(counts))
+	for _, k := range order {
+		if n, ok := counts[k]; ok && n > 0 {
+			parts = append(parts, fmt.Sprintf("%s:%d", k, n))
+		}
+	}
+	return strings.Join(parts, ",")
+}
+
 // filterCommits removes commits that don't represent pending work:
 //   - Infrastructure-only commits (.timbers/, .beads/, .timbersignore matches)
 //   - Reverts of already-documented commits (parsed from "This reverts commit <sha>")
-//   - When gateStrict is true: also clean merge commits (no first-parent file
-//     changes) and empty commits. These are safely dropped from the gate
-//     because they add no new work to this branch's first-parent line.
+//   - Clean merge commits (2+ parents AND empty combined diff) — added by
+//     a routine `git merge --no-ff branch-y` that brought in sibling work
+//     but added nothing on this branch's first-parent line. Dropped from
+//     both gate and display paths so pending output matches the gate.
+//   - When gateStrict is true: also non-merge commits with empty file lists
+//     (i.e., --allow-empty marker commits). The display keeps these so
+//     intentionally-empty commits remain visible to the user; the gate
+//     drops them because they're not actionable debt.
 //
 // On git lookup error, returns all commits unfiltered (safe default).
 // docSet is supplied by the caller so a single ListEntries scan can feed
 // both latest-entry resolution and revert auto-skipping.
-func (s *Storage) filterCommits(commits []git.Commit, docSet map[string]bool, gateStrict bool) []git.Commit {
+func (s *Storage) filterCommits(commits []git.Commit, docSet, ackedSet map[string]bool, gateStrict bool) []git.Commit {
 	if len(commits) == 0 {
 		return commits
 	}
@@ -129,25 +285,42 @@ func (s *Storage) filterCommits(commits []git.Commit, docSet map[string]bool, ga
 	if err != nil {
 		return commits
 	}
-	filtered := s.filterByRules(commits, fileMap, docSet)
-	if !gateStrict {
-		return filtered
+	s.traceFilterDecisions(commits, fileMap, docSet, ackedSet, gateStrict)
+	filtered := s.filterByRules(commits, fileMap, docSet, ackedSet)
+	if gateStrict {
+		// Gate: drop ALL empty-file commits (merges with clean combined
+		// diff AND non-merge --allow-empty commits). Strict — no content
+		// means no actionable debt for the current branch.
+		return dropEmptyFileChanges(filtered, fileMap)
 	}
-	// Gate-strict pass: drop commits with no file changes. For non-merge
-	// commits this never happens (git rejects empty commits without
-	// --allow-empty), so the only realistic match is a clean merge whose
-	// combined diff against its parents collapses to nothing — i.e., the
-	// merge added no work on this branch's first-parent line. Treating it
-	// as "not the current actor's debt" matches the gate's intent.
-	return dropEmptyFileChanges(filtered, fileMap)
+	// Display: drop only empty-file MERGE commits. Single-parent empty
+	// commits (--allow-empty) are preserved because they're intentional
+	// and the user may want to see them in pending.
+	return dropEmptyMerges(filtered, fileMap)
 }
 
 // dropEmptyFileChanges removes commits whose file map entry is nil or empty.
-// Order-preserving.
+// Used by the gate. Order-preserving.
 func dropEmptyFileChanges(commits []git.Commit, fileMap map[string][]string) []git.Commit {
 	out := make([]git.Commit, 0, len(commits))
 	for _, commit := range commits {
 		if len(fileMap[commit.SHA]) == 0 {
+			continue
+		}
+		out = append(out, commit)
+	}
+	return out
+}
+
+// dropEmptyMerges removes merge commits (2+ parents) whose combined diff
+// returned no files — i.e., the merge added nothing on this branch's
+// first-parent line. Single-parent commits are preserved even when their
+// file list is empty (--allow-empty marker commits stay visible in
+// display output). Order-preserving.
+func dropEmptyMerges(commits []git.Commit, fileMap map[string][]string) []git.Commit {
+	out := make([]git.Commit, 0, len(commits))
+	for _, commit := range commits {
+		if commit.IsMerge() && len(fileMap[commit.SHA]) == 0 {
 			continue
 		}
 		out = append(out, commit)

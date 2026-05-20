@@ -1,7 +1,10 @@
 package ledger
 
 import (
+	"bytes"
 	"errors"
+	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -942,5 +945,258 @@ func TestGetPendingCommits_StillUsesFullDAG(t *testing.T) {
 	}
 	if mock.firstParentCalled {
 		t.Error("GetPendingCommits must not use LogFirstParent (would hide debt from displays)")
+	}
+}
+
+// TestFilterCommits_DebugTrace verifies that TIMBERS_DEBUG=1 produces a
+// per-commit classification trace on stderr. Format is intentionally
+// stable so downstream automation can parse it.
+func TestFilterCommits_DebugTrace(t *testing.T) {
+	var buf bytes.Buffer
+	origWriter := debugWriter
+	debugWriter = func() io.Writer { return &buf }
+	defer func() { debugWriter = origWriter }()
+
+	t.Setenv("TIMBERS_DEBUG", "1")
+
+	mock := newMockGitOps()
+	mock.headSHA = "headsha1234"
+	mock.logCommits = []git.Commit{
+		{SHA: "keepme00000", Short: "keepme", ParentCount: 1},
+		{SHA: "infraonly00", Short: "infra", ParentCount: 1},
+		{SHA: "cleanmerge0", Short: "merge", ParentCount: 2},
+	}
+	mock.commitFiles = map[string][]string{
+		"keepme00000": {"cmd/main.go"},
+		"infraonly00": {".beads/issues.jsonl"},
+		"cleanmerge0": nil,
+	}
+
+	anchor := makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+	store := newTestStorage(t, mock, anchor)
+
+	if _, _, err := store.GetPendingCommits(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out := buf.String()
+	wantSubstrs := []string{
+		"[timbers] debug: path=display",
+		"keepme keep",
+		"infra skip infra",
+		"merge skip merge-empty",
+		"dropped=infra:1,merge-empty:1",
+	}
+	for _, want := range wantSubstrs {
+		if !strings.Contains(out, want) {
+			t.Errorf("debug output missing %q\nfull output:\n%s", want, out)
+		}
+	}
+}
+
+// TestFilterCommits_DebugDisabled confirms that no trace output is
+// emitted when TIMBERS_DEBUG is unset.
+func TestFilterCommits_DebugDisabled(t *testing.T) {
+	var buf bytes.Buffer
+	origWriter := debugWriter
+	debugWriter = func() io.Writer { return &buf }
+	defer func() { debugWriter = origWriter }()
+
+	t.Setenv("TIMBERS_DEBUG", "")
+
+	mock := newMockGitOps()
+	mock.headSHA = "headsha1234"
+	mock.logCommits = []git.Commit{
+		{SHA: "keepme00000", Short: "keepme", ParentCount: 1},
+	}
+	mock.commitFiles = map[string][]string{
+		"keepme00000": {"cmd/main.go"},
+	}
+	anchor := makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+	store := newTestStorage(t, mock, anchor)
+
+	if _, _, err := store.GetPendingCommits(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("expected no debug output when env unset, got: %s", buf.String())
+	}
+}
+
+// TestGetPendingCommits_SkipsAckedSHAs confirms that acked SHAs are
+// dropped from pending. The roundtrip: WriteAck → AckedSet → filterByRules
+// → commit dropped from GetPendingCommits.
+func TestGetPendingCommits_SkipsAckedSHAs(t *testing.T) {
+	mock := newMockGitOps()
+	mock.headSHA = "headsha1234"
+	mock.logCommits = []git.Commit{
+		{SHA: "humancommit", Short: "human", ParentCount: 1},
+		{SHA: "ackedcommit", Short: "acked", ParentCount: 1},
+	}
+	mock.commitFiles = map[string][]string{
+		"humancommit": {"cmd/main.go"},
+		"ackedcommit": {"web/page.tsx"},
+	}
+
+	anchor := makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+	store := newTestStorage(t, mock, anchor)
+
+	// Sanity: both commits are pending before any ack lands.
+	if commits, _, err := store.GetPendingCommits(); err != nil {
+		t.Fatalf("pre-ack pending: %v", err)
+	} else if len(commits) != 2 {
+		t.Fatalf("expected 2 pending pre-ack, got %d", len(commits))
+	}
+
+	// Write an ack for one of them.
+	now := time.Now().UTC()
+	ack := &Ack{
+		Schema:    SchemaVersion,
+		Kind:      KindAck,
+		ID:        GenerateAckID("ackedcommit", now),
+		AckedAt:   now,
+		Acker:     Acker{Name: "Test", Email: "test@example.com"},
+		TargetSHA: "ackedcommit",
+		Reason:    "Upstream sync; checked, no entry needed",
+	}
+	if err := store.WriteAck(ack); err != nil {
+		t.Fatalf("WriteAck: %v", err)
+	}
+
+	// After the ack, only the human commit should remain pending.
+	commits, _, err := store.GetPendingCommits()
+	if err != nil {
+		t.Fatalf("post-ack pending: %v", err)
+	}
+	if len(commits) != 1 {
+		t.Fatalf("expected 1 pending post-ack, got %d", len(commits))
+	}
+	if commits[0].SHA != "humancommit" {
+		t.Errorf("commits[0].SHA = %q, want humancommit", commits[0].SHA)
+	}
+}
+
+// TestGetPendingCommits_SkipsAuthorGlobMatches confirms that commits whose
+// author matches a configured skip-author glob are dropped from pending
+// (both gate and display paths route through filterByRules). Use case:
+// AI auto-review bots opening PRs at a known author identity — operators
+// add the bot to .timbers/skip-authors and the bot's commits no longer
+// clutter pending.
+func TestGetPendingCommits_SkipsAuthorGlobMatches(t *testing.T) {
+	mock := newMockGitOps()
+	mock.headSHA = "headsha1234"
+	mock.logCommits = []git.Commit{
+		{SHA: "humancommit", Short: "human", Author: "Alice", AuthorEmail: "alice@example.com", ParentCount: 1},
+		{SHA: "botcommit01", Short: "bot1", Author: "q-redshifted", AuthorEmail: "noreply@anthropic.com", ParentCount: 1},
+		{SHA: "botcommit02", Short: "bot2", Author: "argocd", AuthorEmail: "argo@bot.example.com", ParentCount: 1},
+	}
+	mock.commitFiles = map[string][]string{
+		"humancommit": {"cmd/main.go"},
+		"botcommit01": {"web/page.tsx"},
+		"botcommit02": {"k8s/deployment.yml"},
+	}
+
+	anchor := makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+	store := newTestStorage(t, mock, anchor)
+	// Inject skip-authors directly (real loading is tested in
+	// skipauthors_test.go; this verifies the storage-level wiring).
+	store.skipAuthors = []string{"q-redshifted", "*@bot.example.com"}
+
+	commits, _, err := store.GetPendingCommits()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(commits) != 1 {
+		t.Fatalf("got %d commits, want 1 (only the human commit)", len(commits))
+	}
+	if commits[0].SHA != "humancommit" {
+		t.Errorf("commits[0].SHA = %q, want humancommit", commits[0].SHA)
+	}
+}
+
+// TestGetPendingCommits_DropsEmptyMerges confirms that display output no
+// longer surfaces clean PR merges (the osprey-strike "Merge pull request
+// #N" noise). A merge commit with ParentCount>=2 and an empty file list
+// is dropped from display; a merge with file changes (conflict resolution
+// touched code) is kept; a single-parent commit with an empty file list
+// (--allow-empty) is also kept because the user may want to see it.
+func TestGetPendingCommits_DropsEmptyMerges(t *testing.T) {
+	tests := []struct {
+		name        string
+		commits     []git.Commit
+		commitFiles map[string][]string
+		wantSHAs    []string
+	}{
+		{
+			name: "clean merge dropped, single-parent code kept",
+			commits: []git.Commit{
+				{SHA: "cleanmerge1", Short: "merge", ParentCount: 2},
+				{SHA: "realcommit1", Short: "real", ParentCount: 1},
+			},
+			commitFiles: map[string][]string{
+				"cleanmerge1": nil, // empty combined diff
+				"realcommit1": {"cmd/main.go"},
+			},
+			wantSHAs: []string{"realcommit1"},
+		},
+		{
+			name: "merge with conflict-resolution file changes kept",
+			commits: []git.Commit{
+				{SHA: "resolvemrg1", Short: "resol", ParentCount: 2},
+			},
+			commitFiles: map[string][]string{
+				"resolvemrg1": {"src/conflict.go"},
+			},
+			wantSHAs: []string{"resolvemrg1"},
+		},
+		{
+			name: "single-parent empty commit kept in display (intentional --allow-empty)",
+			commits: []git.Commit{
+				{SHA: "markercmt01", Short: "marker", ParentCount: 1},
+			},
+			commitFiles: map[string][]string{
+				"markercmt01": nil,
+			},
+			wantSHAs: []string{"markercmt01"},
+		},
+		{
+			name: "multiple clean merges all dropped",
+			commits: []git.Commit{
+				{SHA: "mrg203be479", Short: "mrg1", ParentCount: 2},
+				{SHA: "mrgeb566051", Short: "mrg2", ParentCount: 2},
+				{SHA: "contentcmt1", Short: "code", ParentCount: 1},
+			},
+			commitFiles: map[string][]string{
+				"mrg203be479": nil,
+				"mrgeb566051": nil,
+				"contentcmt1": {"web/page.tsx"},
+			},
+			wantSHAs: []string{"contentcmt1"},
+		},
+	}
+
+	anchor := makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC))
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := newMockGitOps()
+			mock.headSHA = "headsha1234"
+			mock.logCommits = tt.commits
+			mock.commitFiles = tt.commitFiles
+			store := newTestStorage(t, mock, anchor)
+
+			commits, _, err := store.GetPendingCommits()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(commits) != len(tt.wantSHAs) {
+				t.Fatalf("got %d commits, want %d (%v)", len(commits), len(tt.wantSHAs), tt.wantSHAs)
+			}
+			for i, want := range tt.wantSHAs {
+				if commits[i].SHA != want {
+					t.Errorf("commits[%d].SHA = %q, want %q", i, commits[i].SHA, want)
+				}
+			}
+		})
 	}
 }

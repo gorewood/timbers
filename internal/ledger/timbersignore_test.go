@@ -8,7 +8,7 @@ import (
 
 func TestLoadSkipRules_NoFile(t *testing.T) {
 	repoRoot := t.TempDir()
-	rules, err := loadSkipRules(repoRoot)
+	rules, _, err := loadSkipConfig(repoRoot)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -18,7 +18,7 @@ func TestLoadSkipRules_NoFile(t *testing.T) {
 }
 
 func TestLoadSkipRules_EmptyRepoRoot(t *testing.T) {
-	rules, err := loadSkipRules("")
+	rules, _, err := loadSkipConfig("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -41,7 +41,7 @@ docs/generated/   # inline comment
 		t.Fatalf("write: %v", err)
 	}
 
-	rules, err := loadSkipRules(repoRoot)
+	rules, _, err := loadSkipConfig(repoRoot)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestLoadSkipRules_OnlyComments(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repoRoot, ".timbersignore"), []byte(contents), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	rules, err := loadSkipRules(repoRoot)
+	rules, _, err := loadSkipConfig(repoRoot)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

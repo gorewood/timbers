@@ -159,30 +159,7 @@ func (fs *FileStorage) ListEntriesWithStats() ([]*Entry, *ListStats, error) {
 	var entries []*Entry
 
 	err := filepath.WalkDir(fs.dir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || !strings.HasSuffix(d.Name(), ".json") {
-			return nil
-		}
-
-		stats.Total++
-		// Filenames may be in either format (canonical dashed, post-v0.18; or
-		// legacy colon-encoded). Convert to the canonical ID for ReadEntry.
-		id := FilenameToID(strings.TrimSuffix(d.Name(), ".json"))
-		entry, readErr := fs.ReadEntry(id)
-		if readErr != nil {
-			stats.Skipped++
-			if errors.Is(readErr, ErrNotTimbersNote) {
-				stats.NotTimbers++
-			} else {
-				stats.ParseErrors++
-			}
-			return nil
-		}
-		entries = append(entries, entry)
-		stats.Parsed++
-		return nil
+		return fs.walkEntryFile(path, d, err, &entries, stats)
 	})
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -192,6 +169,50 @@ func (fs *FileStorage) ListEntriesWithStats() ([]*Entry, *ListStats, error) {
 	}
 
 	return entries, stats, nil
+}
+
+// walkEntryFile is the per-file callback used by ListEntriesWithStats.
+// Extracted so the outer function stays under the cognitive-complexity
+// limit. Mutates the entries slice and stats counters in place; returns
+// non-nil only for fatal walk errors (read failures of individual files
+// are recorded as stats and swallowed).
+func (fs *FileStorage) walkEntryFile(
+	_ string, d os.DirEntry, walkErr error,
+	entries *[]*Entry, stats *ListStats,
+) error {
+	if walkErr != nil {
+		return walkErr
+	}
+	if d.IsDir() || !strings.HasSuffix(d.Name(), ".json") {
+		return nil
+	}
+
+	// Ack files (ack_*.json) live in the same date layout as entries
+	// but are not entries — skip them silently so they don't show up
+	// in parse-error stats.
+	name := strings.TrimSuffix(d.Name(), ".json")
+	if strings.HasPrefix(name, ackIDPrefix) {
+		return nil
+	}
+
+	stats.Total++
+	// Filenames may be in either format (canonical dashed, post-v0.18; or
+	// legacy colon-encoded). Convert to the canonical ID for ReadEntry.
+	id := FilenameToID(name)
+	entry, readErr := fs.ReadEntry(id)
+	if readErr != nil {
+		stats.Skipped++
+		if errors.Is(readErr, ErrNotTimbersNote) {
+			stats.NotTimbers++
+		} else {
+			stats.ParseErrors++
+		}
+		//nolint:nilerr // per-file parse errors are recorded in stats and skipped; the walk continues
+		return nil
+	}
+	*entries = append(*entries, entry)
+	stats.Parsed++
+	return nil
 }
 
 // WriteEntry writes an entry to the storage directory and stages it with git add.
@@ -283,43 +304,6 @@ func (fs *FileStorage) removeLegacySibling(id, canonical string) {
 		return
 	}
 	_ = fs.gitAdd(legacy)
-}
-
-// MigrateLegacyFilenames walks the storage directory and renames any
-// pre-v0.18 colon-encoded entry files to the canonical (dashed) form.
-// Returns the IDs that were migrated. Idempotent: a no-op if everything is
-// already canonical, and tolerates a canonical sibling already existing
-// (the legacy file is removed in that case).
-func (fs *FileStorage) MigrateLegacyFilenames() ([]string, error) {
-	var migrated []string
-	walkErr := filepath.WalkDir(fs.dir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || !strings.HasSuffix(d.Name(), ".json") {
-			return nil
-		}
-		base := strings.TrimSuffix(d.Name(), ".json")
-		if !strings.Contains(base, ":") {
-			return nil
-		}
-		canonicalName := IDToFilename(base) + ".json"
-		canonicalPath := filepath.Join(filepath.Dir(path), canonicalName)
-		if _, statErr := os.Stat(canonicalPath); statErr == nil {
-			// Canonical exists already — drop the legacy duplicate.
-			if rmErr := os.Remove(path); rmErr != nil {
-				return fmt.Errorf("remove duplicate legacy %s: %w", path, rmErr)
-			}
-		} else if rnErr := os.Rename(path, canonicalPath); rnErr != nil {
-			return fmt.Errorf("rename %s: %w", path, rnErr)
-		}
-		migrated = append(migrated, FilenameToID(base))
-		return nil
-	})
-	if walkErr != nil && !errors.Is(walkErr, os.ErrNotExist) {
-		return migrated, output.NewSystemErrorWithCause("filename migration walk failed", walkErr)
-	}
-	return migrated, nil
 }
 
 // EntryExists returns true if an entry file exists for the given ID,

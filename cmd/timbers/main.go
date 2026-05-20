@@ -154,8 +154,9 @@ func addCommandGroups(cmd *cobra.Command) {
 
 // addCommands adds all subcommands with their group assignments.
 func addCommands(cmd *cobra.Command) {
-	// Core commands: log, pending, status, amend
+	// Core commands: log, ack, pending, status, amend
 	addGroupedCommand(cmd, newLogCmd(), "core")
+	addGroupedCommand(cmd, newAckCmd(), "core")
 	addGroupedCommand(cmd, newAmendCmd(), "core")
 	addGroupedCommand(cmd, newPendingCmd(), "core")
 	addGroupedCommand(cmd, newStatusCmd(), "core")

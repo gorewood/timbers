@@ -45,9 +45,10 @@ type GitOps interface {
 
 // Storage provides read/write access to ledger entries stored as files in .timbers/.
 type Storage struct {
-	git       GitOps
-	files     *FileStorage
-	skipRules []skipRule
+	git         GitOps
+	files       *FileStorage
+	skipRules   []skipRule
+	skipAuthors []string
 }
 
 // NewStorage creates a Storage with the given git operations and file storage.
@@ -64,12 +65,17 @@ func NewStorage(ops GitOps, files *FileStorage) *Storage {
 		ops = realGitOps{}
 	}
 	rules := compiledDefaultSkipRules
+	var authors []string
 	if files != nil {
-		if loaded, err := loadSkipRules(filepath.Dir(files.Dir())); err == nil {
-			rules = loaded
+		// One file parse yields both path rules and author globs. A
+		// malformed or unreadable .timbersignore must not break pending
+		// detection, so loader errors fall through to the defaults.
+		if loadedRules, loadedAuthors, err := loadSkipConfig(filepath.Dir(files.Dir())); err == nil {
+			rules = loadedRules
+			authors = loadedAuthors
 		}
 	}
-	return &Storage{git: ops, files: files, skipRules: rules}
+	return &Storage{git: ops, files: files, skipRules: rules, skipAuthors: authors}
 }
 
 // NewDefaultStorage creates a Storage using real git operations
@@ -217,12 +223,16 @@ func (s *Storage) getPendingCommits(firstParent bool) ([]git.Commit, *Entry, err
 
 	// One disk scan per pending check: ListEntries is the source of both
 	// `latest` and the documented-SHA set used by revert auto-skipping.
+	// AckedSet is a parallel scan — built once here and threaded into
+	// filterCommits so all filter calls in this pending check see the
+	// same snapshot (mirrors the docSet pattern).
 	entries, listErr := s.ListEntries()
 	if listErr != nil {
 		return nil, nil, listErr
 	}
 	latest := latestEntry(entries)
 	docSet := documentedSHASetFromEntries(entries)
+	ackedSet := s.AckedSet()
 
 	// No entries yet — return all reachable commits with nil latest.
 	// Display callers (pending, doctor) check latest == nil to show friendly messaging.
@@ -231,7 +241,7 @@ func (s *Storage) getPendingCommits(firstParent bool) ([]git.Commit, *Entry, err
 		if reachErr != nil {
 			return nil, nil, reachErr
 		}
-		return s.filterCommits(commits, docSet, firstParent), nil, nil
+		return s.filterCommits(commits, docSet, ackedSet, firstParent), nil, nil
 	}
 
 	// Check if the anchor is reachable from HEAD. After rebase or squash merge,
@@ -244,7 +254,7 @@ func (s *Storage) getPendingCommits(firstParent bool) ([]git.Commit, *Entry, err
 		if reachErr != nil {
 			return nil, nil, reachErr
 		}
-		return s.filterCommits(fallback, docSet, firstParent), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
+		return s.filterCommits(fallback, docSet, ackedSet, firstParent), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
 	}
 
 	// Get commits from anchor (exclusive) to HEAD (inclusive).
@@ -260,10 +270,10 @@ func (s *Storage) getPendingCommits(firstParent bool) ([]git.Commit, *Entry, err
 		if reachErr != nil {
 			return nil, nil, reachErr
 		}
-		return s.filterCommits(fallback, docSet, firstParent), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
+		return s.filterCommits(fallback, docSet, ackedSet, firstParent), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
 	}
 
-	return s.filterCommits(commits, docSet, firstParent), latest, nil
+	return s.filterCommits(commits, docSet, ackedSet, firstParent), latest, nil
 }
 
 // latestEntry returns the entry with the most recent CreatedAt, or nil
@@ -279,30 +289,6 @@ func latestEntry(entries []*Entry) *Entry {
 		}
 	}
 	return latest
-}
-
-// isInfrastructureOnlyCommit returns true if every file in the list matches
-// a skip rule (built-in defaults plus any patterns from .timbersignore).
-// Returns false for empty lists (unknown = don't filter).
-func isInfrastructureOnlyCommit(rules []skipRule, files []string) bool {
-	if len(files) == 0 {
-		return false
-	}
-	for _, f := range files {
-		if !matchAny(rules, f) {
-			return false
-		}
-	}
-	return true
-}
-
-// rulesOrDefault returns the storage's skip rules, falling back to the
-// built-in defaults when none have been loaded (e.g., bare-bones tests).
-func (s *Storage) rulesOrDefault() []skipRule {
-	if len(s.skipRules) == 0 {
-		return compiledDefaultSkipRules
-	}
-	return s.skipRules
 }
 
 // HasPendingCommits checks whether undocumented commits exist on the current

@@ -22,6 +22,12 @@ type Commit struct {
 	Author      string    // Author name
 	AuthorEmail string    // Author email
 	Date        time.Time // Commit date
+	ParentCount int       // Number of parents (0=root, 1=normal, 2+=merge)
+}
+
+// IsMerge reports whether the commit is a merge commit (2+ parents).
+func (c Commit) IsMerge() bool {
+	return c.ParentCount >= 2
 }
 
 // Diffstat represents the change statistics for a range of commits.
@@ -58,20 +64,8 @@ func LogFirstParent(fromRef, toRef string) ([]Commit, error) {
 
 // logRange is the shared implementation for Log and LogFirstParent.
 func logRange(fromRef, toRef string, firstParent bool) ([]Commit, error) {
-	// Use custom format to parse commits reliably
-	// Format: SHA, Short, Subject, Body, Author, AuthorEmail, Date (Unix timestamp)
-	format := strings.Join([]string{
-		"%H",  // Full SHA
-		"%h",  // Short SHA
-		"%s",  // Subject
-		"%b",  // Body
-		"%an", // Author name
-		"%ae", // Author email
-		"%at", // Unix timestamp
-	}, fieldSeparator) + commitSeparator
-
 	rangeSpec := fromRef + ".." + toRef
-	args := []string{"log", "--pretty=format:" + format}
+	args := []string{"log", "--pretty=format:" + commitFormat()}
 	if firstParent {
 		args = append(args, "--first-parent")
 	}
@@ -85,10 +79,11 @@ func logRange(fromRef, toRef string, firstParent bool) ([]Commit, error) {
 	return parseCommits(out)
 }
 
-// CommitsReachableFrom returns all commits reachable from the given ref.
-// Commits are returned in reverse chronological order (newest first).
-func CommitsReachableFrom(sha string) ([]Commit, error) {
-	format := strings.Join([]string{
+// commitFormat returns the git log --pretty=format string used by Log,
+// LogFirstParent, and CommitsReachableFrom. Centralized so the field
+// order stays in sync with parseCommitFields.
+func commitFormat() string {
+	return strings.Join([]string{
 		"%H",  // Full SHA
 		"%h",  // Short SHA
 		"%s",  // Subject
@@ -96,9 +91,14 @@ func CommitsReachableFrom(sha string) ([]Commit, error) {
 		"%an", // Author name
 		"%ae", // Author email
 		"%at", // Unix timestamp
+		"%P",  // Parent SHAs (space-separated; empty for root commit)
 	}, fieldSeparator) + commitSeparator
+}
 
-	out, err := Run("log", "--pretty=format:"+format, sha)
+// CommitsReachableFrom returns all commits reachable from the given ref.
+// Commits are returned in reverse chronological order (newest first).
+func CommitsReachableFrom(sha string) ([]Commit, error) {
+	out, err := Run("log", "--pretty=format:"+commitFormat(), sha)
 	if err != nil {
 		return nil, output.NewSystemErrorWithCause("failed to get commits from "+sha, err)
 	}
@@ -135,7 +135,7 @@ func parseCommits(out string) ([]Commit, error) {
 // Returns the commit and true if successful, zero value and false otherwise.
 func parseCommitFields(commitStr string) (Commit, bool) {
 	fields := strings.Split(commitStr, fieldSeparator)
-	if len(fields) < 7 {
+	if len(fields) < 8 {
 		return Commit{}, false
 	}
 
@@ -143,6 +143,13 @@ func parseCommitFields(commitStr string) (Commit, bool) {
 	timestamp, err := strconv.ParseInt(strings.TrimSpace(fields[6]), 10, 64)
 	if err != nil {
 		timestamp = 0
+	}
+
+	// Count parent SHAs (space-separated; empty string = 0 parents = root commit).
+	parentField := strings.TrimSpace(fields[7])
+	parentCount := 0
+	if parentField != "" {
+		parentCount = len(strings.Fields(parentField))
 	}
 
 	return Commit{
@@ -153,6 +160,7 @@ func parseCommitFields(commitStr string) (Commit, bool) {
 		Author:      strings.TrimSpace(fields[4]),
 		AuthorEmail: strings.TrimSpace(fields[5]),
 		Date:        time.Unix(timestamp, 0),
+		ParentCount: parentCount,
 	}, true
 }
 
