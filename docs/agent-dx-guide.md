@@ -889,16 +889,47 @@ Use this checklist when designing agent-oriented CLIs:
 - `timbers hooks install` — Opt-in pre-commit warning for undocumented work
   - The gate walks the **current branch's first-parent line** (not the full DAG),
     so undocumented commits authored on sibling branches and pulled in via merge
-    do not block the current agent. Display commands (`timbers pending`,
-    `prime`, `status`) still show the full picture for debt awareness.
+    do not block the current agent.
   - The gate also drops commits with no first-parent file changes (clean merge
     commits, `--allow-empty` commits), so a routine `git merge --no-ff branch-y`
     that only brings in sibling work does not gate either.
+  - Display commands (`timbers pending`, `prime`, `status`) drop clean merge
+    commits too — so PR merge SHAs ("Merge pull request #N") no longer clutter
+    pending output. Single-parent commits with empty file lists stay visible
+    in display (gate drops them; display keeps them for awareness).
   - **Escape hatch:** set `TIMBERS_SKIP_CROSS_AGENT_DEBT=1` to bypass the gate
     for a single shell. Reserved for narrower edge cases — e.g., a merge commit
     that itself introduced source-file changes on this branch's line (typically
     a conflict resolution) but the current agent considers that work "not
     theirs." Cheaper than `--no-verify` because it doesn't disable other hooks.
+
+- `timbers ack <SHA> --reason "<one-line>"` — Record a decision-to-skip
+  - Third bypass path alongside infrastructure rules and revert auto-skip, with
+    audit trail (date, acker, reason). Use when a commit doesn't merit a
+    content entry but you want to clear it from pending honestly rather than
+    fabricating an entry or using `--no-verify`.
+  - Stored at `.timbers/YYYY/MM/DD/ack_<sha>_<timestamp>.json`, git-tracked
+    alongside entries. Server-side use case: GH Action on PR merge runs
+    `timbers ack <merge_sha> --reason "GitHub merge of PR #N"` so the merge
+    SHA self-clears from everyone's pending list without client discipline.
+
+- `.timbersignore` — Per-repo skip config (extends `.gitignore`-family
+  convention)
+  - Path patterns: `vendor/`, `*.lock`, `docs/generated/` (existing behavior)
+  - Author globs: `author:<glob>` matches against commit author name and email
+    using `filepath.Match` semantics. Useful for auto-skipping bot-authored
+    commits without needing per-commit acks.
+    ```
+    author:q-redshifted              # exact name
+    author:*@bot.example.com         # email-domain glob
+    author:dependabot*               # prefix wildcard (literal '[' has glob meaning)
+    ```
+
+- `TIMBERS_DEBUG=1` — Diagnostic trace for pending-detection decisions
+  - Set to `1`, `true`, `yes`, or `on` to print per-commit classification to
+    stderr: `[timbers] debug: <short-sha> skip <reason>` for each dropped
+    commit, plus a summary line `dropped=infra:N,author:N,ack:N,...`. Useful
+    when investigating "why is/isn't this commit pending?"
 - `timbers setup claude` — Session-start prime injection (project-level by default, `--global` available)
 - `timbers onboard` — Minimal CLAUDE.md/AGENTS.md snippet
 - `timbers init` — Full setup: `.timbers/` directory, optional Claude integration; git hooks via `--hooks`
