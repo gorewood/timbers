@@ -270,6 +270,122 @@ func TestSHAExists(t *testing.T) {
 	})
 }
 
+// TestIsPushedToUpstream verifies the push-before-log race detector. The
+// helper has to fail safely when there's no upstream, when HEAD is detached,
+// or when git is unhappy for any reason — the gate's job is to warn, not
+// to surprise users with false positives.
+func TestIsPushedToUpstream(t *testing.T) {
+	t.Run("returns false for empty SHA", func(t *testing.T) {
+		if IsPushedToUpstream("") {
+			t.Error("expected false for empty SHA")
+		}
+	})
+
+	t.Run("returns false when no upstream configured", func(t *testing.T) {
+		dir := t.TempDir()
+		origDir, _ := os.Getwd()
+		defer func() { _ = os.Chdir(origDir) }()
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("chdir: %v", err)
+		}
+		mustRun := func(args ...string) {
+			t.Helper()
+			if _, err := Run(args...); err != nil {
+				t.Fatalf("git %v failed: %v", args, err)
+			}
+		}
+		mustRun("init")
+		mustRun("config", "user.email", "test@test.com")
+		mustRun("config", "user.name", "Test")
+		if err := os.WriteFile("a.txt", []byte("a"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		mustRun("add", "a.txt")
+		mustRun("commit", "-m", "first")
+
+		sha, err := HEAD()
+		if err != nil {
+			t.Fatalf("HEAD: %v", err)
+		}
+		// No upstream configured — must not warn.
+		if IsPushedToUpstream(sha) {
+			t.Error("expected false when no upstream is configured")
+		}
+	})
+
+	t.Run("returns true when SHA is reachable from upstream", func(t *testing.T) {
+		// Two repos wired up: 'upstream' as a bare remote, 'local' tracking it.
+		// Mimics the push-before-log race: agent pushed the content SHA to
+		// origin, then ran timbers log locally.
+		root := t.TempDir()
+		upstream := filepath.Join(root, "upstream.git")
+		local := filepath.Join(root, "local")
+		origDir, _ := os.Getwd()
+		defer func() { _ = os.Chdir(origDir) }()
+
+		// Create bare upstream
+		if err := os.Chdir(root); err != nil {
+			t.Fatalf("chdir root: %v", err)
+		}
+		if _, err := Run("init", "--bare", upstream); err != nil {
+			t.Fatalf("init upstream: %v", err)
+		}
+
+		// Create local clone
+		if _, err := Run("clone", upstream, local); err != nil {
+			t.Fatalf("clone: %v", err)
+		}
+		if err := os.Chdir(local); err != nil {
+			t.Fatalf("chdir local: %v", err)
+		}
+		mustRun := func(args ...string) {
+			t.Helper()
+			if _, err := Run(args...); err != nil {
+				t.Fatalf("git %v failed: %v", args, err)
+			}
+		}
+		mustRun("config", "user.email", "test@test.com")
+		mustRun("config", "user.name", "Test")
+		if err := os.WriteFile("a.txt", []byte("a"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		mustRun("add", "a.txt")
+		mustRun("commit", "-m", "first")
+		// Determine the default branch and push it so upstream tracking is set.
+		branch, err := CurrentBranch()
+		if err != nil {
+			t.Fatalf("current branch: %v", err)
+		}
+		mustRun("push", "-u", "origin", branch)
+
+		pushedSHA, err := HEAD()
+		if err != nil {
+			t.Fatalf("HEAD after push: %v", err)
+		}
+
+		// The pushed SHA is reachable from @{u} — this is the race condition.
+		if !IsPushedToUpstream(pushedSHA) {
+			t.Error("expected true: pushed SHA should be reachable from upstream")
+		}
+
+		// Make a follow-up commit locally without pushing — mimics the
+		// auto-committed timbers entry. The unpushed SHA must NOT report
+		// as pushed.
+		if writeErr := os.WriteFile("b.txt", []byte("b"), 0o600); writeErr != nil {
+			t.Fatal(writeErr)
+		}
+		mustRun("add", "b.txt")
+		mustRun("commit", "-m", "second (unpushed)")
+		localSHA, headErr := HEAD()
+		if headErr != nil {
+			t.Fatalf("HEAD after local commit: %v", headErr)
+		}
+		if IsPushedToUpstream(localSHA) {
+			t.Error("expected false: unpushed local SHA should not be reachable from upstream")
+		}
+	})
+}
+
 func TestIsInteractiveGitOp(t *testing.T) {
 	t.Run("normal repo is not mid-operation", func(t *testing.T) {
 		chdirToRepoRoot(t)

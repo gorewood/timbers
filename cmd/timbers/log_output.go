@@ -54,7 +54,7 @@ func formatDiffstat(ds *ledger.Diffstat) string {
 }
 
 // outputLogSuccess outputs the success result.
-func outputLogSuccess(printer *output.Printer, entry *ledger.Entry, pushedMsg string) error {
+func outputLogSuccess(printer *output.Printer, entry *ledger.Entry) error {
 	if printer.IsJSON() {
 		commitSHAs := make([]string, len(entry.Workset.Commits))
 		copy(commitSHAs, entry.Workset.Commits)
@@ -69,7 +69,7 @@ func outputLogSuccess(printer *output.Printer, entry *ledger.Entry, pushedMsg st
 		})
 	}
 
-	_ = printer.Success(map[string]any{"message": "Created entry " + entry.ID + pushedMsg})
+	_ = printer.Success(map[string]any{"message": "Created entry " + entry.ID})
 	printer.Println("  " + entry.Summary.What)
 
 	return nil

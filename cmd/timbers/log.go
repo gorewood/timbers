@@ -224,9 +224,20 @@ func executeLogWrite(
 		return err
 	}
 
-	pushedMsg := ""
+	// Push-before-log race detection: if the commit we just documented is
+	// already on the upstream branch, then the user pushed before logging
+	// and the entry we just auto-committed is stranded locally. Without a
+	// follow-up push, anyone branching off origin sees the content commit
+	// pending with no entry.
+	if anchor := entry.Workset.AnchorCommit; anchor != "" && git.IsPushedToUpstream(anchor) {
+		printer.Warn(
+			"documented commit %s is already pushed, but this entry is not — "+
+				"run `git push` to sync the entry",
+			shortSHA(anchor),
+		)
+	}
 
-	return outputLogSuccess(printer, entry, pushedMsg)
+	return outputLogSuccess(printer, entry)
 }
 
 // getLogCommits retrieves the commits to include in the entry.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/protocol"
 )
 
 // toCommitSummaries converts git commits to CommitSummary slice.
@@ -51,34 +52,11 @@ func buildPrimeEntries(entries []*ledger.Entry, verbose bool) []PrimeEntry {
 }
 
 // defaultWorkflowContent is the fallback workflow text when no PRIME.md exists.
-// NOTE: Keep in sync with cmd/timbers/prime_workflow.go defaultWorkflowContent.
-const defaultWorkflowContent = `<protocol>
-# Session Protocol
+// Composed from internal/protocol so the shared sections (session protocol,
+// stale-anchor guidance) stay in sync with `timbers prime` automatically.
+const defaultWorkflowContent = protocol.SessionProtocol + `
 
-After each git commit, run timbers log to document what you committed.
-Entries reference commit SHAs, so the commit must exist before the entry.
-Document each commit individually — batching loses commit-level granularity.
-
-Session checklist:
-- [ ] git add && git commit (commit code first)
-- [ ] timbers log "what" --why "why" --how "how" (document committed work)
-- [ ] timbers pending (should be zero before session end)
-- [ ] git push (timbers log auto-commits entries, push to sync)
-</protocol>
-
-<stale-anchor>
-# Stale Anchor After Squash Merge
-
-If timbers warns that the anchor commit is missing from history, this typically
-means a branch was squash-merged or rebased. The pending list may show commits
-that are already documented by entries from the original branch.
-
-What to do:
-- Do NOT try to catch up or re-document these commits
-- If the squash-merged branch had timbers entries, the work is already covered
-- Just proceed with your normal work — the anchor self-heals the next time you
-  run timbers log after a real commit
-</stale-anchor>
+` + protocol.StaleAnchorGuidance + `
 `
 
 // loadWorkflowContent loads workflow content from .timbers/PRIME.md or returns default.

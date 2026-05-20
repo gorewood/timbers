@@ -1,21 +1,15 @@
 // Package main provides the entry point for the timbers CLI.
 package main
 
+import "github.com/gorewood/timbers/internal/protocol"
+
 // defaultWorkflowContent is the default workflow instructions for agent onboarding.
 // This can be overridden by placing a .timbers/PRIME.md file in the repo root.
-const defaultWorkflowContent = `<protocol>
-# Session Protocol
-
-After each git commit, run timbers log to document what you committed.
-Entries reference commit SHAs, so the commit must exist before the entry.
-Document each commit individually — batching loses commit-level granularity.
-
-Session checklist:
-- [ ] git add && git commit (commit code first)
-- [ ] timbers log "what" --why "why" --how "how" (document committed work)
-- [ ] timbers pending (should be zero before session end)
-- [ ] git push (timbers log auto-commits entries, push to sync)
-</protocol>
+//
+// The <protocol> and <stale-anchor> sections come from internal/protocol so
+// they stay in sync with the MCP server's workflow injection — the same
+// rules should reach agents regardless of which surface they arrive through.
+const defaultWorkflowContent = protocol.SessionProtocol + `
 
 <why-coaching>
 # Writing Good Why Fields
@@ -220,17 +214,5 @@ ledger entries: git log --invert-grep --grep="^timbers: document"
 See docs/design-decisions.md in the timbers repo for the full rationale.
 </git-log>
 
-<stale-anchor>
-# Stale Anchor After Squash Merge
-
-If timbers warns that the anchor commit is missing from history, this typically
-means a branch was squash-merged or rebased. The pending list may show commits
-that are already documented by entries from the original branch.
-
-What to do:
-- Do NOT try to catch up or re-document these commits
-- If the squash-merged branch had timbers entries, the work is already covered
-- Just proceed with your normal work — the anchor self-heals the next time you
-  run timbers log after a real commit
-</stale-anchor>
+` + protocol.StaleAnchorGuidance + `
 `

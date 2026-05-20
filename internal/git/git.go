@@ -108,6 +108,26 @@ func IsAncestorOf(ancestor, descendant string) bool {
 	return err == nil
 }
 
+// IsPushedToUpstream returns true if the given SHA is reachable from the
+// current branch's upstream (origin/<branch> via @{u}). Returns false when
+// there is no upstream configured, when HEAD is detached, or when any git
+// call fails — the caller treats those as "don't warn" so missing config
+// never produces a spurious warning.
+//
+// Used by `timbers log` to detect the push-before-log race: if the commit
+// the user just documented is already pushed but the entry's auto-commit
+// isn't, the entry is stranded locally and the user needs to push again.
+func IsPushedToUpstream(sha string) bool {
+	if sha == "" {
+		return false
+	}
+	upstream, err := Run("rev-parse", "--symbolic-full-name", "@{u}")
+	if err != nil || upstream == "" {
+		return false
+	}
+	return IsAncestorOf(sha, upstream)
+}
+
 // HasUncommittedChanges returns true if the working tree has staged or unstaged changes.
 func HasUncommittedChanges() bool {
 	out, err := Run("status", "--porcelain")
