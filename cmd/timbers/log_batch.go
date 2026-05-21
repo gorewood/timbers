@@ -225,7 +225,7 @@ func processBatchGroup(
 func buildBatchEntry(storage *ledger.Storage, group commitGroup, tags []string) *ledger.Entry {
 	what, why, how := extractAutoContent(group.commits)
 	workItems := extractWorkItemsFromKey(group.key)
-	anchor := group.commits[0].SHA
+	anchor := pickBatchAnchor(group.commits)
 	diffstat := getBatchDiffstat(storage, group.commits, anchor)
 
 	now := time.Now().UTC()
