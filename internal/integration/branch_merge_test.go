@@ -11,10 +11,27 @@ import (
 )
 
 // commitEntry commits staged timbers entry files.
-// Must be called after timbers log/amend before switching branches.
+//
+// Historically (pre-v0.17 or so) timbers log only staged the entry file,
+// leaving the caller to commit it. Modern timbers log auto-commits via
+// its own git commit invocation, so by the time this helper runs there
+// is typically nothing left to commit. Tolerate that — a clean working
+// tree is the expected state after timbers log in current versions.
+//
+// Kept as a no-op helper rather than removed so the existing test
+// scaffolding still reads naturally as "log then commit-the-entry."
 func (r *testRepo) commitEntry(msg string) {
 	r.t.Helper()
-	r.git("commit", "-m", msg)
+	if _, err := r.gitMayFail("commit", "-m", msg); err != nil {
+		// "nothing to commit" means timbers log already committed the
+		// entry — the modern auto-commit path. Any other error is a
+		// real failure worth surfacing.
+		status, _ := r.gitMayFail("status", "--porcelain")
+		if status == "" {
+			return
+		}
+		r.t.Fatalf("commitEntry %q failed and working tree is not clean: %v\nstatus: %s", msg, err, status)
+	}
 }
 
 // TestBranchMerge_DisjointEntries tests that entries created on separate branches
@@ -117,14 +134,18 @@ func TestBranchMerge_SameDayEntries(t *testing.T) {
 		t.Fatalf("expected 2 entries, got %d", len(entries))
 	}
 
-	// Verify the .timbers/ directory structure has date subdirs
+	// Verify the .timbers/ directory structure has date subdirs.
+	// Filenames use the canonical (dashed) form per v0.18+ —
+	// colons in the time portion (HH:MM:SS) are stored as dashes
+	// (Windows-safe). Apply the same transform here.
 	timbersDir := filepath.Join(repo.dir, ".timbers")
 	for _, e := range entries {
 		// Entry ID format: tb_YYYY-MM-DDT...
 		datePart := e.ID[3:13] // "2026-02-11"
 		parts := strings.SplitN(datePart, "-", 3)
 		expectedDir := filepath.Join(timbersDir, parts[0], parts[1], parts[2])
-		entryFile := filepath.Join(expectedDir, e.ID+".json")
+		filenameSafeID := strings.ReplaceAll(e.ID, ":", "-")
+		entryFile := filepath.Join(expectedDir, filenameSafeID+".json")
 		if _, err := os.Stat(entryFile); err != nil {
 			t.Errorf("entry file not in expected date dir: %s", entryFile)
 		}
@@ -718,6 +739,108 @@ func parseEntryWhats(t *testing.T, queryJSON string) []string {
 		whats[i] = e.Summary.What
 	}
 	return whats
+}
+
+// TestBranchMerge_SideBranchEntryWinsTimestamp is the regression test for
+// the Laura pathology reported on v0.22.0 (osprey-strike, 2026-05-21).
+//
+// Setup: main has its own entry covering main-branch work; a feature
+// branch has an entry covering feature-branch work; the feature-branch
+// entry was created AFTER the main entry (winning the latest-by-timestamp
+// race). When feature is merged back to main, the pending output from
+// main MUST NOT show commits already covered by either entry — both
+// entries' workset.commits contribute to the documented-SHA set
+// regardless of which branch the entries were authored on.
+//
+// This test codifies the correctness contract that any future
+// pending-detection algorithm change must satisfy. As of v0.22.0 the
+// algorithm picks `latest` purely by created_at, which has been shown to
+// cause "pending scrambling" symptoms in real-world repos when a
+// side-branch entry wins the timestamp race. If this test fails on
+// v0.22.0 today, that documents the bug; if it passes, the user-visible
+// symptom comes from elsewhere (likely a coverage gap in the actual
+// workset.commits arrays at runtime, surfaced by the diagnostic from
+// Phase 0 (timbers-rx8)).
+func TestBranchMerge_SideBranchEntryWinsTimestamp(t *testing.T) {
+	repo := newTestRepo(t)
+
+	// Initial commit on main + anchor entry so pending starts clean.
+	repo.createFile("README.md", "# Project")
+	repo.commit("Initial commit")
+	repo.timbersOK("log", "Project init",
+		"--why", "Bootstrap the repo", "--how", "Created README")
+	repo.commitEntry("Log initial entry")
+
+	// Main-branch work + entry. This entry's anchor is on main's
+	// first-parent line — the "correct" anchor from main's perspective.
+	repo.createFile("main_work.go", "package main\nfunc mainWork() {}")
+	mainWorkSHA := repo.commit("Main-branch work")
+	repo.timbersOK("log", "Main branch work",
+		"--why", "Feature requested on main",
+		"--how", "Added mainWork function",
+		"--range", "HEAD^..HEAD")
+	repo.commitEntry("Log main-branch entry")
+
+	// Feature branch off main (branched AFTER the main entry was logged).
+	// Feature-branch work + entry. This entry will be created AFTER the
+	// main-branch entry, so by created_at it becomes "latest" — and its
+	// anchor will be on a side branch from main's perspective.
+	repo.git("checkout", "-b", "feature")
+	repo.createFile("feature_work.go", "package main\nfunc featureWork() {}")
+	featureWorkSHA := repo.commit("Feature-branch work")
+	repo.timbersOK("log", "Feature branch work",
+		"--why", "Different feature on a side branch",
+		"--how", "Added featureWork function",
+		"--range", "HEAD^..HEAD")
+	repo.commitEntry("Log feature-branch entry")
+
+	// Merge feature back to main. After this point HEAD is the merge
+	// commit; main's first-parent line includes the initial commit, the
+	// main-branch work, and the merge — but NOT the feature-branch
+	// commit. The feature-branch entry's anchor is on the side branch.
+	repo.git("checkout", "main")
+	repo.git("merge", "feature", "--no-edit")
+
+	// Run pending. Both pre-merge entries' workset.commits cover their
+	// respective commits, so neither mainWorkSHA nor featureWorkSHA
+	// should appear in pending — they are documented.
+	pendingOut := repo.timbersOK("pending", "--json")
+	var pendingResult struct {
+		Count   int `json:"count"`
+		Commits []struct {
+			SHA     string `json:"sha"`
+			Subject string `json:"subject"`
+		} `json:"commits"`
+	}
+	if err := json.Unmarshal([]byte(pendingOut), &pendingResult); err != nil {
+		t.Fatalf("failed to parse pending JSON: %v", err)
+	}
+
+	// Contract: documented SHAs must not appear in pending regardless of
+	// which entry/branch documented them. The merge commit MAY appear if
+	// it touched files (combined diff non-empty) — dropEmptyMerges only
+	// filters clean merges, and a real merge often has at least the
+	// merged file contents in its first-parent diff.
+	for _, c := range pendingResult.Commits {
+		if c.SHA == mainWorkSHA {
+			t.Errorf("pending shows mainWorkSHA %s but it's documented by the main-branch entry", mainWorkSHA)
+		}
+		if c.SHA == featureWorkSHA {
+			t.Errorf("pending shows featureWorkSHA %s but it's documented by the feature-branch entry", featureWorkSHA)
+		}
+	}
+
+	// Any pending commits that DO appear should be the merge commit
+	// itself (or other genuinely-undocumented work). Surface what
+	// remains for the human reader so a regression is easy to diagnose.
+	if pendingResult.Count > 0 {
+		var subjects []string
+		for _, c := range pendingResult.Commits {
+			subjects = append(subjects, c.Subject)
+		}
+		t.Logf("pending non-empty (%d commits) after merge; remaining: %s",
+			pendingResult.Count, strings.Join(subjects, "; "))
+	}
 }
 
 // containsID checks if an ID exists in a slice of IDs.
