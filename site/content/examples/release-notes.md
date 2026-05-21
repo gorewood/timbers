@@ -1,6 +1,6 @@
 +++
 title = 'Release Notes'
-date = '2026-05-20'
+date = '2026-05-21'
 tags = ['example', 'release-notes']
 +++
 
@@ -8,34 +8,25 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ---
 
-# Release Notes
+# Release Notes — v0.22.0
 
 ## New Features
 
-- You can now mark commits as intentionally skipped with `timbers ack`, recording an honest skip-with-reason instead of leaving them in pending.
-- The new `.timbersignore` file at your repo root lets you configure per-repo skip rules, including `author:` globs for filtering bot or automation commits.
-- Set `TIMBERS_DEBUG=1` to trace why specific commits are being skipped or surfaced as pending.
-- `timbers prime --full` (or `--guide`) shows the complete onboarding guide; the default session-start output is now a compact summary.
-- The default `devblog` template now coaches an operator-and-collaborator voice with explicit anti-fabrication guardrails for emotion, theme, and consequence.
+- **`timbers ack`** — You can now acknowledge commits as intentionally skipped (with a reason) instead of being nudged to log them. This gives you an honest skip path for work that legitimately doesn't need a ledger entry.
+- **Author globs in `.timbersignore`** — You can now skip commits by author using `author:<glob>` lines in `.timbersignore` (e.g. `author:dependabot[bot]*`). Useful for filtering bot-authored commits out of pending detection.
+- **`TIMBERS_DEBUG=1`** — Set this environment variable to get a trace of how pending detection classifies each commit, so you can see why something was (or wasn't) flagged.
+- **PR-description authoring guidance** — `timbers prime` now coaches agents to draft PR bodies from your ledger entries by default when entries exist for the branch.
 
 ## Improvements
 
-- `timbers pending` no longer surfaces empty-file merge commits, cutting noise from auto-rebases and clean merges.
-- In parallel-agent workflows, the pending gate now follows the first-parent line so one agent's undocumented commits no longer block another's. Set `TIMBERS_SKIP_CROSS_AGENT_DEBT=1` to bypass remaining edge cases.
-- `timbers log` now warns when the commit you're documenting has already been pushed upstream, catching push-before-log mistakes that strand entries locally.
-- The post-commit hook now stays quiet for commits that touch only files like `.beads/issues.jsonl` — no more misleading "log this" nudges for non-actionable changes.
-- Lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `go.sum`, `Cargo.lock`, `Gemfile.lock`) are skipped by default when they appear alone in a commit; pair them with a manifest change and they stay pending.
-- The session-start protocol now spells out commit → log → push ordering with an explicit "never push between" callout.
-- Compact `timbers prime` output keeps full entry IDs (resolvable by `timbers show`) and hints when a custom `PRIME.md` is active.
-- `timbers prime --json` now reports the requested mode honestly instead of always reporting `full`.
-- `timbers prime` now coaches agents to draft PR descriptions from your ledger entries via the `pr-description` template when entries exist.
-- Provider model aliases for Anthropic, OpenAI, and Gemini have been refreshed to current official model IDs; Gemini Flash-Lite now resolves to the stable 3.1 model.
-- The `changelog`, `decision-log`, `pr-description`, `release-notes`, `sprint-report`, and `standup` templates have been tuned to better match each artifact's audience and reduce fabrication risk. ADRs now include `Status`, `Date`, and supersession fields.
+- Merge commits with no file changes are no longer shown in `timbers pending`, removing noise from the most common false positives.
+- `timbers log` now warns when you've already pushed the commit you're documenting — surfacing the push-before-log race that previously stranded entries locally.
+- The session-start protocol now spells out the commit → log → push ordering explicitly, with a "never push between commit and log" callout.
+- `docs/agent-dx-guide.md` covers the new surfaces (`ack`, author globs, `TIMBERS_DEBUG`, merge-skip display) alongside existing gates.
 
 ## Bug Fixes
 
-- Hooks no longer install a `timbers prime` invocation that breaks when the binary isn't on PATH — they now degrade gracefully with an install hint.
-
-## Breaking Changes
-
-- **`.timbersignore` now lives at your repo root**, not inside `.timbers/`. If you created one under the old location, move it to the repo root (e.g. `mv .timbers/.timbersignore .timbersignore`).
+- **Post-commit hook no longer nudges on commits with no actionable pending work** — fixes the false nudge when commits touch only `.beads/` or other ignored paths (v0.20.1).
+- **First-parent gate fix for parallel agents** — the timbers gate now scopes to the first-parent line of history, so agent A is no longer blocked by undocumented commits from agent B on a merged side branch (v0.21.0).
+- **`TIMBERS_SKIP_CROSS_AGENT_DEBT`** escape hatch added for the residual case where a merge commit itself touched source files during conflict resolution (v0.21.0).
+- Provider model aliases refreshed — `draft` and `generate` shortcuts now resolve to current official model IDs (including the stable Gemini 3.1 Flash-Lite).

@@ -1,6 +1,6 @@
 +++
 title = 'Changelog'
-date = '2026-05-20'
+date = '2026-05-21'
 tags = ['example', 'changelog']
 +++
 
@@ -14,6 +14,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.22.1] - 2026-05-21
+
+### Internal
+- Added Phase 0 pending-detection diagnostics that surface side-branch topology in `timbers pending` and `timbers doctor` (JSON and human output) without changing the existing anchor-selection algorithm, pointing users at existing escape hatches when a merge-commit anchor obscures the latest entry.
+
 
 ## [0.22.0] - 2026-05-20
 
@@ -579,3 +585,4 @@ Initial public release.
 [0.20.1]: https://github.com/gorewood/timbers/releases/tag/v0.20.1
 [0.21.0]: https://github.com/gorewood/timbers/releases/tag/v0.21.0
 [0.22.0]: https://github.com/gorewood/timbers/releases/tag/v0.22.0
+[0.22.1]: https://github.com/gorewood/timbers/releases/tag/v0.22.1
