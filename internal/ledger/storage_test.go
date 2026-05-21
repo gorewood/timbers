@@ -16,17 +16,18 @@ import (
 
 // mockGitOps implements GitOps for testing (git operations only, no storage).
 type mockGitOps struct {
-	headSHA            string
-	headErr            error
-	logCommits         []git.Commit
-	logErr             error
-	firstParentCommits []git.Commit // returned by LogFirstParent; falls back to logCommits when nil
-	firstParentErr     error        // returned by LogFirstParent; falls back to logErr when nil
-	firstParentCalled  bool         // true if LogFirstParent was called (asserts gate path)
-	reachableFrom      []git.Commit
-	reachableErr       error
-	isAncestor         bool
-	commitFiles        map[string][]string // SHA -> files; nil map = unknown (no filtering)
+	headSHA              string
+	headErr              error
+	logCommits           []git.Commit
+	logErr               error
+	firstParentCommits   []git.Commit // returned by LogFirstParent; falls back to logCommits when nil
+	firstParentErr       error        // returned by LogFirstParent; falls back to logErr when nil
+	firstParentCalled    bool         // true if LogFirstParent was called (asserts gate path)
+	reachableFrom        []git.Commit
+	reachableErr         error
+	isAncestor           bool
+	anchorOffFirstParent bool                // opt-in: when true, IsOnFirstParentLine returns false
+	commitFiles          map[string][]string // SHA -> files; nil map = unknown (no filtering)
 }
 
 func newMockGitOps() *mockGitOps {
@@ -76,6 +77,16 @@ func (m *mockGitOps) CommitsReachableFrom(sha string) ([]git.Commit, error) {
 
 func (m *mockGitOps) IsAncestorOf(ancestor, descendant string) bool {
 	return m.isAncestor
+}
+
+func (m *mockGitOps) IsOnFirstParentLine(sha, head string) bool {
+	// Default true unless the test opts into the "off the line" case
+	// — keeps existing tests unchanged while letting new tests exercise
+	// the Laura pathology directly.
+	if m.anchorOffFirstParent {
+		return false
+	}
+	return true
 }
 
 func (m *mockGitOps) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
@@ -1020,6 +1031,96 @@ func TestFilterCommits_DebugDisabled(t *testing.T) {
 	}
 	if buf.Len() != 0 {
 		t.Errorf("expected no debug output when env unset, got: %s", buf.String())
+	}
+}
+
+// TestLatestAnchorOffFirstParent verifies the diagnostic helper that
+// surfaces the Laura pathology (latest entry's anchor on a merged-in
+// side branch). Returns the negative case (anchor IS on the first-parent
+// line) by default; flipping the mock's anchorOffFirstParent toggle
+// simulates a side-branch anchor.
+func TestLatestAnchorOffFirstParent(t *testing.T) {
+	tests := []struct {
+		name      string
+		entries   []*Entry
+		setupMock func(*mockGitOps)
+		wantOff   bool
+		wantNil   bool
+	}{
+		{
+			name:    "no entries returns false",
+			entries: nil,
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "headsha1234"
+			},
+			wantOff: false,
+			wantNil: true,
+		},
+		{
+			name: "anchor on first-parent line: not off",
+			entries: []*Entry{
+				makeTestEntry("anchorsha12", time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "headsha1234"
+				mock.isAncestor = true
+				// anchorOffFirstParent defaults to false → IsOnFirstParentLine returns true
+			},
+			wantOff: false,
+		},
+		{
+			name: "anchor on side branch but reachable: off (Laura pathology)",
+			entries: []*Entry{
+				makeTestEntry("sidebranch1", time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "headsha1234"
+				mock.isAncestor = true // reachable via merge
+				mock.anchorOffFirstParent = true
+			},
+			wantOff: true,
+		},
+		{
+			name: "stale anchor: not off (different signal)",
+			entries: []*Entry{
+				makeTestEntry("staleanchor", time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "headsha1234"
+				mock.isAncestor = false // anchor missing from history entirely
+				mock.anchorOffFirstParent = true
+			},
+			wantOff: false,
+		},
+		{
+			name: "HEAD error: degrades to false (best-effort diagnostic)",
+			entries: []*Entry{
+				makeTestEntry("anchorsha12", time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headErr = output.NewSystemError("git failed")
+			},
+			wantOff: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := newMockGitOps()
+			tt.setupMock(mock)
+			store := newTestStorage(t, mock, tt.entries...)
+
+			off, latest, err := store.LatestAnchorOffFirstParent()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if off != tt.wantOff {
+				t.Errorf("LatestAnchorOffFirstParent off = %v, want %v", off, tt.wantOff)
+			}
+			if tt.wantNil && latest != nil {
+				t.Errorf("expected nil latest, got %v", latest.ID)
+			}
+		})
 	}
 }
 

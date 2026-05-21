@@ -36,6 +36,10 @@ func (m *mockGitOpsForExport) IsAncestorOf(ancestor, descendant string) bool {
 	return true
 }
 
+func (m *mockGitOpsForExport) IsOnFirstParentLine(sha, head string) bool {
+	return true
+}
+
 func (m *mockGitOpsForExport) GetDiffstat(_, _ string) (git.Diffstat, error) {
 	return git.Diffstat{}, nil
 }

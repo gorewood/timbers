@@ -37,6 +37,7 @@ type GitOps interface {
 	LogFirstParent(fromRef, toRef string) ([]git.Commit, error)
 	CommitsReachableFrom(sha string) ([]git.Commit, error)
 	IsAncestorOf(ancestor, descendant string) bool
+	IsOnFirstParentLine(sha, head string) bool
 	GetDiffstat(fromRef, toRef string) (git.Diffstat, error)
 	CommitFiles(sha string) ([]string, error)
 	CommitFilesMulti(shas []string) (map[string][]string, error)

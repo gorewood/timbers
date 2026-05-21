@@ -19,12 +19,13 @@ import (
 
 // mockGitOpsForPending implements ledger.GitOps for testing pending command.
 type mockGitOpsForPending struct {
-	head            string
-	headErr         error
-	commits         []git.Commit
-	commitsErr      error
-	reachableResult []git.Commit
-	reachableErr    error
+	head                string
+	headErr             error
+	commits             []git.Commit
+	commitsErr          error
+	reachableResult     []git.Commit
+	reachableErr        error
+	anchorOnFirstParent bool // returned by IsOnFirstParentLine; default false models the Laura case
 }
 
 func (m *mockGitOpsForPending) HEAD() (string, error) {
@@ -45,6 +46,10 @@ func (m *mockGitOpsForPending) CommitsReachableFrom(sha string) ([]git.Commit, e
 
 func (m *mockGitOpsForPending) IsAncestorOf(ancestor, descendant string) bool {
 	return true
+}
+
+func (m *mockGitOpsForPending) IsOnFirstParentLine(sha, head string) bool {
+	return m.anchorOnFirstParent
 }
 
 func (m *mockGitOpsForPending) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {

@@ -108,6 +108,34 @@ func IsAncestorOf(ancestor, descendant string) bool {
 	return err == nil
 }
 
+// IsOnFirstParentLine reports whether sha is reachable from head via
+// first-parent traversal. The current branch's first-parent line is the
+// "spine" — commits made directly on this branch, ignoring side branches
+// brought in via merge. A side-branch anchor (e.g., a commit from a
+// merged-in PR's branch) is reachable from head via the DAG but NOT via
+// first-parent — that distinction is what this helper exposes.
+//
+// Bounded at 5000 commits so a pathologically deep history doesn't
+// stall pending detection. For shallower histories the walk terminates
+// at the root. Returns false on any git error or when either SHA is
+// empty, so callers degrade gracefully (no diagnostic, no false
+// positive).
+func IsOnFirstParentLine(sha, head string) bool {
+	if sha == "" || head == "" {
+		return false
+	}
+	out, err := Run("rev-list", "--first-parent", "--max-count=5000", head)
+	if err != nil {
+		return false
+	}
+	for line := range strings.SplitSeq(out, "\n") {
+		if strings.TrimSpace(line) == sha {
+			return true
+		}
+	}
+	return false
+}
+
 // IsPushedToUpstream returns true if the given SHA is reachable from the
 // current branch's upstream (origin/<branch> via @{u}). Returns false when
 // there is no upstream configured, when HEAD is detached, or when any git

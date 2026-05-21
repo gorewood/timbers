@@ -81,11 +81,54 @@ func checkBinaryInPath() checkResult {
 
 // runWorkflowChecks performs workflow-related checks.
 func runWorkflowChecks() []checkResult {
-	checks := make([]checkResult, 0, 3)
+	checks := make([]checkResult, 0, 4)
 	checks = append(checks, checkPendingCommits())
+	checks = append(checks, checkLatestAnchorTopology())
 	checks = append(checks, checkRecentEntries())
 	checks = append(checks, checkMergeStrategy())
 	return checks
+}
+
+// checkLatestAnchorTopology surfaces the Laura pathology: latest entry's
+// anchor is on a merged-in side branch rather than HEAD's first-parent
+// line. The pending algorithm handles this case correctly via docSet
+// filtering, but the situation is opaque to users — pending output reads
+// as "scrambled" even though it isn't. The check tells the user what's
+// going on and points at the existing escape hatches.
+func checkLatestAnchorTopology() checkResult {
+	storage, err := ledger.NewDefaultStorage()
+	if err != nil {
+		return checkResult{
+			Name:    "Latest Anchor Topology",
+			Status:  checkPass,
+			Message: "skipped: " + err.Error(),
+		}
+	}
+	off, latest, offErr := storage.LatestAnchorOffFirstParent()
+	if offErr != nil || latest == nil {
+		return checkResult{
+			Name:    "Latest Anchor Topology",
+			Status:  checkPass,
+			Message: "no entries or check unavailable",
+		}
+	}
+	if !off {
+		return checkResult{
+			Name:    "Latest Anchor Topology",
+			Status:  checkPass,
+			Message: "latest entry's anchor is on this branch's first-parent line",
+		}
+	}
+	return checkResult{
+		Name:   "Latest Anchor Topology",
+		Status: checkWarn,
+		Message: "latest entry (" + latest.ID + ") is anchored to a merged-in side branch (" +
+			shortSHA(latest.Workset.AnchorCommit) + ")",
+		Hint: "Coverage from side-branch entries still applies via docSet — pending is structurally " +
+			"correct but the linear `since-anchor` mental model is opaque here. Escape hatches: " +
+			"set TIMBERS_SKIP_CROSS_AGENT_DEBT=1 to bypass the gate, run 'timbers ack <sha>' " +
+			"to clear a specific commit, or run timbers log on the current branch to re-anchor.",
+	}
 }
 
 // checkPendingCommits checks for undocumented commits.

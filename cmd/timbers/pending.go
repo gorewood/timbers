@@ -14,9 +14,10 @@ import (
 
 // pendingResult holds the data for pending output.
 type pendingResult struct {
-	Count     int             `json:"count"`
-	LastEntry *entryReference `json:"last_entry,omitempty"`
-	Commits   []commitSummary `json:"commits,omitempty"`
+	Count                    int             `json:"count"`
+	LastEntry                *entryReference `json:"last_entry,omitempty"`
+	Commits                  []commitSummary `json:"commits,omitempty"`
+	AnchorOffFirstParentLine bool            `json:"anchor_off_first_parent_line,omitempty"`
 }
 
 // entryReference is a simplified reference to a ledger entry.
@@ -107,6 +108,7 @@ func runPending(cmd *cobra.Command, storage *ledger.Storage, countOnly bool) err
 
 	// Build result
 	result := buildPendingResult(commits, latest)
+	result.AnchorOffFirstParentLine = anchorOffFirstParent(storage)
 
 	// Output based on mode
 	if printer.IsJSON() {
@@ -115,6 +117,19 @@ func runPending(cmd *cobra.Command, storage *ledger.Storage, countOnly bool) err
 
 	outputPendingHuman(printer, result, countOnly)
 	return nil
+}
+
+// anchorOffFirstParent returns true when the latest entry's anchor is on
+// a merged-in side branch — the Laura pathology where pending output is
+// structurally correct but reads as "scrambled" to anyone thinking
+// linearly. Errors from the underlying check are best-effort and silently
+// degrade to false: the diagnostic never blocks pending output.
+func anchorOffFirstParent(storage *ledger.Storage) bool {
+	off, _, err := storage.LatestAnchorOffFirstParent()
+	if err != nil {
+		return false
+	}
+	return off
 }
 
 // outputStaleAnchor handles the stale anchor case — reports 0 actionable
@@ -203,6 +218,9 @@ func outputPendingJSON(printer *output.Printer, result *pendingResult) error {
 		"commits": result.Commits,
 	}
 	data["last_entry"] = result.LastEntry
+	if result.AnchorOffFirstParentLine {
+		data["anchor_off_first_parent_line"] = true
+	}
 
 	// Add suggested commands based on state
 	if result.Count > 0 {
@@ -259,4 +277,19 @@ func outputPendingHuman(printer *output.Printer, result *pendingResult, countOnl
 	// Suggest command
 	printer.Println()
 	printer.Println("Run 'timbers log \"<what>\" --why \"<why>\" --how \"<how>\"' to document this work")
+
+	// Diagnostic hint: when the latest entry's anchor is on a merged-in
+	// side branch, the pending walk is structurally well-defined but
+	// reads as "scrambled" to anyone thinking linearly. Surface the
+	// situation and point at the existing escape hatches.
+	if result.AnchorOffFirstParentLine {
+		printer.Println()
+		printer.Warn("Latest entry's anchor is on a merged-in side branch")
+		printer.Println("This is the cross-agent merge case. Coverage from side-branch entries")
+		printer.Println("still applies via docSet, but the linear `since-anchor` model is opaque here.")
+		printer.Println("Escape hatches:")
+		printer.Println("  - TIMBERS_SKIP_CROSS_AGENT_DEBT=1 (bypass the pre-commit gate)")
+		printer.Println("  - timbers ack <sha> --reason \"...\" (clear a specific commit honestly)")
+		printer.Println("  - re-run timbers log on a commit on this branch's first-parent line")
+	}
 }

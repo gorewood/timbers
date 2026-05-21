@@ -42,6 +42,10 @@ func (m *mockGitOpsForAmend) IsAncestorOf(ancestor, descendant string) bool {
 	return true
 }
 
+func (m *mockGitOpsForAmend) IsOnFirstParentLine(sha, head string) bool {
+	return true
+}
+
 func (m *mockGitOpsForAmend) GetDiffstat(_, _ string) (git.Diffstat, error) {
 	return git.Diffstat{}, nil
 }

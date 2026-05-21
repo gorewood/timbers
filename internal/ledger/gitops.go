@@ -25,6 +25,10 @@ func (realGitOps) IsAncestorOf(ancestor, descendant string) bool {
 	return git.IsAncestorOf(ancestor, descendant)
 }
 
+func (realGitOps) IsOnFirstParentLine(sha, head string) bool {
+	return git.IsOnFirstParentLine(sha, head)
+}
+
 func (realGitOps) GetDiffstat(fromRef, toRef string) (git.Diffstat, error) {
 	return git.GetDiffstat(fromRef, toRef)
 }
