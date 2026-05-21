@@ -28,8 +28,28 @@ func pickBatchAnchor(commits []git.Commit) string {
 	if err != nil || head == "" {
 		return commits[0].SHA
 	}
+	return pickBatchAnchorWith(commits, func(sha string) bool {
+		return git.IsOnFirstParentLine(sha, head)
+	})
+}
+
+// pickBatchAnchorWith is the pure-function core of pickBatchAnchor —
+// dependency on git is injected so the topology behavior is unit-testable
+// without spinning up a real repo. Returns the first commit whose SHA
+// satisfies isOnFirstParent, or commits[0] if none qualify. Empty input
+// returns "".
+//
+// Group ordering invariant: callers pass newest-first slices (mirrors
+// git log's reverse-chronological output via getBatchCommits →
+// GetPendingCommits). Combined with "first match wins," this means the
+// returned SHA is the NEWEST commit on the first-parent line — the
+// correct anchor semantics for a batch entry covering a range of work.
+func pickBatchAnchorWith(commits []git.Commit, isOnFirstParent func(sha string) bool) string {
+	if len(commits) == 0 {
+		return ""
+	}
 	for _, commit := range commits {
-		if git.IsOnFirstParentLine(commit.SHA, head) {
+		if isOnFirstParent(commit.SHA) {
 			return commit.SHA
 		}
 	}
