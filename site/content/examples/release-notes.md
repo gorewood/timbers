@@ -8,25 +8,31 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ---
 
-# Release Notes — v0.22.0
-
 ## New Features
 
-- **`timbers ack`** — You can now acknowledge commits as intentionally skipped (with a reason) instead of being nudged to log them. This gives you an honest skip path for work that legitimately doesn't need a ledger entry.
-- **Author globs in `.timbersignore`** — You can now skip commits by author using `author:<glob>` lines in `.timbersignore` (e.g. `author:dependabot[bot]*`). Useful for filtering bot-authored commits out of pending detection.
-- **`TIMBERS_DEBUG=1`** — Set this environment variable to get a trace of how pending detection classifies each commit, so you can see why something was (or wasn't) flagged.
-- **PR-description authoring guidance** — `timbers prime` now coaches agents to draft PR bodies from your ledger entries by default when entries exist for the branch.
+- You can now create a `.timbersignore` file with `author:<glob>` lines to skip commits from specific authors (useful for bots and automated commits)
+- New `timbers ack` command lets you mark commits as intentionally skipped with a reason, replacing the need for `--no-verify` workarounds
+- Set `TIMBERS_DEBUG=1` to get a detailed trace of why each commit was classified as pending or skipped
+- Set `TIMBERS_SKIP_CROSS_AGENT_DEBT=1` as an escape hatch when working alongside parallel agents whose merge commits would otherwise block your workflow
+- `timbers prime` now defaults to a compact session-start output; use `--full` or `timbers guide` for the complete coaching guide
+- `timbers doctor` now reports when your latest entry's anchor is on a side branch, pointing you at the right escape hatch
+- `timbers pending` surfaces a hint when the latest anchor falls off the first-parent line, so you know why detection looks unusual
 
 ## Improvements
 
-- Merge commits with no file changes are no longer shown in `timbers pending`, removing noise from the most common false positives.
-- `timbers log` now warns when you've already pushed the commit you're documenting — surfacing the push-before-log race that previously stranded entries locally.
-- The session-start protocol now spells out the commit → log → push ordering explicitly, with a "never push between commit and log" callout.
-- `docs/agent-dx-guide.md` covers the new surfaces (`ack`, author globs, `TIMBERS_DEBUG`, merge-skip display) alongside existing gates.
+- `timbers log` now warns when you push a commit before documenting it, catching a race that previously stranded entries locally
+- Pending detection no longer blocks you on another agent's undocumented commits when working in parallel — the gate now scopes to your own first-parent line
+- Empty merge commits and clean `--allow-empty` commits no longer appear as actionable pending work
+- The post-commit hook no longer nudges you to document commits that only touch ignored paths (like `.beads/issues.jsonl`-only commits)
+- `--batch` mode now picks a sensible anchor commit on the first-parent line instead of sometimes landing on a side-branch SHA
+- Session-start prime output is now significantly smaller, freeing context for your actual work
+- Compact prime output preserves full resolvable entry IDs so you can paste them straight into `timbers show`
+- Compact prime tells you when a custom `PRIME.md` workflow is active in your repo
+- Provider model aliases for Anthropic, OpenAI, and Gemini refreshed to current model IDs
 
 ## Bug Fixes
 
-- **Post-commit hook no longer nudges on commits with no actionable pending work** — fixes the false nudge when commits touch only `.beads/` or other ignored paths (v0.20.1).
-- **First-parent gate fix for parallel agents** — the timbers gate now scopes to the first-parent line of history, so agent A is no longer blocked by undocumented commits from agent B on a merged side branch (v0.21.0).
-- **`TIMBERS_SKIP_CROSS_AGENT_DEBT`** escape hatch added for the residual case where a merge commit itself touched source files during conflict resolution (v0.21.0).
-- Provider model aliases refreshed — `draft` and `generate` shortcuts now resolve to current official model IDs (including the stable Gemini 3.1 Flash-Lite).
+- Fixed post-commit hook nudging on `.beads/`-only commits in repos like vellum where the bug was reported
+- Fixed `--json` mode on `timbers prime` reporting the wrong mode in its output
+- Fixed `--batch` entry anchors occasionally pointing at side-branch commits, breaking downstream linear-anchor assumptions
+- Documented commits that previously fell through the pending filter are now correctly recognized as already-documented
