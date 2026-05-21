@@ -102,6 +102,10 @@ func (s *Storage) countAutoSkipped(commits []git.Commit) int {
 			count++
 			continue
 		}
+		if docSet[commit.SHA] {
+			count++
+			continue
+		}
 		if ackedSet[commit.SHA] {
 			count++
 			continue
@@ -167,6 +171,17 @@ func (s *Storage) filterByRules(
 		if matchesSkipAuthor(s.skipAuthors, commit.AuthorEmail, commit.Author) {
 			continue
 		}
+		// Direct docSet membership: any commit in any entry's
+		// workset.commits is documented coverage, regardless of which
+		// branch the entry was authored on. Harmless in the linear
+		// case (Log(anchor, head) range excludes anchor's ancestors
+		// where documented commits typically live). Critical in the
+		// merge case where side-branch commits arrive in the range
+		// via merge and are already covered by side-branch entries'
+		// workset.commits.
+		if docSet != nil && docSet[commit.SHA] {
+			continue
+		}
 		if ackedSet != nil && ackedSet[commit.SHA] {
 			continue
 		}
@@ -185,8 +200,7 @@ func (s *Storage) filterByRules(
 func (s *Storage) classifyCommit(
 	commit git.Commit,
 	fileMap map[string][]string,
-	docSet map[string]bool,
-	ackedSet map[string]bool,
+	docSet, ackedSet map[string]bool,
 	gateStrict bool,
 ) string {
 	rules := s.rulesOrDefault()
@@ -194,8 +208,25 @@ func (s *Storage) classifyCommit(
 	if isInfrastructureOnlyCommit(rules, files) {
 		return "infra"
 	}
-	if matchesSkipAuthor(s.skipAuthors, commit.AuthorEmail, commit.Author) {
+	if reason := classifyByIdentity(commit, docSet, ackedSet, s.skipAuthors); reason != "" {
+		return reason
+	}
+	return classifyByContent(commit, files, gateStrict)
+}
+
+// classifyByIdentity checks author globs, direct docSet membership,
+// ack records, and revert relationships. Returns the first matching
+// reason or "" if none match.
+func classifyByIdentity(
+	commit git.Commit,
+	docSet, ackedSet map[string]bool,
+	skipAuthors []string,
+) string {
+	if matchesSkipAuthor(skipAuthors, commit.AuthorEmail, commit.Author) {
 		return "author"
+	}
+	if docSet != nil && docSet[commit.SHA] {
+		return "documented"
 	}
 	if ackedSet != nil && ackedSet[commit.SHA] {
 		return "ack"
@@ -203,13 +234,21 @@ func (s *Storage) classifyCommit(
 	if docSet != nil && isDocumentedRevert(commit, docSet) {
 		return "revert"
 	}
-	if len(files) == 0 {
-		if commit.IsMerge() {
-			return "merge-empty"
-		}
-		if gateStrict {
-			return "empty"
-		}
+	return ""
+}
+
+// classifyByContent checks for empty-file-list commits (clean merges,
+// --allow-empty markers). gateStrict controls whether non-merge empty
+// commits are dropped (gate path) or kept visible (display path).
+func classifyByContent(commit git.Commit, files []string, gateStrict bool) string {
+	if len(files) > 0 {
+		return ""
+	}
+	if commit.IsMerge() {
+		return "merge-empty"
+	}
+	if gateStrict {
+		return "empty"
 	}
 	return ""
 }
@@ -252,7 +291,7 @@ func (s *Storage) traceFilterDecisions(
 // formatDropCounts renders a map of reason→count as "reason:N,reason:N"
 // in a stable order for parseability.
 func formatDropCounts(counts map[string]int) string {
-	order := []string{"infra", "author", "ack", "revert", "merge-empty", "empty"}
+	order := []string{"infra", "author", "documented", "ack", "revert", "merge-empty", "empty"}
 	parts := make([]string, 0, len(counts))
 	for _, k := range order {
 		if n, ok := counts[k]; ok && n > 0 {
@@ -297,33 +336,4 @@ func (s *Storage) filterCommits(commits []git.Commit, docSet, ackedSet map[strin
 	// commits (--allow-empty) are preserved because they're intentional
 	// and the user may want to see them in pending.
 	return dropEmptyMerges(filtered, fileMap)
-}
-
-// dropEmptyFileChanges removes commits whose file map entry is nil or empty.
-// Used by the gate. Order-preserving.
-func dropEmptyFileChanges(commits []git.Commit, fileMap map[string][]string) []git.Commit {
-	out := make([]git.Commit, 0, len(commits))
-	for _, commit := range commits {
-		if len(fileMap[commit.SHA]) == 0 {
-			continue
-		}
-		out = append(out, commit)
-	}
-	return out
-}
-
-// dropEmptyMerges removes merge commits (2+ parents) whose combined diff
-// returned no files — i.e., the merge added nothing on this branch's
-// first-parent line. Single-parent commits are preserved even when their
-// file list is empty (--allow-empty marker commits stay visible in
-// display output). Order-preserving.
-func dropEmptyMerges(commits []git.Commit, fileMap map[string][]string) []git.Commit {
-	out := make([]git.Commit, 0, len(commits))
-	for _, commit := range commits {
-		if commit.IsMerge() && len(fileMap[commit.SHA]) == 0 {
-			continue
-		}
-		out = append(out, commit)
-	}
-	return out
 }

@@ -1034,6 +1034,96 @@ func TestFilterCommits_DebugDisabled(t *testing.T) {
 	}
 }
 
+// TestGetGatePendingCommits_OffFirstParentFallback verifies the gate
+// fallback fix (timbers-lyp): when the latest entry's anchor is
+// reachable from HEAD via merge but NOT on HEAD's first-parent line,
+// the gate path (firstParent=true) must route through the
+// all-reachable + docSet path instead of running LogFirstParent against
+// a structurally weird range.
+//
+// This was Laura's actual gate-blocking failure: a merged-in side-branch
+// entry won the latest-by-timestamp race, the gate walked
+// LogFirstParent(side-branch-anchor, HEAD), and the result included
+// commits from main's first-parent line that confused the user even
+// when docSet ultimately filtered them.
+func TestGetGatePendingCommits_OffFirstParentFallback(t *testing.T) {
+	mock := newMockGitOps()
+	mock.headSHA = "headsha1234"
+	mock.isAncestor = true           // anchor reachable via merge
+	mock.anchorOffFirstParent = true // but NOT on first-parent line
+	mock.reachableFrom = []git.Commit{
+		{SHA: "ownworkcom1", Short: "own", ParentCount: 1},  // user's own work, in docSet
+		{SHA: "sidecommit1", Short: "side", ParentCount: 1}, // side-branch, in docSet from PR entry
+	}
+	mock.commitFiles = map[string][]string{
+		"ownworkcom1": {"cmd/main.go"},
+		"sidecommit1": {"README.md"},
+	}
+	// firstParentCommits is set non-empty to detect routing mistakes:
+	// if the gate path incorrectly uses LogFirstParent, we'd see this
+	// instead of the reachable-from fallback. With the fix, LogFirstParent
+	// should NOT be called in this scenario.
+	mock.firstParentCommits = []git.Commit{
+		{SHA: "wrongcommit", Short: "wrong", ParentCount: 1},
+	}
+
+	// Anchor entry covers the side-branch commit; the older entry covers
+	// the user's own work. docSet (union of both entries' workset.commits)
+	// should fully cover the two reachable commits — gate result must be 0.
+	anchorEntry := makeTestEntry("sidebranch1", time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC))
+	anchorEntry.Workset.Commits = []string{"sidebranch1", "sidecommit1"}
+	ownEntry := makeTestEntry("ownworkcom1", time.Date(2026, 5, 21, 9, 0, 0, 0, time.UTC))
+	ownEntry.Workset.Commits = []string{"ownworkcom1"}
+	store := newTestStorage(t, mock, anchorEntry, ownEntry)
+
+	commits, _, err := store.GetGatePendingCommits()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Both candidates are in docSet (anchorEntry covers sidebranch1 +
+	// ownEntry covers ownworkcom1), so the gate should see ZERO actionable
+	// pending — which is the correct behavior for Laura's case after fix.
+	if len(commits) != 0 {
+		t.Errorf("expected 0 gate pending (all covered), got %d: %+v", len(commits), commits)
+	}
+	if mock.firstParentCalled {
+		t.Error("gate must NOT call LogFirstParent when anchor is off-first-parent — should use all-reachable fallback")
+	}
+}
+
+// TestGetGatePendingCommits_OnFirstParentUsesLogFirstParent guards the
+// normal case from regression: when the anchor IS on the first-parent
+// line, the gate must still use LogFirstParent (not the fallback).
+func TestGetGatePendingCommits_OnFirstParentUsesLogFirstParent(t *testing.T) {
+	mock := newMockGitOps()
+	mock.headSHA = "headsha1234"
+	mock.isAncestor = true
+	mock.anchorOffFirstParent = false // healthy case
+	mock.logCommits = []git.Commit{
+		{SHA: "newcommit01", Short: "new", ParentCount: 1},
+	}
+	mock.firstParentCommits = []git.Commit{
+		{SHA: "newcommit01", Short: "new", ParentCount: 1},
+	}
+	mock.commitFiles = map[string][]string{
+		"newcommit01": {"cmd/feature.go"},
+	}
+
+	anchor := makeTestEntry("anchorsha12", time.Date(2026, 5, 21, 9, 0, 0, 0, time.UTC))
+	store := newTestStorage(t, mock, anchor)
+
+	commits, _, err := store.GetGatePendingCommits()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(commits) != 1 {
+		t.Errorf("expected 1 gate pending, got %d", len(commits))
+	}
+	if !mock.firstParentCalled {
+		t.Error("gate must call LogFirstParent in the normal (on-first-parent-line) case")
+	}
+}
+
 // TestLatestAnchorOffFirstParent verifies the diagnostic helper that
 // surfaces the Laura pathology (latest entry's anchor on a merged-in
 // side branch). Returns the negative case (anchor IS on the first-parent

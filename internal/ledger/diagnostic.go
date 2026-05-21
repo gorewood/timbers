@@ -1,5 +1,50 @@
 package ledger
 
+import (
+	"fmt"
+
+	"github.com/gorewood/timbers/internal/git"
+)
+
+// anchorShortCircuit handles two short-circuit cases that bypass the
+// normal Log(anchor, head) walk:
+//   - Stale anchor: anchor SHA no longer reachable from HEAD (squash/
+//     rebase GC'd it). Falls back to all-reachable + docSet filtering
+//     and wraps ErrStaleAnchor so display callers can surface a hint.
+//   - Off-first-parent anchor in gate path: anchor is reachable but
+//     not on HEAD's first-parent line (latest entry was authored on a
+//     merged-in side branch). LogFirstParent(anchor, head) would walk
+//     a structurally weird range — exclude side is full-DAG, include
+//     side is first-parent only. Falls back to the same all-reachable
+//     path without wrapping ErrStaleAnchor.
+//
+// Returns (fallbackCommits, err, true) when a short-circuit applied;
+// (nil, nil, false) when the caller should continue with the normal
+// log walk.
+func (s *Storage) anchorShortCircuit(
+	anchor, head string,
+	docSet, ackedSet map[string]bool,
+	firstParent bool,
+) ([]git.Commit, error, bool) {
+	if !s.git.IsAncestorOf(anchor, head) {
+		fallback, reachErr := s.git.CommitsReachableFrom(head)
+		if reachErr != nil {
+			return nil, reachErr, true
+		}
+		return s.filterCommits(fallback, docSet, ackedSet, firstParent),
+			fmt.Errorf("%w: %s", ErrStaleAnchor, anchor),
+			true
+	}
+	if firstParent && !s.git.IsOnFirstParentLine(anchor, head) {
+		fallback, reachErr := s.git.CommitsReachableFrom(head)
+		if reachErr != nil {
+			return nil, reachErr, true
+		}
+		return s.filterCommits(fallback, docSet, ackedSet, firstParent), nil, true
+	}
+	return nil, nil, false
+}
+
 // LatestAnchorOffFirstParent reports whether the latest entry's anchor
 // is reachable from HEAD via merge but NOT via first-parent traversal —
 // i.e., the entry was authored on a side branch that has been merged in.

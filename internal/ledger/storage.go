@@ -245,17 +245,14 @@ func (s *Storage) getPendingCommits(firstParent bool) ([]git.Commit, *Entry, err
 		return s.filterCommits(commits, docSet, ackedSet, firstParent), nil, nil
 	}
 
-	// Check if the anchor is reachable from HEAD. After rebase or squash merge,
-	// old SHAs may linger in the object store (until gc.pruneExpire) but are no
-	// longer in HEAD's history. Without this check, git log succeeds but returns
-	// phantom commits — rebased versions of already-documented work.
+	// Check anchor reachability + topology. Two short-circuit cases:
+	// stale anchor (squash/rebase GC'd the SHA) and off-first-parent
+	// anchor in gate path (LogFirstParent walks a structurally weird
+	// range when the exclude side isn't on the first-parent line).
+	// Both route through CommitsReachableFrom + docSet filtering.
 	anchor := latest.Workset.AnchorCommit
-	if !s.git.IsAncestorOf(anchor, head) {
-		fallback, reachErr := s.git.CommitsReachableFrom(head)
-		if reachErr != nil {
-			return nil, nil, reachErr
-		}
-		return s.filterCommits(fallback, docSet, ackedSet, firstParent), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
+	if fallback, anchorErr, used := s.anchorShortCircuit(anchor, head, docSet, ackedSet, firstParent); used {
+		return fallback, latest, anchorErr
 	}
 
 	// Get commits from anchor (exclusive) to HEAD (inclusive).
