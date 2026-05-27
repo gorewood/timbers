@@ -1,6 +1,6 @@
 +++
 title = 'Changelog'
-date = '2026-05-21'
+date = '2026-05-27'
 tags = ['example', 'changelog']
 +++
 
@@ -14,6 +14,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.22.3] - 2026-05-27
+
+### Changed
+- Improved rebase-relink guidance across `timbers prime` and the MCP server, and sharpened the ack hints in `timbers pending` and `timbers doctor` to a copy-pasteable `rebased; content in <entry-id>` form pointing at the ack-for-rebase pattern.
+
 
 ## [0.22.2] - 2026-05-21
 
@@ -597,3 +603,4 @@ Initial public release.
 [0.22.0]: https://github.com/gorewood/timbers/releases/tag/v0.22.0
 [0.22.1]: https://github.com/gorewood/timbers/releases/tag/v0.22.1
 [0.22.2]: https://github.com/gorewood/timbers/releases/tag/v0.22.2
+[0.22.3]: https://github.com/gorewood/timbers/releases/tag/v0.22.3

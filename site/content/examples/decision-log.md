@@ -1,6 +1,6 @@
 +++
 title = 'Decision Log'
-date = '2026-05-21'
+date = '2026-05-27'
 tags = ['example', 'decision-log']
 +++
 
@@ -8,170 +8,142 @@ Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
 
 ---
 
-## ADR-1: Compact prime output by default, full guide behind opt-in flag
-
-**Status:** Accepted
-**Date:** 2026-05-07
-
-**Context:** Default `timbers prime` injection at session start was spending agent context budget on repeated coaching text — the same protocol guidance reloaded every session. With multiple agents priming per session, the cumulative token cost was substantial, and most of the payload was operational boilerplate the agent had already seen.
-
-**Decision:** Ship a compact v2 renderer as the default `prime` output, preserving only operational ledger safeguards (pending state, stale-anchor warning, recent entries). Move the full coaching guide behind a `--full`/`guide` mode. Claude hooks switched to the new hook mode.
-
-**Consequences:**
-- Smaller per-session context payload across all agents using prime injection.
-- Compact mode initially regressed three affordances — truncated IDs were unresolvable, custom PRIME.md customizations became invisible, and JSON `Mode` field was hardcoded before the flag was interpreted. Fixed in a follow-up: full IDs restored, a hint surfaces when PRIME.md is overridden, JSON honestly reports the requested mode.
-- Agents that need the full coaching guide must now opt in explicitly via `--full`.
-
----
-
-## ADR-2: Single source of truth for protocol text via `internal/protocol` package
-
-**Status:** Accepted
-**Date:** 2026-05-20
-
-**Context:** Protocol guidance (commit ordering, stale-anchor recovery) needed to appear in both the full PRIME doc and the MCP subset, with different consumers needing different subsets of the same content. A push-before-log race had also stranded an entry locally in osprey-strike — the protocol said "commit, log" but didn't bold the no-push-between-them rule.
-
-**Decision:** Extract shared protocol/stale-anchor sections into an `internal/protocol` package. Both `cmd/timbers` (full PRIME doc) and `internal/mcp` (subset) compose from these constants. Rewrote the ordering checklist with an explicit "never push between commit and log" callout. Added `IsPushedToUpstream` + `printer.Warn` so `timbers log` warns when a documented commit is already on upstream but the entry isn't.
-
-**Consequences:**
-- Const-plus-const concatenation gives compile-time composition without runtime overhead.
-- Different consumers can keep their own subsets in sync as the canonical text evolves.
-- Reviewer noted prose-only protocol tests would miss a reordered checklist; added an explicit ordering-position assertion as part of the sanity test.
-- A single-file approach was considered (inspired by folding skip-authors into `.timbersignore`) but rejected because workflow text is fundamentally compositional.
-
----
-
-## ADR-3: Gate pending detection on first-parent line, not full DAG
-
-**Status:** Accepted
-**Date:** 2026-05-18
-
-**Context:** Parallel agents share `.timbers/` via merges. The pre-existing full-DAG gate was blocking agent A's commits on agent B's undocumented commits — wrong actor for the gate to fire on. Author-based attribution was considered first, but all agents in the target setup commit as the same git identity, making author filtering a no-op.
-
-**Decision:** Add `LogFirstParent` to the git layer; refactor `GetPendingCommits` behind a `firstParent bool`; route `HasPendingCommits` through the gate path. Add a `dropEmptyFileChanges` gate-only filter so clean merges and `--allow-empty` commits don't block (display path keeps the conservative empty=unknown rule). Add a `TIMBERS_SKIP_CROSS_AGENT_DEBT` env-var bypass for the narrower case where the merge commit itself touched source during conflict resolution.
-
-**Consequences:**
-- Git-native solution works regardless of how agents configure their commit identity.
-- Display path and gate path now have different semantics — gate is lenient, display still surfaces merges for awareness. The divergence is intentional but adds cognitive load.
-- Cross-agent debt env-var escape hatch ships as a stopgap; the merge-commit-touched-source case isn't fully solved.
-- Author-based attribution path explicitly rejected for this user's setup.
-
----
-
-## ADR-4: Hooks share one `hasActionablePending()` definition of "actionable"
-
-**Status:** Accepted
-**Date:** 2026-05-10
-
-**Context:** Pending, log, and the post-commit hook were drifting on what counts as undocumented work. The hook nudged agents to log commits that `timbers log` would refuse, creating contradictory signals. A real bug surfaced in gorewood/vellum where `.beads/issues.jsonl`-only commits triggered the nudge because `runPostCommitHook` never checked `HasPendingCommits`.
-
-**Decision:** Extract `hasActionablePending()` helper combining `IsRepo`, `IsInteractiveGitOp`, `.timbers/` existence, storage construction, and `HasPendingCommits` checks. Route both pre-commit and post-commit hooks through it. A narrower inline fix in `runPostCommitHook` was considered but rejected — the helper eliminates the divergence root cause and any future hook (post-rewrite, etc.) inherits the same gate for free.
-
-**Consequences:**
-- Adding a third hook later requires no special-casing to stay consistent.
-- Parity is now a single one-line assertion in tests.
-- Test harness needed a `seedFile` escape hatch so `.timbersignore` can be baked into the initial commit; otherwise the ignore file itself becomes actionable.
-
----
-
-## ADR-5: Drop Dolt remote; embedded JSONL is the sole sync channel
+## ADR-1: Keep full entry IDs and a customization hint in compact prime output over maximum terseness
 
 **Status:** Accepted
 **Date:** 2026-05-08
 
-**Context:** A previous agent had skipped committing auto-staged JSONL after misreading a one-time bd 1.0.x schema flip (records gained `_type` discriminator and reordered). The Dolt remote had been unused since 2026-04-29, and `bd dolt push/pull` no-op without one anyway. Two sync channels (Dolt + JSONL) created room for misinterpretation.
+**Context:** The compact `timbers prime` output had shipped to cut the session-context payload, but a follow-up pass found it had traded away agent affordances to do so: it printed ellipsis-truncated entry IDs that couldn't be pasted into `timbers show`, hid that a custom `PRIME.md` workflow was in effect, and the JSON branch hardcoded `Mode=full` before the flag was even interpreted. The fork was whether terseness should win outright or whether specific affordances were worth their byte cost.
 
-**Decision:** Remove the bd SQL remote. Document embedded-only mode in AGENTS.md. Tell agents to commit bd 1.0.x's `_type`-prefixed JSONL rewrites without reverting. Add a `bd export | diff` drift-recovery recipe. Drop `bd dolt push` from session-close workflow. Keeping the remote "just in case" was considered and rejected: the gitignored `.beads/dolt/` working DB plus the committed JSONL is sufficient for full reconstruction.
+**Decision:** Favor affordance and honesty over raw size. Removed `compactEntryID` so the full `tb_<ts>_<sha>` ID prints — ~50 bytes per session across three entries — to restore paste-into-`timbers show` ergonomics. Emit a hint when `PRIME.md` is overridden rather than auto-merging its content into compact, keeping the view tight while flagging that customization exists. Set `Mode` from the flag before the JSON branch so JSON reports the mode that was actually requested.
 
 **Consequences:**
-- Single sync channel — no more "which one is authoritative" ambiguity.
-- A future Dolt remote can be re-added with one command if multi-machine federation is ever needed.
-- Agents now have an explicit drift-recovery procedure when the JSONL looks "wrong."
+- Compact output costs ~50 bytes more per session, buying resolvable, paste-ready IDs.
+- Custom-workflow users get a discoverability signal without bloating the default compact view.
+- The `Mode` fix was a structural bug repair — the hardcoded value would otherwise have leaked into MCP/JSON consumers.
+- Does not surface full `PRIME.md` content in compact mode; only a hint. Users who want the full custom workflow must ask for full mode.
 
----
+## ADR-2: Drop the Dolt remote in favor of a single JSONL sync channel
 
-## ADR-6: `.timbersignore` carries author globs via `author:` prefix
+**Status:** Accepted
+**Date:** 2026-05-08
+
+**Context:** A previous agent had skipped committing auto-staged `.beads/issues.jsonl`, misreading a one-time bd 1.0.x schema flip (records gaining a `_type` discriminator and reordering) as corruption. The repo carried two potential sync channels — a Dolt SQL remote and the committed JSONL — but the Dolt remote had been unused since 2026-04-29, and `bd dolt push/pull` no-op without one. The choice was to keep the remote "just in case" or delete it to leave one unambiguous channel.
+
+**Decision:** Delete the Dolt remote. The gitignored `.beads/dolt/` working DB plus the committed JSONL already give full reconstruction, so a second channel added confusion without capability. Documented embedded-only mode in `AGENTS.md`, instructed agents to commit bd's `_type`-prefixed JSONL rewrites without reverting, and added a `bd export | diff` drift-recovery recipe. A future remote can be re-added with one command if multi-machine federation is ever actually needed.
+
+**Consequences:**
+- One sync channel (committed JSONL) removes the misread that stranded bead state locally.
+- `bd dolt push` drops out of the session-close workflow.
+- Agents must trust bd's JSONL rewrites; `bd export -o /tmp/x && diff` is the verification path when the file looks wrong.
+- Multi-machine Dolt federation is unavailable until the remote is re-added — a deliberate deferral, not a loss.
+
+## ADR-3: Share one `hasActionablePending()` gate across hooks over inlining a narrow fix
+
+**Status:** Accepted
+**Date:** 2026-05-10
+
+**Context:** In gorewood/vellum, commits touching only `.beads/issues.jsonl` triggered the post-commit hook's "document this" nudge, even though `timbers log` would refuse them as non-actionable — a contradictory signal for agents. Root cause: `runPostCommitHook` never checked `HasPendingCommits` before printing. The narrow fix was to inline that one check in the post-commit path; the broader option was to extract a single shared definition of "actionable."
+
+**Decision:** Extract `hasActionablePending()` — combining `IsRepo`, `IsInteractiveGitOp`, `.timbers/` existence, storage construction, and `HasPendingCommits` — and route both pre-commit and post-commit hooks through it. The helper eliminates the divergence at its root rather than patching one symptom: pending, log, and both hooks now share one definition, and a future third hook (e.g. post-rewrite) inherits the gate for free.
+
+**Consequences:**
+- Hooks and `timbers log` can no longer disagree about what counts as undocumented.
+- New hooks get correct gating without re-deriving it; the parity test reads as a single assertion.
+- The test harness needed a `seedFile` escape hatch so `.timbersignore` can be baked into the initial commit — otherwise adding it as a separate commit makes *that* commit actionable.
+- Does not change what "actionable" means; only unifies where it is decided.
+
+## ADR-4: Scope the commit gate to the first-parent line over author-based attribution
+
+**Status:** Accepted
+**Date:** 2026-05-18
+
+**Context:** Parallel agents share `.timbers/` through merges, and the old full-DAG gate blocked agent A's commit on agent B's undocumented commits — firing on the wrong actor. The osprey-strike feedback proposed author-based attribution (skip other authors' commits), but in this user's setup all agents commit under the same git identity, so an author filter would no-op.
+
+**Decision:** Scope the gate to HEAD's first-parent line via `LogFirstParent` rather than author. First-parent is git-native and works regardless of identity configuration, which author attribution cannot here. A regression test then exposed a residual case — `git merge --no-ff` puts a merge commit on the first-parent line that still blocked — so a gate-only `dropEmptyFileChanges` filter was added: clean merges and `--allow-empty` commits have empty file lists and add no work to this branch's line. The display path deliberately keeps the conservative empty=unknown rule so `timbers pending` still surfaces them. `TIMBERS_SKIP_CROSS_AGENT_DEBT` remains an escape hatch for the narrow case where a merge commit itself touched source (conflict resolution).
+
+**Consequences:**
+- Agents are no longer gated on commits outside their first-parent line, fixing the parallel-agent false block.
+- Gate and display paths now diverge intentionally — empty merges drop from the gate but remain visible in `pending` for awareness.
+- The env-var bypass covers conflict-resolution merges that legitimately carry source changes.
+- Genuinely distinct-identity use cases stay unaddressed by design; first-parent was chosen precisely because identities are *not* distinct in this setup.
+
+## ADR-5: Compose protocol text from `internal/protocol` const sections over a single shared file
 
 **Status:** Accepted
 **Date:** 2026-05-20
 
-**Context:** The impending q-redshifted autofix pipeline needed a bot-author skip path. An initial implementation used a dedicated `.timbers/skip-authors` file. The user pushed back on file sprawl.
+**Context:** A push-before-log race in osprey-strike stranded an entry locally — the protocol said "commit, log" but didn't make the no-push-between rule prominent, and `timbers log` gave no warning despite having the data to detect it. Fixing the wording meant touching workflow text that two surfaces consume: the full PRIME doc in `cmd/timbers` and a subset in `internal/mcp`. The question was whether to keep that text in one file or structure it for multiple consumers.
 
-**Decision:** Extend `.timbersignore` with `author:<glob>` lines via `classifyTimbersIgnoreLine`. Single parser yields both rule shapes (path globs and author globs). Mirrors the `.gitignore` family idiom and gives a single source of truth for repo skip config.
+**Decision:** Move shared protocol and stale-anchor sections into an `internal/protocol` package as composable `const` sections, assembled differently by each consumer — `cmd/timbers` builds the full PRIME doc, `internal/mcp` takes a subset. The text is fundamentally compositional (different consumers need different subsets), and const+const concatenation gives compile-time composition with no runtime concat overhead, versus a single-file blob that every consumer would have to over-include. Alongside, `IsPushedToUpstream` lets `timbers log` warn when the documented commit is already on `@{u}` but the entry isn't, and the protocol gained an explicit "never push between" callout.
 
 **Consequences:**
-- One file to teach agents about, not two.
-- Edge case: the `author:` prefix collides with literal paths starting with `author:` — extremely rare since `:` is forbidden in Windows filenames, but documented.
-- Author glob examples (exact-name, email-domain, GitHub-bot prefix-wildcard) needed explicit doc coverage because `filepath.Match`'s character-class semantics aren't obvious.
+- Protocol wording lives in one package; both surfaces stay consistent without duplicating prose.
+- New sections plug into the same compose sites — later, `RebaseRelinkGuidance` (ADR-9) wires into both `prime_workflow.go` and `mcp/helpers.go` this way.
+- A protocol sanity test must assert ordering positions, since a prose-only check would miss a reordered checklist.
+- The push-before-log race is now surfaced as a warning rather than silently tolerated.
 
----
-
-## ADR-7: `timbers ack` for honest skip-with-reason instead of fabrication
+## ADR-6: Fold skip-authors into `.timbersignore` author globs over a dedicated config file
 
 **Status:** Accepted
 **Date:** 2026-05-20
 
-**Context:** Agents hitting commits they shouldn't document (merges, vendored changes, automated work) had two bad options: fabricate an entry, or bypass the hook with `--no-verify`. Neither leaves an audit trail.
+**Context:** The impending q-redshifted autofix pipeline needed a way to skip bot-authored commits from pending detection. The first implementation added a dedicated `.timbers/skip-authors` file; the operator pushed back on file sprawl during review.
 
-**Decision:** Ship `timbers ack` storing acknowledgements under `.timbers/YYYY/MM/DD/ack_*.json` with `kind="ack"` under the existing `timbers.devlog/v1` schema. Thread `AckedSet` through `filterCommits` parallel to `docSet` (single scan per pending check).
+**Decision:** Fold author skipping into `.timbersignore` as `author:<glob>` lines, parsed by `classifyTimbersIgnoreLine` (the same parser yields both path and author rule shapes). This mirrors the `.gitignore` family and gives one source of truth for repo skip config rather than a second file. The operator's pushback reshaped the call from a new file to a prefixed line.
 
 **Consequences:**
-- Honest "skip with reason" is now a first-class operation with a persistent record.
-- Reuses the existing devlog schema rather than introducing a new file format.
-- Reviewer caught an `AckedSet` double-scan on round one — corrected before commit.
+- Repo skip configuration lives in one file, idiomatic to anyone who knows `.gitignore`.
+- Author globs support exact-name, email-domain, and (via prefix-wildcard) GitHub-bot patterns, working around `filepath.Match`'s character-class semantics.
+- Edge case: the `author:` prefix collides with literal paths beginning `author:` — accepted as extremely rare, since `:` is forbidden in Windows filenames.
+- Empty or malformed globs fall through the existing silent-drop path for malformed rules.
 
----
+## ADR-7: Provide `timbers ack` as an honest skip-with-reason over fabrication or `--no-verify`
 
-## ADR-8: Phase 0 diagnostic-only response to side-branch latest-anchor friction
+**Status:** Accepted
+**Date:** 2026-05-20
 
-**Status:** Superseded by ADR-9
+**Context:** In osprey-strike, Laura saw merge SHAs in `pending` with no obvious next action. The two existing responses to a commit you don't want to document were both bad: fabricate a ledger entry for it, or bypass the gate with `git commit --no-verify`. Neither leaves an honest record of the deliberate skip.
+
+**Decision:** Add `timbers ack` — a structured skip-with-reason stored under `.timbers/YYYY/MM/DD/ack_*.json` with `kind="ack"` under `timbers.devlog/v1`. The acked set threads through `filterCommits` parallel to `docSet` (one scan per pending check), so an acked commit clears pending the way a documented one does, but the record states it was deliberately skipped and why — honest accounting instead of a fake entry or a silent bypass.
+
+**Consequences:**
+- A commit can be cleared from pending with a recorded reason, no fabrication.
+- Ack records are structured `timbers.devlog/v1` documents, not out-of-band state.
+- The acked set adds a second membership check, folded into the existing single scan rather than a new pass.
+- Becomes the basis for the rebase-relink workflow (ADR-9), where an ack counts as a structured "documented" record.
+
+## ADR-8: Resolve merge-topology pending friction with diagnostics and targeted fixes, not a pending-detection algorithm rewrite
+
+**Status:** Accepted
 **Date:** 2026-05-21
 
-**Context:** Laura's friction on v0.22.0 read as "pending scrambling." An initial plan proposed an algorithm change (first-parent-aware latest entry). An independent reviewer caught that this would regress the common "entry on feature branch then merge" workflow already covered by `TestBranchMerge_EntryOnBranch_NoneOnMain` — losing the anchor entirely for solo-dev-feature-branch flows. Their critique was specific: "Phase 1 is wrong; drop it."
+**Context:** Laura's v0.22.0 friction read as "pending scrambling." The initial plan (Phase 1) was to make the pending-detection algorithm first-parent-aware when selecting the latest entry's anchor. An independent reviewer in a separate context caught that plan as a regression: a first-parent-aware latest entry would lose the anchor entirely for the common "entry on a feature branch, then merge" workflow already exercised by `TestBranchMerge_EntryOnBranch_NoneOnMain` — and gave the exact counterexample. The real question became whether the algorithm was wrong at all.
 
-**Decision:** Ship pure diagnostic in v0.22.1 — no algorithm change. Add `IsOnFirstParentLine` (bounded first-parent walk) and `LatestAnchorOffFirstParent` (disambiguates from stale-anchor). Wire diagnostics into pending and doctor (JSON + human + check surfaces). Codify the regression contract for the Laura pathology in a new integration test. The contract test passing on current code is the empirical signal that the algorithm change may not be needed at all — the friction may be opacity, not incorrectness.
+**Decision:** Don't rewrite the algorithm — the `docSet` algorithm was correct; the gaps were diagnostic opacity and filtering coverage. Shipped in phases:
+- **Phase 0 (diagnostic only):** `IsOnFirstParentLine` + `LatestAnchorOffFirstParent` surface side-branch anchors in `pending`/`doctor`, and a contract test codifies Laura's pathology. That test passing on *unchanged* code was the empirical signal that the friction was opacity, not incorrectness.
+- **Targeted fixes:** A second reviewer traced Laura's transcript to the actual culprit — `--batch` mode picking `commits[0]`, which sometimes landed on a side-branch SHA. `pickBatchAnchor` now returns the first commit on HEAD's first-parent line, falling back to `commits[0]` for the pure cross-agent-debt case. A gate fallback (`anchorShortCircuit`) plus a direct `docSet[commit.SHA]` membership check in `filterByRules` (which had used `docSet` only for revert detection) were both required *together* to get Laura's class to zero pending. The planned algorithm change was confirmed unnecessary.
 
-**Decision was reshaped by the independent reviewer's regression counterexample**, which converted a planned algorithm change into a diagnostic-soak phase.
+Two reviewers reshaped this twice — first killing the algorithm change, then locating the true root cause in `--batch` anchor selection.
 
 **Consequences:**
-- No regression risk for solo-dev-feature-branch users.
-- Existing escape hatches now have visibility — users see the topology.
-- Doesn't actually fix Laura's case; defers the fix until the diagnostic data clarifies whether an algorithm change is warranted.
-- Two pre-existing integration test rot issues surfaced and were repaired separately (`commitEntry` helper predating v0.17 auto-commit; `SameDayEntries` predating v0.18 filename-safe encoding).
+- Laura's merge-topology friction resolves with small, local fixes instead of a risky rewrite; the "entry on feature branch then merge" workflow is preserved.
+- `--batch` entries now anchor on the first-parent line; pure cross-agent-debt cases fall back to `commits[0]` and surface via the off-first-parent diagnostic.
+- Direct `docSet` membership surfaces "documented" as a distinct classify-reason in the `TIMBERS_DEBUG` trace and auto-skip count.
+- The fix was later backed by a `pickBatchAnchorWith` pure-function variant with seven mixed-topology test cases, closing the post-hoc review gap that the original fix shipped without.
+- Phasing let the v0.22.1 diagnostic surface deliver value on its own before the v0.22.2 fixes landed.
 
----
-
-## ADR-9: Fix `--batch` entry anchor by preferring first-parent-line commit
+## ADR-9: Document the existing ack path for rebase-relinking over building content-matching
 
 **Status:** Accepted
-**Date:** 2026-05-21
+**Date:** 2026-05-27
 
-**Context:** After v0.22.1 shipped diagnostics-only, a second reviewer dug into Laura's transcript and identified the actual culprit: `--batch` mode grouped a Work-item trailer's local + cross-branch commits, then naively picked `commits[0]`, which sometimes landed on a side-branch SHA. The resulting entry was structurally valid but its anchor pointed to a side branch, breaking linear-anchor assumptions downstream.
+**Context:** A five-proposal feature request asked timbers to handle rebased commits whose SHAs changed but whose content is preserved — an entry's `docSet` holds literal SHAs that no longer exist in history. The requester's preferred option (A) was automatic content-match relinking. But timbers has no content-matching today, so A would be built from scratch, and its naive byte-identical-diff/reflog form is unsound: rebases shift context lines, and reflog is absent on fresh clones and CI. A sound version needs patch-id stored at log time — a schema change.
 
-**Decision:** Add `pickBatchAnchor` helper that iterates the group's commits and returns the first one on HEAD's first-parent line; falls back to `commits[0]` when no commit qualifies (pure cross-agent debt case, where the off-first-parent-line diagnostic from v0.22.1 surfaces the residual situation). HEAD resolved best-effort via `git.HEAD()` — fails gracefully back to legacy behavior on git error rather than failing the batch run.
-
-A companion fix in pending detection: extract `anchorShortCircuit` helper handling both stale-anchor and off-first-parent gate triggers, routing both through `CommitsReachableFrom` + `filterCommits`. Add direct `docSet[commit.SHA]` membership check in `filterByRules` before ack/revert checks (it was previously only used for revert detection). Both fixes together drop Laura's class to zero pending; either alone is insufficient.
-
-Replaces ADR-8.
+**Decision:** Don't build content-matching now. `ack` (ADR-7) already satisfies the requirement — it produces a structured record that counts as documented — so the cheapest correct fix is documenting that path. Added a `RebaseRelinkGuidance` protocol section (wired into both prime and MCP compose sites per ADR-5), sharpened the `pending`/`doctor` ack hints from a generic `...` reason to a copy-pasteable `rebased; content in <entry-id>` form, and locked the section with a protocol test. Inverted the requester's preference order to D→B→maybe-A per Gall's Law: ship the doc now, graduate to a typed `ack --to <entry>` only if the free-text link bites, and build patch-id gating only with real volume evidence.
 
 **Consequences:**
-- Much smaller fix than the originally-planned algorithm change.
-- Diagnostic surface from v0.22.1 still ships value — surfaces residual cross-agent debt where `pickBatchAnchor` falls back to `commits[0]`.
-- New "documented" classify-reason in the `TIMBERS_DEBUG` trace and `countAutoSkipped` count.
-- Two converging independent reviewers (one caught the original algorithm plan as a regression; the other localized the bug to `--batch`) materially reshaped the call.
-
----
-
-## ADR-10: `TIMBERS_DEBUG` env-truthy trace knob over a permanent flag
-
-**Status:** Accepted
-**Date:** 2026-05-20
-
-**Context:** Pending-detection trace output is high-value for debugging but high-noise in normal operation. A persistent `--debug` flag would either need plumbing through every entry point or get ignored.
-
-**Decision:** Gate trace output in `skipcount.go` on `TIMBERS_DEBUG` env-truthy. Same env-truthy helper covers the `TIMBERS_SKIP_CROSS_AGENT_DEBT` bypass (ADR-3).
-
-**Consequences:**
-- Zero plumbing — any caller (including external scripts) can flip it.
-- Standard pattern for users who already understand `DEBUG=1`.
-- No discoverability from `--help`; relies on docs.
+- Rebased-and-content-preserved commits get a documented, working relink path immediately, with no new code paths.
+- The unsound auto-match (byte-diff/reflog) is avoided; the sound version (patch-id at log time) is deferred behind an evidence gate.
+- Distinct from the stale-anchor case: there the anchor is GC'd and self-heals; here it stays reachable and does not, so it needs explicit handling.
+- Follow-ups filed and deferred: typed `ack --to <entry>` (P3) and patch-id gating (P4).
