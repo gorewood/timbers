@@ -1,0 +1,1 @@
+{"schema":"timbers.devlog/v1","kind":"ack","id":"ack_b9f9b9_2026-05-27T16:53:06Z","acked_at":"2026-05-27T16:53:06.151365Z","acker":{"name":"Bob Bergman","email":"robert.bergman@gmail.com"},"target_sha":"b9f9b9533253ea58a719b7861121174e085d0aa6","reason":"release changelog for v0.22.3; generated artifact, no design decision to record"}
