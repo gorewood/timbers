@@ -62,3 +62,7 @@ sync-branch: "beads-sync"
 # - github.repo
 
 sync.remote: "git+ssh://git@github.com/gorewood/timbers.git"
+
+export.auto: false
+
+export.git-add: false
