@@ -46,10 +46,11 @@ type GitOps interface {
 
 // Storage provides read/write access to ledger entries stored as files in .timbers/.
 type Storage struct {
-	git         GitOps
-	files       *FileStorage
-	skipRules   []skipRule
-	skipAuthors []string
+	git          GitOps
+	files        *FileStorage
+	skipRules    []skipRule
+	skipAuthors  []string
+	skipMessages []string
 }
 
 // NewStorage creates a Storage with the given git operations and file storage.
@@ -66,17 +67,18 @@ func NewStorage(ops GitOps, files *FileStorage) *Storage {
 		ops = realGitOps{}
 	}
 	rules := compiledDefaultSkipRules
-	var authors []string
+	var authors, messages []string
 	if files != nil {
-		// One file parse yields both path rules and author globs. A
-		// malformed or unreadable .timbersignore must not break pending
-		// detection, so loader errors fall through to the defaults.
-		if loadedRules, loadedAuthors, err := loadSkipConfig(filepath.Dir(files.Dir())); err == nil {
+		// One file parse yields path rules, author globs, and message
+		// globs. A malformed or unreadable .timbersignore must not break
+		// pending detection, so loader errors fall through to the defaults.
+		if loadedRules, loadedAuthors, loadedMessages, err := loadSkipConfig(filepath.Dir(files.Dir())); err == nil {
 			rules = loadedRules
 			authors = loadedAuthors
+			messages = loadedMessages
 		}
 	}
-	return &Storage{git: ops, files: files, skipRules: rules, skipAuthors: authors}
+	return &Storage{git: ops, files: files, skipRules: rules, skipAuthors: authors, skipMessages: messages}
 }
 
 // NewDefaultStorage creates a Storage using real git operations

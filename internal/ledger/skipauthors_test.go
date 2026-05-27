@@ -79,7 +79,7 @@ func TestMatchesSkipAuthor(t *testing.T) {
 func TestLoadSkipConfig_AuthorLines(t *testing.T) {
 	t.Run("missing file returns defaults and no authors", func(t *testing.T) {
 		dir := t.TempDir()
-		rules, authors, err := loadSkipConfig(dir)
+		rules, authors, _, err := loadSkipConfig(dir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -107,7 +107,7 @@ author:dependabot*               # prefix wildcard for [bot] suffix
 			t.Fatalf("write: %v", err)
 		}
 
-		rules, authors, err := loadSkipConfig(dir)
+		rules, authors, _, err := loadSkipConfig(dir)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -137,7 +137,7 @@ author:dependabot*               # prefix wildcard for [bot] suffix
 			t.Fatalf("write: %v", err)
 		}
 
-		_, authors, err := loadSkipConfig(dir)
+		_, authors, _, err := loadSkipConfig(dir)
 		if err != nil {
 			t.Fatalf("loader must not fail on bad globs, got %v", err)
 		}
@@ -158,7 +158,7 @@ author:dependabot*               # prefix wildcard for [bot] suffix
 			t.Fatalf("write: %v", err)
 		}
 
-		_, authors, err := loadSkipConfig(dir)
+		_, authors, _, err := loadSkipConfig(dir)
 		if err != nil {
 			t.Fatalf("loader: %v", err)
 		}

@@ -21,54 +21,62 @@ const timbersIgnoreFilename = ".timbersignore"
 // readers can tell at a glance which lines target paths vs. authors.
 const authorLinePrefix = "author:"
 
-// loadSkipConfig returns the effective skip-rule set and author-glob set
-// for a given repo root, parsed from <repoRoot>/.timbersignore. A missing
-// file is not an error. The built-in default rules are always merged into
-// the result; user-supplied patterns extend the defaults.
+// messageLinePrefix marks a .timbersignore line as a commit-subject glob
+// (matched against commit.Subject via filepath.Match) instead of a path
+// pattern. Skips housekeeping commits whose files aren't all path-skippable
+// — e.g. a release changelog commit that also touches a version-badge file.
+const messageLinePrefix = "msg:"
+
+// loadSkipConfig returns the effective skip-rule set, author-glob set, and
+// commit-subject-glob set for a given repo root, parsed from
+// <repoRoot>/.timbersignore. A missing file is not an error. The built-in
+// default rules are always merged into the result; user-supplied patterns
+// extend the defaults.
 //
 // File format: one entry per line. Lines starting with "#" are comments;
-// inline " #" trailers are stripped. Two entry shapes:
+// inline " #" trailers are stripped. Three entry shapes:
 //   - "<pattern>"        — path skip rule (existing behavior)
 //   - "author:<glob>"    — author skip rule (matched against email + name)
+//   - "msg:<glob>"       — commit-subject skip rule (matched against Subject)
 //
 // Path patterns follow the skipRule grammar: trailing "/" = directory
-// prefix, leading "*" = suffix match, otherwise exact path. Author globs
-// use filepath.Match semantics (*, ?, character classes).
+// prefix, leading "*" = suffix match, otherwise exact path. Author and
+// message globs use filepath.Match semantics (*, ?, character classes).
 //
-// Edge case: a path that literally starts with "author:" (e.g. a file
-// named "author:notes.txt") cannot be expressed as a path rule because
+// Edge case: a path that literally starts with "author:" or "msg:" (e.g. a
+// file named "msg:notes.txt") cannot be expressed as a path rule because
 // the prefix is reserved. Such filenames are exceedingly rare in real
 // repos (Windows forbids ':' in filenames; most tooling treats ':' as
-// special), and the syntax was chosen so common paths like "author/" do
-// NOT collide (the prefix requires a literal ':' after "author"). If you
-// hit this, use a parent-directory rule instead.
-func loadSkipConfig(repoRoot string) ([]skipRule, []string, error) {
+// special), and the syntax was chosen so common paths like "msg/" do NOT
+// collide (the prefix requires a literal ':' after "msg"). If you hit this,
+// use a parent-directory rule instead.
+func loadSkipConfig(repoRoot string) ([]skipRule, []string, []string, error) {
 	rules := make([]skipRule, 0, len(compiledDefaultSkipRules))
 	rules = append(rules, compiledDefaultSkipRules...)
 
 	if repoRoot == "" {
-		return rules, nil, nil
+		return rules, nil, nil, nil
 	}
 
-	patterns, authors, err := readTimbersIgnore(filepath.Join(repoRoot, timbersIgnoreFilename))
+	patterns, authors, messages, err := readTimbersIgnore(filepath.Join(repoRoot, timbersIgnoreFilename))
 	if err != nil {
-		return rules, nil, err
+		return rules, nil, nil, err
 	}
 	rules = append(rules, compileSkipRules(patterns)...)
-	return rules, authors, nil
+	return rules, authors, messages, nil
 }
 
 // readTimbersIgnore reads and parses a .timbersignore file at the given path.
-// Returns (paths, authors, error). Author entries are lines prefixed with
-// "author:"; everything else is a path pattern. Returns empty slices (no
-// error) if the file does not exist.
-func readTimbersIgnore(path string) (paths, authors []string, err error) {
+// Returns (paths, authors, messages, error). Author entries are lines prefixed
+// with "author:", message entries with "msg:"; everything else is a path
+// pattern. Returns empty slices (no error) if the file does not exist.
+func readTimbersIgnore(path string) (paths, authors, messages []string, err error) {
 	file, openErr := os.Open(path) //nolint:gosec // path is composed from trusted .timbers/ root
 	if openErr != nil {
 		if errors.Is(openErr, fs.ErrNotExist) {
-			return nil, nil, nil
+			return nil, nil, nil, nil
 		}
-		return nil, nil, fmt.Errorf("read %s: %w", timbersIgnoreFilename, openErr)
+		return nil, nil, nil, fmt.Errorf("read %s: %w", timbersIgnoreFilename, openErr)
 	}
 	defer func() { _ = file.Close() }()
 
@@ -82,21 +90,24 @@ func readTimbersIgnore(path string) (paths, authors []string, err error) {
 			paths = append(paths, value)
 		case ignoreLineAuthor:
 			authors = append(authors, value)
+		case ignoreLineMessage:
+			messages = append(messages, value)
 		}
 	}
 	if scanErr := scanner.Err(); scanErr != nil {
-		return nil, nil, fmt.Errorf("scan %s: %w", timbersIgnoreFilename, scanErr)
+		return nil, nil, nil, fmt.Errorf("scan %s: %w", timbersIgnoreFilename, scanErr)
 	}
-	return paths, authors, nil
+	return paths, authors, messages, nil
 }
 
 // ignoreLineKind tags how a .timbersignore line should be consumed.
 type ignoreLineKind int
 
 const (
-	ignoreLineSkip   ignoreLineKind = iota // blank, comment, empty after trim, or malformed entry
-	ignoreLinePath                         // path pattern (no prefix)
-	ignoreLineAuthor                       // "author:<glob>" entry
+	ignoreLineSkip    ignoreLineKind = iota // blank, comment, empty after trim, or malformed entry
+	ignoreLinePath                          // path pattern (no prefix)
+	ignoreLineAuthor                        // "author:<glob>" entry
+	ignoreLineMessage                       // "msg:<glob>" entry
 )
 
 // classifyTimbersIgnoreLine parses a single .timbersignore line and
@@ -118,20 +129,29 @@ func classifyTimbersIgnoreLine(raw string) (ignoreLineKind, string) {
 	if line == "" {
 		return ignoreLineSkip, ""
 	}
-	rest, isAuthor := strings.CutPrefix(line, authorLinePrefix)
-	if !isAuthor {
-		return ignoreLinePath, line
+	if rest, isAuthor := strings.CutPrefix(line, authorLinePrefix); isAuthor {
+		return classifyGlobLine(ignoreLineAuthor, rest)
 	}
+	if rest, isMsg := strings.CutPrefix(line, messageLinePrefix); isMsg {
+		return classifyGlobLine(ignoreLineMessage, rest)
+	}
+	return ignoreLinePath, line
+}
+
+// classifyGlobLine validates a glob-bearing line (author: or msg:) and
+// returns the given kind with the cleaned glob, or ignoreLineSkip if the
+// glob is empty or rejected by filepath.Match. Dropping malformed globs
+// means a bad entry can never break pending detection — same posture as
+// path rules.
+func classifyGlobLine(kind ignoreLineKind, rest string) (ignoreLineKind, string) {
 	rest = strings.TrimSpace(rest)
 	if rest == "" {
 		return ignoreLineSkip, ""
 	}
-	// Drop globs that filepath.Match rejects so a malformed entry can
-	// never break pending detection — same posture as path rules.
 	if _, matchErr := filepath.Match(rest, ""); matchErr != nil {
 		return ignoreLineSkip, ""
 	}
-	return ignoreLineAuthor, rest
+	return kind, rest
 }
 
 // indexInlineComment returns the index of the first '#' preceded by whitespace,

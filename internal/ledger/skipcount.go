@@ -165,27 +165,15 @@ func (s *Storage) filterByRules(
 	rules := s.rulesOrDefault()
 	filtered := make([]git.Commit, 0, len(commits))
 	for _, commit := range commits {
+		// A commit is dropped if it's infrastructure-only (all files match
+		// skip rules) or matches any identity-based skip (author/message
+		// glob, direct docSet membership, ack, documented revert).
+		// classifyByIdentity encodes that chain; reusing it keeps this loop
+		// flat and the skip semantics single-sourced with the debug trace.
 		if isInfrastructureOnlyCommit(rules, fileMap[commit.SHA]) {
 			continue
 		}
-		if matchesSkipAuthor(s.skipAuthors, commit.AuthorEmail, commit.Author) {
-			continue
-		}
-		// Direct docSet membership: any commit in any entry's
-		// workset.commits is documented coverage, regardless of which
-		// branch the entry was authored on. Harmless in the linear
-		// case (Log(anchor, head) range excludes anchor's ancestors
-		// where documented commits typically live). Critical in the
-		// merge case where side-branch commits arrive in the range
-		// via merge and are already covered by side-branch entries'
-		// workset.commits.
-		if docSet != nil && docSet[commit.SHA] {
-			continue
-		}
-		if ackedSet != nil && ackedSet[commit.SHA] {
-			continue
-		}
-		if docSet != nil && isDocumentedRevert(commit, docSet) {
+		if classifyByIdentity(commit, docSet, ackedSet, s.skipAuthors, s.skipMessages) != "" {
 			continue
 		}
 		filtered = append(filtered, commit)
@@ -208,22 +196,25 @@ func (s *Storage) classifyCommit(
 	if isInfrastructureOnlyCommit(rules, files) {
 		return "infra"
 	}
-	if reason := classifyByIdentity(commit, docSet, ackedSet, s.skipAuthors); reason != "" {
+	if reason := classifyByIdentity(commit, docSet, ackedSet, s.skipAuthors, s.skipMessages); reason != "" {
 		return reason
 	}
 	return classifyByContent(commit, files, gateStrict)
 }
 
-// classifyByIdentity checks author globs, direct docSet membership,
-// ack records, and revert relationships. Returns the first matching
-// reason or "" if none match.
+// classifyByIdentity checks author globs, commit-subject globs, direct
+// docSet membership, ack records, and revert relationships. Returns the
+// first matching reason or "" if none match.
 func classifyByIdentity(
 	commit git.Commit,
 	docSet, ackedSet map[string]bool,
-	skipAuthors []string,
+	skipAuthors, skipMessages []string,
 ) string {
 	if matchesSkipAuthor(skipAuthors, commit.AuthorEmail, commit.Author) {
 		return "author"
+	}
+	if matchesSkipMessage(skipMessages, commit.Subject) {
+		return "message"
 	}
 	if docSet != nil && docSet[commit.SHA] {
 		return "documented"
@@ -291,7 +282,7 @@ func (s *Storage) traceFilterDecisions(
 // formatDropCounts renders a map of reason→count as "reason:N,reason:N"
 // in a stable order for parseability.
 func formatDropCounts(counts map[string]int) string {
-	order := []string{"infra", "author", "documented", "ack", "revert", "merge-empty", "empty"}
+	order := []string{"infra", "author", "message", "documented", "ack", "revert", "merge-empty", "empty"}
 	parts := make([]string, 0, len(counts))
 	for _, k := range order {
 		if n, ok := counts[k]; ok && n > 0 {

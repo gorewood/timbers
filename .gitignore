@@ -78,6 +78,9 @@ Desktop.ini
 # Install script
 !install.sh
 
+# Timbers per-repo skip config (shared — gate reads it in every clone/CI)
+!.timbersignore
+
 # Timbers ledger entries
 !.timbers/
 !.timbers/**
