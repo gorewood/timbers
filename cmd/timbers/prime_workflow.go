@@ -215,4 +215,6 @@ See docs/design-decisions.md in the timbers repo for the full rationale.
 </git-log>
 
 ` + protocol.StaleAnchorGuidance + `
+
+` + protocol.RebaseRelinkGuidance + `
 `

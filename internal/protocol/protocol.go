@@ -49,3 +49,34 @@ What to do:
 - Just proceed with your normal work — the anchor self-heals the next time you
   run timbers log after a real commit
 </stale-anchor>`
+
+// RebaseRelinkGuidance is the canonical text for the rebase-preserved-content
+// case, injected by both timbers prime and the MCP server. It is distinct
+// from StaleAnchorGuidance: there the old anchor is GC'd and pending
+// self-heals; here the rebase only rewrote SHAs (content unchanged) while the
+// old anchor may still be reachable, so pending genuinely flags the new SHA
+// and does NOT self-heal. The honest, low-friction fix is `ack`, not a
+// duplicate `log`.
+const RebaseRelinkGuidance = `<rebase-relink>
+# Rebased Commits That Preserve Content
+
+A rebase — or a force-push after addressing review — gives an
+already-documented commit a NEW SHA while its content is unchanged. This is
+NOT the stale-anchor case: the old anchor may still be reachable, so pending
+does NOT self-heal. Coverage is tracked by SHA, so the new SHA shows as
+pending even though the work is already documented.
+
+Do NOT write a fresh entry that just restates the original ("same as <id>,
+rebased"). That pollutes the ledger with duplicate intent.
+
+Instead, ack the new SHA and point at the entry that already covers it:
+
+  timbers ack <new-sha> --reason "rebased; content in <original-entry-id>"
+
+The ack is a structured, auditable record (date + acker + reason) and counts
+as documented — it clears both timbers pending and the pre-commit gate.
+
+Exception: if the rebase genuinely changed the content (you resolved
+conflicts, dropped or reworked hunks), that is new work — write a real
+timbers log entry instead. ack is only for content-preserved SHAs.
+</rebase-relink>`

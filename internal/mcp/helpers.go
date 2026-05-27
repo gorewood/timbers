@@ -53,10 +53,13 @@ func buildPrimeEntries(entries []*ledger.Entry, verbose bool) []PrimeEntry {
 
 // defaultWorkflowContent is the fallback workflow text when no PRIME.md exists.
 // Composed from internal/protocol so the shared sections (session protocol,
-// stale-anchor guidance) stay in sync with `timbers prime` automatically.
+// stale-anchor guidance, rebase-relink guidance) stay in sync with
+// `timbers prime` automatically.
 const defaultWorkflowContent = protocol.SessionProtocol + `
 
 ` + protocol.StaleAnchorGuidance + `
+
+` + protocol.RebaseRelinkGuidance + `
 `
 
 // loadWorkflowContent loads workflow content from .timbers/PRIME.md or returns default.

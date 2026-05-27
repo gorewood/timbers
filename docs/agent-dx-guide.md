@@ -912,6 +912,15 @@ Use this checklist when designing agent-oriented CLIs:
     alongside entries. Server-side use case: GH Action on PR merge runs
     `timbers ack <merge_sha> --reason "GitHub merge of PR #N"` so the merge
     SHA self-clears from everyone's pending list without client discipline.
+  - **Rebase-preserved content (canonical pattern):** when a rebase or a
+    force-push after review gives an already-documented commit a new SHA but
+    the content is unchanged, `ack` the new SHA instead of re-logging:
+    `timbers ack <new-sha> --reason "rebased; content in <original-entry-id>"`.
+    This is distinct from the stale-anchor case (see below): there the old
+    anchor is GC'd and pending self-heals; here the old anchor may still be
+    reachable, so pending genuinely flags the new SHA and `ack` is the honest,
+    low-friction clear. Re-`log` only if the rebase actually changed the
+    content (conflict resolution, dropped hunks) — that's new work.
 
 - `.timbersignore` — Per-repo skip config (extends `.gitignore`-family
   convention)

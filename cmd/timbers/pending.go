@@ -289,7 +289,8 @@ func outputPendingHuman(printer *output.Printer, result *pendingResult, countOnl
 		printer.Println("still applies via docSet, but the linear `since-anchor` model is opaque here.")
 		printer.Println("Escape hatches:")
 		printer.Println("  - TIMBERS_SKIP_CROSS_AGENT_DEBT=1 (bypass the pre-commit gate)")
-		printer.Println("  - timbers ack <sha> --reason \"...\" (clear a specific commit honestly)")
+		printer.Println("  - timbers ack <sha> --reason \"rebased; content in <entry-id>\" (clear a")
+		printer.Println("    content-preserved SHA honestly — it counts as documented)")
 		printer.Println("  - re-run timbers log on a commit on this branch's first-parent line")
 	}
 }

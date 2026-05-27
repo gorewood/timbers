@@ -59,3 +59,23 @@ func TestStaleAnchorGuidance_ContainsCriticalRule(t *testing.T) {
 		}
 	}
 }
+
+// TestRebaseRelinkGuidance_ContainsAckPattern sanity-checks that the
+// rebase-relink text steers agents to ack the new SHA rather than write a
+// duplicate entry. If a future edit drops the ack command or the
+// content-preserved framing, agents lose the low-friction path and fall back
+// to re-logging rebased work.
+func TestRebaseRelinkGuidance_ContainsAckPattern(t *testing.T) {
+	wantSubstrs := []string{
+		"timbers ack <new-sha>",
+		"content in <original-entry-id>",
+		"does NOT self-heal",
+		"<rebase-relink>",
+		"</rebase-relink>",
+	}
+	for _, want := range wantSubstrs {
+		if !strings.Contains(RebaseRelinkGuidance, want) {
+			t.Errorf("RebaseRelinkGuidance missing %q", want)
+		}
+	}
+}

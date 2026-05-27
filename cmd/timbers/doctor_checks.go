@@ -126,8 +126,9 @@ func checkLatestAnchorTopology() checkResult {
 			shortSHA(latest.Workset.AnchorCommit) + ")",
 		Hint: "Coverage from side-branch entries still applies via docSet — pending is structurally " +
 			"correct but the linear `since-anchor` mental model is opaque here. Escape hatches: " +
-			"set TIMBERS_SKIP_CROSS_AGENT_DEBT=1 to bypass the gate, run 'timbers ack <sha>' " +
-			"to clear a specific commit, or run timbers log on the current branch to re-anchor.",
+			"set TIMBERS_SKIP_CROSS_AGENT_DEBT=1 to bypass the gate, run " +
+			"'timbers ack <sha> --reason \"rebased; content in <entry-id>\"' to clear a " +
+			"content-preserved commit honestly, or run timbers log on the current branch to re-anchor.",
 	}
 }
 
