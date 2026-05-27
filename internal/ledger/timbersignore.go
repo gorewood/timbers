@@ -66,6 +66,15 @@ func loadSkipConfig(repoRoot string) ([]skipRule, []string, []string, error) {
 	return rules, authors, messages, nil
 }
 
+// LoadIgnoreGlobs returns the author and message globs configured in
+// <repoRoot>/.timbersignore. The built-in defaults carry none, so an empty
+// result means the repo has no author/message rules. A missing file is not an
+// error. Exposed for diagnostics (e.g. timbers doctor's glob lint).
+func LoadIgnoreGlobs(repoRoot string) (authors, messages []string, err error) {
+	_, authors, messages, err = loadSkipConfig(repoRoot)
+	return authors, messages, err
+}
+
 // readTimbersIgnore reads and parses a .timbersignore file at the given path.
 // Returns (paths, authors, messages, error). Author entries are lines prefixed
 // with "author:", message entries with "msg:"; everything else is a path

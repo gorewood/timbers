@@ -180,6 +180,7 @@ func addCommands(cmd *cobra.Command) {
 	addGroupedCommand(cmd, newHooksCmd(), "admin")
 	addGroupedCommand(cmd, newSetupCmd(), "admin")
 	addGroupedCommand(cmd, newOnboardCmd(), "admin")
+	addGroupedCommand(cmd, newTimbersignoreHelpCmd(), "admin")
 
 	// Hidden internal commands
 	cmd.AddCommand(newHookCmd())

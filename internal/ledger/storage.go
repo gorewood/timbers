@@ -3,7 +3,6 @@ package ledger
 
 import (
 	"errors"
-	"fmt"
 	"path/filepath"
 	"sort"
 
@@ -219,61 +218,14 @@ func (s *Storage) GetGatePendingCommits() ([]git.Commit, *Entry, error) {
 // commits with no first-parent file changes (clean merges or empty commits)
 // are dropped, since they add no new work to this branch's line.
 func (s *Storage) getPendingCommits(firstParent bool) ([]git.Commit, *Entry, error) {
-	head, err := s.git.HEAD()
-	if err != nil {
-		return nil, nil, err
+	commits, latest, docSet, ackedSet, err := s.pendingRange(firstParent)
+	if commits == nil {
+		// Hard error (HEAD/reach failure) — nothing to filter.
+		return nil, latest, err
 	}
-
-	// One disk scan per pending check: ListEntries is the source of both
-	// `latest` and the documented-SHA set used by revert auto-skipping.
-	// AckedSet is a parallel scan — built once here and threaded into
-	// filterCommits so all filter calls in this pending check see the
-	// same snapshot (mirrors the docSet pattern).
-	entries, listErr := s.ListEntries()
-	if listErr != nil {
-		return nil, nil, listErr
-	}
-	latest := latestEntry(entries)
-	docSet := documentedSHASetFromEntries(entries)
-	ackedSet := s.AckedSet()
-
-	// No entries yet — return all reachable commits with nil latest.
-	// Display callers (pending, doctor) check latest == nil to show friendly messaging.
-	if latest == nil {
-		commits, reachErr := s.git.CommitsReachableFrom(head)
-		if reachErr != nil {
-			return nil, nil, reachErr
-		}
-		return s.filterCommits(commits, docSet, ackedSet, firstParent), nil, nil
-	}
-
-	// Check anchor reachability + topology. Two short-circuit cases:
-	// stale anchor (squash/rebase GC'd the SHA) and off-first-parent
-	// anchor in gate path (LogFirstParent walks a structurally weird
-	// range when the exclude side isn't on the first-parent line).
-	// Both route through CommitsReachableFrom + docSet filtering.
-	anchor := latest.Workset.AnchorCommit
-	if fallback, anchorErr, used := s.anchorShortCircuit(anchor, head, docSet, ackedSet, firstParent); used {
-		return fallback, latest, anchorErr
-	}
-
-	// Get commits from anchor (exclusive) to HEAD (inclusive).
-	// If the anchor no longer exists (GC'd), fall back to all reachable
-	// commits from HEAD and wrap ErrStaleAnchor.
-	logFn := s.git.Log
-	if firstParent {
-		logFn = s.git.LogFirstParent
-	}
-	commits, logErr := logFn(anchor, head)
-	if logErr != nil {
-		fallback, reachErr := s.git.CommitsReachableFrom(head)
-		if reachErr != nil {
-			return nil, nil, reachErr
-		}
-		return s.filterCommits(fallback, docSet, ackedSet, firstParent), latest, fmt.Errorf("%w: %s", ErrStaleAnchor, anchor)
-	}
-
-	return s.filterCommits(commits, docSet, ackedSet, firstParent), latest, nil
+	// On stale anchor, commits is the all-reachable fallback; still filter it
+	// (callers that care distinguish via errors.Is(err, ErrStaleAnchor)).
+	return s.filterCommits(commits, docSet, ackedSet, firstParent), latest, err
 }
 
 // latestEntry returns the entry with the most recent CreatedAt, or nil

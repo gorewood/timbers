@@ -43,6 +43,7 @@ func newPendingCmd() *cobra.Command {
 // If storage is nil, a real storage is created when the command runs.
 func newPendingCmdInternal(storage *ledger.Storage) *cobra.Command {
 	var countOnly bool
+	var explain bool
 
 	cmd := &cobra.Command{
 		Use:   "pending",
@@ -55,42 +56,55 @@ made after the most recent ledger entry's anchor commit.
 Examples:
   timbers pending              # List all undocumented commits
   timbers pending --count      # Show only the count of pending commits
+  timbers pending --explain    # Show why each commit is kept or skipped
   timbers pending --json       # Output pending commits as JSON`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runPending(cmd, storage, countOnly)
+			return runPending(cmd, storage, countOnly, explain)
 		},
 	}
 
 	cmd.Flags().BoolVar(&countOnly, "count", false, "Show count only, without commit list")
+	cmd.Flags().BoolVar(&explain, "explain", false, "Classify every commit in range (kept vs skip reason) — verify .timbersignore rules")
 
 	return cmd
 }
 
-// runPending executes the pending command.
-func runPending(cmd *cobra.Command, storage *ledger.Storage, countOnly bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
-
-	// Check if we're in a git repo (only when using real git)
-	if storage == nil && !git.IsRepo() {
+// acquirePendingStorage returns the injected storage, or constructs a default
+// one after verifying we're in a git repo. Reports errors via the printer.
+func acquirePendingStorage(injected *ledger.Storage, printer *output.Printer) (*ledger.Storage, error) {
+	if injected != nil {
+		return injected, nil
+	}
+	if !git.IsRepo() {
 		err := output.NewSystemError("not in a git repository")
 		printer.Error(err)
-		return err
+		return nil, err
 	}
+	storage, err := ledger.NewDefaultStorage()
+	if err != nil {
+		printer.Error(err)
+		return nil, err
+	}
+	return storage, nil
+}
 
-	// Create storage if not injected
-	if storage == nil {
-		var err error
-		storage, err = ledger.NewDefaultStorage()
-		if err != nil {
-			printer.Error(err)
-			return err
-		}
+// runPending executes the pending command.
+func runPending(cmd *cobra.Command, storage *ledger.Storage, countOnly, explain bool) error {
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
+
+	storage, err := acquirePendingStorage(storage, printer)
+	if err != nil {
+		return err
 	}
 
 	// During rebase/merge/cherry-pick, pending counts are unreliable —
 	// check early to avoid wasted git work that produces garbage results.
 	if git.IsInteractiveGitOp() {
 		return outputMidOperation(printer)
+	}
+
+	if explain {
+		return runPendingExplain(storage, printer)
 	}
 
 	// Get pending commits
@@ -277,6 +291,12 @@ func outputPendingHuman(printer *output.Printer, result *pendingResult, countOnl
 	// Suggest command
 	printer.Println()
 	printer.Println("Run 'timbers log \"<what>\" --why \"<why>\" --how \"<how>\"' to document this work")
+
+	// Point at the exemption lever: not all pending commits warrant an entry.
+	// Bot/housekeeping commits are better exempted via .timbersignore than
+	// logged or acked one-by-one.
+	printer.Println("Housekeeping or bot commits can be exempted in .timbersignore")
+	printer.Println("  (path, author:, or msg: rules; e.g. 'author:dependabot*'). See 'timbers help timbersignore'.")
 
 	// Diagnostic hint: when the latest entry's anchor is on a merged-in
 	// side branch, the pending walk is structurally well-defined but

@@ -20,6 +20,7 @@ Install: ` + "`curl -fsSL https://raw.githubusercontent.com/gorewood/timbers/mai
 - ` + "`timbers prime`" + ` - Get workflow context at session start
 - ` + "`timbers pending`" + ` - Check for undocumented commits before session end
 - ` + "`timbers log \"what\" --why \"why\" --how \"how\"`" + ` - Document committed work
+- ` + "`timbers help timbersignore`" + ` - Exempt bot/housekeeping commits from pending (e.g. ` + "`author:dependabot*`" + `)
 - Entries are files in .timbers/ — sync via ` + "`git push`"
 
 // newOnboardCmd creates the onboard command.

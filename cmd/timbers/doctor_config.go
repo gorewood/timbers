@@ -88,11 +88,12 @@ func fetchLatestVersion() (string, error) {
 
 // runConfigChecks performs configuration-related checks.
 func runConfigChecks(flags *doctorFlags) []checkResult {
-	checks := make([]checkResult, 0, 4)
+	checks := make([]checkResult, 0, 5)
 	checks = append(checks, checkConfigDir(flags))
 	checks = append(checks, checkEnvFiles())
 	checks = append(checks, checkTemplates())
 	checks = append(checks, checkGeneration())
+	checks = append(checks, checkTimbersignoreGlobs())
 	return checks
 }
 
