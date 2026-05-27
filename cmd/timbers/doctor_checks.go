@@ -14,9 +14,10 @@ import (
 
 // runCoreChecks performs core infrastructure checks.
 func runCoreChecks(flags *doctorFlags) []checkResult {
-	checks := make([]checkResult, 0, 5)
+	checks := make([]checkResult, 0, 6)
 	checks = append(checks, checkTimbersDirExists())
 	checks = append(checks, checkBinaryInPath())
+	checks = append(checks, checkShadowingBinary())
 	checks = append(checks, checkVersion())
 	checks = append(checks, checkGitattributes())
 	checks = append(checks, checkLegacyFilenames(flags))

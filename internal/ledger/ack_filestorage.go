@@ -56,7 +56,17 @@ func (fs *FileStorage) WriteAck(ack *Ack) error {
 		return output.NewSystemErrorWithCause("failed to stage ack file", err)
 	}
 	if err = fs.gitCommit(path, "timbers: ack "+ack.ID); err != nil {
-		return output.NewSystemErrorWithCause("failed to commit ack file", err)
+		// The record is written and staged; only the commit was rejected.
+		// The usual cause is the pre-commit gate run by a stale hook binary:
+		// "ack counts as documented" landed in v0.22.0, so a hook timbers
+		// older than that still sees the SHA as pending and blocks. Point at
+		// the recovery rather than leaving a bare "commit failed".
+		return output.NewSystemErrorWithCause(
+			"ack record written and staged, but the commit was rejected (usually the "+
+				"pre-commit gate). If the hook's timbers binary predates v0.22.0 it won't "+
+				"treat acks as documented — upgrade it (install.sh / 'just install-release'), "+
+				"check 'timbers doctor' for a shadowing binary on PATH, then run 'git commit'",
+			err)
 	}
 	return nil
 }
