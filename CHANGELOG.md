@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.4] - 2026-05-27
+
+### Changed
+- Added support for `msg:` commit-subject rules in `.timbersignore`, letting commits be skipped from `timbers pending` by subject glob (e.g. `msg:chore: changelog for v*`) without hiding legitimate edits to files those commits also touch.
+- Added a "Binary Shadowing" check to `timbers doctor` that warns when a stale `timbers` binary earlier on `PATH` shadows a newer one (compared by version token to avoid false positives).
+- Improved the `timbers ack` commit-failure message to explain the staged-but-uncommitted state and point to upgrade, `timbers doctor`, and `git commit` recovery.
+
+
 ## [0.22.3] - 2026-05-27
 
 ### Changed
@@ -594,3 +602,4 @@ Initial public release.
 [0.22.1]: https://github.com/gorewood/timbers/releases/tag/v0.22.1
 [0.22.2]: https://github.com/gorewood/timbers/releases/tag/v0.22.2
 [0.22.3]: https://github.com/gorewood/timbers/releases/tag/v0.22.3
+[0.22.4]: https://github.com/gorewood/timbers/releases/tag/v0.22.4
