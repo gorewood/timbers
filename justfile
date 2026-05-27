@@ -335,8 +335,11 @@ release version:
         cat CHANGELOG.md
     } > site/content/examples/changelog.md
 
-    # Regenerate other site examples
-    just examples
+    # Regenerate other site examples. Non-fatal: these are ancillary site
+    # content generated via parallel `claude -p` calls that can flake (rate
+    # limit/timeout). A flake must not abort a version release — the examples
+    # can be regenerated afterward with `just examples`.
+    just examples || echo "WARNING: site example regeneration failed (non-fatal) — rerun 'just examples' later"
 
     # Update landing page version badge
     sed -i '' "s/v[0-9]*\.[0-9]*\.[0-9]* \&middot; Open Source/v${ver} \&middot; Open Source/" site/layouts/index.html
