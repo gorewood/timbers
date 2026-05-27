@@ -348,6 +348,37 @@ release version:
     git push origin main "$tag"
     echo "Release $tag pushed. GitHub Actions will build and publish."
 
+    # Install the published build as a normal consumer once CI publishes it.
+    # This exercises the full pipeline (CI build -> GH release -> install.sh)
+    # as a sanity check rather than trusting the identical local build. The
+    # release is non-draft (see .goreleaser.yaml), so once $tag has assets it
+    # is the "latest" install-release resolves.
+    echo "Waiting for GitHub to publish $tag (up to ~10m)..."
+    deadline=$((SECONDS + 600))
+    published=false
+    while [ "$SECONDS" -lt "$deadline" ]; do
+        asset_count=$(gh release view "$tag" --json assets --jq '.assets | length' 2>/dev/null || echo 0)
+        asset_count=${asset_count:-0}
+        if [ "$asset_count" -gt 0 ]; then
+            published=true
+            break
+        fi
+        sleep 15
+    done
+    if [ "$published" = true ]; then
+        echo "Release published. Installing official build via install-release..."
+        just install-release
+        installed=$(timbers --version 2>/dev/null || echo "unknown")
+        echo "Installed: $installed"
+        case "$installed" in
+            *"$ver"*) echo "Verified: install-release matched $tag." ;;
+            *) echo "WARNING: installed ($installed) does not contain $ver — check 'latest' timing or rerun 'just install-release'." ;;
+        esac
+    else
+        echo "Timed out waiting for publish; the release is pushed and CI is still building."
+        echo "Run 'just install-release' once green: https://github.com/gorewood/timbers/actions"
+    fi
+
 # Validate goreleaser configuration
 release-check:
     goreleaser check
