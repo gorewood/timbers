@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.5] - 2026-05-27
+
+### Added
+- Added a `timbers help timbersignore` topic documenting the three `.timbersignore` rule types and the canonical bot-exemption recipe, and surfaced `.timbersignore` in `timbers onboard` output.
+
+### Changed
+- Added an `--explain` flag to `timbers pending` that classifies every pending commit as documented, acknowledged, or ignored.
+- `timbers pending` now prints a `.timbersignore` hint when ignore rules are active.
+- `timbers doctor` now warns when `author:` or `msg:` rules contain literal-looking `[...]` character classes, guarding the `author:dependabot[bot]` no-op glob footgun.
+
+
 ## [0.22.4] - 2026-05-27
 
 ### Changed
@@ -603,3 +614,4 @@ Initial public release.
 [0.22.2]: https://github.com/gorewood/timbers/releases/tag/v0.22.2
 [0.22.3]: https://github.com/gorewood/timbers/releases/tag/v0.22.3
 [0.22.4]: https://github.com/gorewood/timbers/releases/tag/v0.22.4
+[0.22.5]: https://github.com/gorewood/timbers/releases/tag/v0.22.5

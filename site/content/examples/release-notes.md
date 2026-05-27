@@ -8,25 +8,31 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ---
 
-# Release Notes (v0.20.0 – v0.22.3)
+# Release Notes
 
 ## New Features
-- You can now run `timbers ack` to record an honest reason for intentionally not documenting a commit, instead of bypassing the hook.
-- You can now skip commits by author with `author:<glob>` lines in `.timbersignore` — handy for filtering out bot commits.
-- You can now skip commits by their subject line with `msg:<glob>` lines in `.timbersignore`.
-- Set `TIMBERS_DEBUG=1` to see a trace of how `timbers pending` classifies each commit.
-- Set `TIMBERS_SKIP_CROSS_AGENT_DEBT` to bypass the commit gate when it's blocking on another agent's undocumented work.
+
+- You can now run `timbers ack <commit>` to record an honest skip-with-reason for a commit you don't want to log — no more fabricated entries or bypassing the hook with `--no-verify`.
+- `timbers pending --explain` classifies every commit, showing why each one is pending, documented, or skipped.
+- `.timbersignore` now supports `author:<glob>` rules, so you can skip commits from specific authors such as bot accounts.
+- `.timbersignore` now supports `msg:<glob>` rules, so you can skip commits whose subject matches a pattern (for example, `msg:chore: changelog for v*`).
+- Run `timbers help timbersignore` for a built-in guide to the `.timbersignore` rule types and the canonical bot-skip recipe.
+- Set `TIMBERS_DEBUG=1` to see a trace of how each commit was classified during a pending check.
+- Set `TIMBERS_SKIP_CROSS_AGENT_DEBT=1` to bypass the commit gate when the undocumented commits came from another agent rather than your own work.
 
 ## Improvements
-- In parallel-agent workflows, the commit gate now only considers commits on your branch's first-parent line, so you're no longer blocked by another agent's undocumented commits.
-- `timbers pending` no longer lists empty merge commits that add no work to your branch, reducing noise.
-- `timbers pending` and `timbers doctor` now flag when your latest entry's anchor sits on a side branch and point you at the next step.
-- `timbers log` now warns when you've already pushed the commit you're documenting, catching entries that would otherwise be stranded locally.
-- `timbers doctor` now detects when a stale `timbers` binary earlier on your `PATH` is shadowing your installed version.
-- When `timbers ack` can't commit its record, the error now explains the staged-but-uncommitted state and points you at recovery.
-- `timbers prime` now emits a more compact session-context payload.
+
+- `timbers doctor` now warns when an out-of-date `timbers` earlier on your `PATH` is shadowing your current install — a common, hard-to-spot cause of blocked commits.
+- `timbers doctor` now flags `.timbersignore` `author:`/`msg:` globs containing literal-looking `[...]` brackets, which silently match nothing.
+- `timbers pending` now points you at `.timbersignore` when skip rules apply, and surfaces clearer diagnostics when your latest entry sits on a side branch.
+- `timbers log` now warns when you've already pushed the commit you're documenting but haven't recorded its entry yet, so entries don't get stranded locally.
+- After a rebase, `timbers pending` and `timbers doctor` suggest a ready-to-paste `ack` reason for re-linking moved commits.
+- Empty merge commits no longer clutter `timbers pending`.
+- When an `ack`'s auto-commit is blocked by a stale hook, the error now explains the staged-but-uncommitted state and how to recover.
 
 ## Bug Fixes
-- The post-commit hook no longer nudges you to document commits that only touch skipped files (such as `.beads/`-only commits).
-- `timbers pending` now correctly recognizes already-documented commits across merge and branch topologies, instead of re-listing documented work.
-- `timbers log --batch` now anchors entries to a commit on your branch's first-parent line rather than occasionally picking a side-branch commit.
+
+- `timbers` no longer blocks your commit over undocumented commits that came from a parallel agent or a merge — the commit gate now only considers work on your branch's own line of history.
+- `timbers log --batch` no longer anchors an entry to a side-branch commit, which previously produced entries that downstream commands mis-read.
+- Commits you've already documented are now reliably recognized as documented, even when your latest entry is on a side branch.
+- Clean and empty merge commits no longer block your commit at the gate.
