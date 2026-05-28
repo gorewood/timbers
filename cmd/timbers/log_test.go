@@ -47,6 +47,7 @@ type mockGitOpsForLog struct {
 	headErr         error
 	commits         []git.Commit
 	commitsErr      error
+	rangeCommits    []git.Commit // returned by Log for single-commit range calls (fromRef ends with "^")
 	reachableResult []git.Commit
 	reachableErr    error
 	diffstat        git.Diffstat
@@ -61,7 +62,12 @@ func (m *mockGitOpsForLog) HEAD() (string, error) {
 	return m.head, m.headErr
 }
 
-func (m *mockGitOpsForLog) Log(_, _ string) ([]git.Commit, error) {
+func (m *mockGitOpsForLog) Log(fromRef, _ string) ([]git.Commit, error) {
+	// The --anchor fallback resolves a single commit via LogRange(anchor^, anchor);
+	// distinguish that from the pending-range call so tests can set them apart.
+	if m.rangeCommits != nil && strings.HasSuffix(fromRef, "^") {
+		return m.rangeCommits, nil
+	}
 	return m.commits, m.commitsErr
 }
 
@@ -1074,5 +1080,58 @@ func TestLogStaleAnchorSucceeds(t *testing.T) {
 	}
 	if !strings.Contains(out, "stale anchor") {
 		t.Error("expected stale anchor warning")
+	}
+}
+
+// TestLogAnchorBypassesZeroPending: when detection finds 0 pending commits but
+// --anchor <sha> is given, log should document that single commit rather than
+// refusing — the flag's name promises "use this anchor."
+func TestLogAnchorBypassesZeroPending(t *testing.T) {
+	mock := newMockGitOpsForLog()
+	mock.head = "head000000000000"
+	mock.commits = []git.Commit{}     // pending range is empty → 0 detected
+	mock.rangeCommits = []git.Commit{ // the explicit --anchor commit resolves to one commit
+		{SHA: "anchor0000000000", Short: "anchor0", Subject: "explicit anchor commit"},
+	}
+	mock.diffstat = git.Diffstat{Files: 1, Insertions: 2, Deletions: 0}
+
+	storage, dir := newLogTestStorage(t, mock)
+
+	// A pre-existing entry makes latest != nil so the empty Log(anchor,head)
+	// walk yields 0 pending (rather than the no-entries path).
+	now := time.Now().UTC()
+	prior := &ledger.Entry{
+		Schema: ledger.SchemaVersion, Kind: ledger.KindEntry,
+		ID:        ledger.GenerateID("prioranchor0000000", now),
+		CreatedAt: now, UpdatedAt: now,
+		Workset: ledger.Workset{AnchorCommit: "prioranchor0000000", Commits: []string{"prioranchor0000000"}},
+		Summary: ledger.Summary{What: "prior", Why: "prior", How: "prior"},
+	}
+	data, err := prior.ToJSON()
+	if err != nil {
+		t.Fatalf("serialize: %v", err)
+	}
+	entryDir := filepath.Join(dir, ledger.EntryDateDir(prior.ID))
+	if err := os.MkdirAll(entryDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(entryDir, prior.ID+".json"), data, 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	cmd := newLogCmdWithStorage(storage)
+	cmd.SetArgs([]string{"Document explicit commit", "--why", "real work", "--how", "manual", "--anchor", "anchor0000000000"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	if execErr := cmd.Execute(); execErr != nil {
+		t.Fatalf("expected --anchor to log at 0 pending, got: %v", execErr)
+	}
+	if out := buf.String(); !strings.Contains(out, "Created entry") {
+		t.Errorf("expected entry created via --anchor at 0 pending, got: %q", out)
+	}
+	if n := countJSONFilesInDir(dir); n != 2 { // prior + the new one
+		t.Errorf("expected 2 entry files, got %d", n)
 	}
 }
