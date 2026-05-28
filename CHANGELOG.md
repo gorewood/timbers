@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.6] - 2026-05-27
+
+### Changed
+- Changed `timbers log --anchor` to document a single commit when no pending commits are detected, instead of refusing; the refusal now points at `--range` as the explicit escape hatch.
+- Improved `timbers pending` to surface an explanatory note at count 0 when the anchor is off the first-parent line, pointing at `--explain`/`--range` to disambiguate "clean" from "computed from an off-line anchor".
+
+
 ## [0.22.5] - 2026-05-27
 
 ### Added
@@ -615,3 +622,4 @@ Initial public release.
 [0.22.3]: https://github.com/gorewood/timbers/releases/tag/v0.22.3
 [0.22.4]: https://github.com/gorewood/timbers/releases/tag/v0.22.4
 [0.22.5]: https://github.com/gorewood/timbers/releases/tag/v0.22.5
+[0.22.6]: https://github.com/gorewood/timbers/releases/tag/v0.22.6
