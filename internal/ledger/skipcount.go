@@ -78,9 +78,11 @@ func (s *Storage) commitsSinceLatest() ([]git.Commit, bool, error) {
 }
 
 // countAutoSkipped returns how many of the given commits would be filtered
-// from pending — covers infrastructure-only commits, author-glob matches,
-// acked commits, and documented reverts. Uses the same predicate set as
-// filterByRules.
+// from pending. Mirrors the keep/skip decision of filterByRules — infra-only
+// files OR any identity-based skip (author, message, documented, ack,
+// documented revert) — by delegating identity classification to
+// classifyByIdentity. Single-sourcing the chain prevents the visibility
+// surface (status counts) from drifting away from the gate.
 func (s *Storage) countAutoSkipped(commits []git.Commit) int {
 	if len(commits) == 0 {
 		return 0
@@ -98,19 +100,7 @@ func (s *Storage) countAutoSkipped(commits []git.Commit) int {
 			count++
 			continue
 		}
-		if matchesSkipAuthor(s.skipAuthors, commit.AuthorEmail, commit.Author) {
-			count++
-			continue
-		}
-		if docSet[commit.SHA] {
-			count++
-			continue
-		}
-		if ackedSet[commit.SHA] {
-			count++
-			continue
-		}
-		if isDocumentedRevert(commit, docSet) {
+		if classifyByIdentity(commit, docSet, ackedSet, s.skipAuthors, s.skipMessages) != "" {
 			count++
 		}
 	}

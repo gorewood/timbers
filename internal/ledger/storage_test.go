@@ -775,10 +775,12 @@ func TestGetPendingCommits_KeepsUndocumentedReverts(t *testing.T) {
 
 func TestCountInfraSkippedSinceLatest(t *testing.T) {
 	tests := []struct {
-		name      string
-		entries   []*Entry
-		setupMock func(*mockGitOps)
-		want      int
+		name         string
+		entries      []*Entry
+		setupMock    func(*mockGitOps)
+		skipAuthors  []string
+		skipMessages []string
+		want         int
 	}{
 		{
 			name:    "no entries returns zero",
@@ -809,6 +811,46 @@ func TestCountInfraSkippedSinceLatest(t *testing.T) {
 			want: 2,
 		},
 		{
+			name: "counts commits matched by msg: rule",
+			entries: []*Entry{
+				makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "headsha1234"
+				mock.logCommits = []git.Commit{
+					{SHA: "changelog01", Subject: "chore: changelog for v0.22.7"},
+					{SHA: "realcommit1", Subject: "feat: add widget"},
+					{SHA: "changelog02", Subject: "chore: changelog for v0.22.8"},
+				}
+				mock.commitFiles = map[string][]string{
+					"changelog01": {"CHANGELOG.md"},
+					"realcommit1": {"cmd/main.go"},
+					"changelog02": {"CHANGELOG.md"},
+				}
+			},
+			skipMessages: []string{"chore: changelog for v*"},
+			want:         2,
+		},
+		{
+			name: "counts commits matched by author: rule",
+			entries: []*Entry{
+				makeTestEntry("anchorsha12", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
+			},
+			setupMock: func(mock *mockGitOps) {
+				mock.headSHA = "headsha1234"
+				mock.logCommits = []git.Commit{
+					{SHA: "botcommit01", AuthorEmail: "dependabot[bot]@users.noreply.github.com"},
+					{SHA: "humancommit", AuthorEmail: "human@example.com"},
+				}
+				mock.commitFiles = map[string][]string{
+					"botcommit01": {"go.mod"},
+					"humancommit": {"cmd/main.go"},
+				}
+			},
+			skipAuthors: []string{"dependabot*"},
+			want:        1,
+		},
+		{
 			name: "stale anchor returns zero (not actionable)",
 			entries: []*Entry{
 				makeTestEntry("staleanchor", time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)),
@@ -826,6 +868,8 @@ func TestCountInfraSkippedSinceLatest(t *testing.T) {
 			mock := newMockGitOps()
 			tt.setupMock(mock)
 			store := newTestStorage(t, mock, tt.entries...)
+			store.skipAuthors = tt.skipAuthors
+			store.skipMessages = tt.skipMessages
 
 			got, err := store.CountInfraSkippedSinceLatest()
 			if err != nil {
