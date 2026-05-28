@@ -259,6 +259,14 @@ func outputPendingHuman(printer *output.Printer, result *pendingResult, countOnl
 	// Handle no pending commits (all caught up)
 	if result.Count == 0 {
 		printer.Println("No pending commits - all work is documented")
+		// Off-first-parent anchor: detection still ran (via full-DAG walk),
+		// but say so explicitly here so "no pending" isn't mistaken for
+		// "detection couldn't compute from an off-line anchor."
+		if result.AnchorOffFirstParentLine {
+			printer.Println("(latest entry's anchor is on a merged-in side branch; pending computed")
+			printer.Println(" via full-DAG walk. If this looks wrong: 'timbers pending --explain', or")
+			printer.Println(" 'timbers log --range <from>..<to>' to document a specific range.)")
+		}
 		return
 	}
 
