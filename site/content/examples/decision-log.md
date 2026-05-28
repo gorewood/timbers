@@ -1,6 +1,6 @@
 +++
 title = 'Decision Log'
-date = '2026-05-27'
+date = '2026-05-28'
 tags = ['example', 'decision-log']
 +++
 
@@ -8,160 +8,170 @@ Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
 
 ---
 
-## ADR-1: Detect push-before-log instead of blocking; codify commit→log→never-push-between ordering
-
-**Status:** Accepted
-**Date:** 2026-05-20
-
-**Context:** A push-before-log race in osprey-strike stranded a ledger entry locally — a documented commit reached upstream before `timbers log` ran, and the entry never followed. The protocol said "commit, then log" but never bolded the rule that nothing should be pushed between those steps, and `timbers log` stayed silent even though the upstream state needed to catch the mistake was already in hand.
-
-**Decision:** Surface the race with a warning rather than enforce it with a block. `IsPushedToUpstream` (in `internal/git`) compares the docs anchor against `@{u}` after `WriteEntry`; `printer.Warn` fires when the documented commit is already on upstream but its entry is not. The protocol text was rewritten to lead with explicit commit→log ordering and a "never push between them" callout.
-
-**Consequences:**
-- Agents get an immediate signal at the moment the entry is stranded, using data already available — no extra git round-trips.
-- A warning informs but does not prevent; an agent can still push between commit and log and proceed past it.
-- The "never push between" rule is now explicit in the protocol doc rather than implied by step order.
-
-## ADR-2: Compose protocol text from shared consts in `internal/protocol` over a single-file doc
-
-**Status:** Accepted
-**Date:** 2026-05-20
-
-**Context:** The commit that codified commit→log ordering needed its protocol/workflow text consumed by two surfaces — `cmd/timbers` emits the full PRIME document, while `internal/mcp` needs only a subset. The question was where that text should live.
-
-**Decision:** Reject the single-file approach. The workflow text is fundamentally compositional — different consumers need different subsets — so shared protocol and stale-anchor sections moved into an `internal/protocol` package, composed by each consumer. Const+const concatenation gives compile-time composition with no runtime concat overhead.
-
-**Consequences:**
-- Both consumers draw from one source, so the full doc and the MCP subset cannot drift apart.
-- New shared sections (e.g. `RebaseRelinkGuidance`, added later — see ADR-9) slot in as additional consts wired into each compose site.
-- Composition is fixed at compile time; dynamically selecting subsets at runtime is not supported by this shape.
-
-## ADR-3: Provide `timbers ack` for honest skip-with-reason over fabricated entries or `--no-verify`
-
-**Status:** Accepted
-**Date:** 2026-05-20
-
-**Context:** The v0.22.0 parallel-agent work (osprey-strike feedback) surfaced commits an agent legitimately won't document — merge SHAs, bot autofixes from the impending q-redshifted pipeline. An agent facing the commit gate had only bad options: fabricate a hollow ledger entry, or bypass the hook with `--no-verify`.
-
-**Decision:** Add `timbers ack` — a structured skip-with-reason recorded as `kind="ack"` under `timbers.devlog/v1` in `.timbers/YYYY/MM/DD/ack_*.json`. `AckedSet` threads through `filterCommits` parallel to `docSet`, within the same single scan per pending check.
-
-**Consequences:**
-- A skipped commit leaves an auditable record with a stated reason instead of a fabricated entry or an untracked `--no-verify` bypass.
-- The pending gate honors acks, so acked commits stop showing as pending.
-- ack becomes a first-class disposition alongside "documented"; later work (ADR-9) reuses it for the rebase-relink case.
-
-## ADR-4: Resolve merge-topology pending friction by fixing `--batch` anchor selection and filtering coverage, not the docSet algorithm
+## ADR-1: Pending-detection response: diagnostic-first, defer algorithm change
 
 **Status:** Accepted
 **Date:** 2026-05-21
 
-**Context:** Laura's v0.22.0 friction read as "pending scrambling" against a side-branch merge. The maintainer's initial plan was a Phase 1 algorithm change — making the latest-entry anchor first-parent-aware. An independent reviewer flagged that plan as a regression: it would lose the anchor entirely for the common "entry on a feature branch, then merge" workflow already exercised by `TestBranchMerge_EntryOnBranch_NoneOnMain`.
+**Context:** Laura reported pending detection "scrambling" on v0.22.0 against a side-branch merge topology. The initial plan was a first-parent-aware latest-entry algorithm change. An independent reviewer in a separate context caught that the proposed algorithm would regress the common solo-dev-feature-branch workflow already covered by `TestBranchMerge_EntryOnBranch_NoneOnMain` — entries on a feature branch that later merges would lose their anchor entirely. A second reviewer dug into Laura's transcript and identified `--batch` picking a side-branch SHA in `commits[0]` as the actual culprit, not the docSet algorithm.
 
-**Decision:** Drop the algorithm change — the docSet algorithm was correct; the friction was opacity plus filtering coverage. Ship a diagnostic-only Phase 0 (v0.22.1) — `IsOnFirstParentLine` / `LatestAnchorOffFirstParent`, wired into `pending` and `doctor` — to surface the topology and soak data before changing behavior; the Phase 0 contract test passing on unchanged code was the empirical signal that Phase 1 was unnecessary. The actual root causes, fixed together in v0.22.2, came from two reviewers: `--batch` naively picked `commits[0]`, which could be a side-branch SHA (fixed by `pickBatchAnchor`, which prefers the first commit on HEAD's first-parent line and falls back to `commits[0]` for the pure cross-agent case); and `filterByRules` used `docSet` only for revert detection, never for direct "is this commit documented" membership (fixed by a direct `docSet[commit.SHA]` check, paired with an off-first-parent gate fallback). Both v0.22.2 fixes were required together — the gate fallback alone returned unfiltered reachable commits because direct membership wasn't yet a thing.
+**Decision:** Reverse the algorithm-change plan. Phase 0 ships diagnostic-only: `IsOnFirstParentLine` helper, `LatestAnchorOffFirstParent` disambiguation from stale-anchor, and surfacing the topology in `pending` and `doctor`. The current code already passes the codified contract test — the friction was opacity, not incorrectness. Two follow-up patches landed targeted fixes: `pickBatchAnchor` prefers first-parent-line commits in `--batch` grouping, and `filterByRules` gained direct `docSet` membership filtering plus an off-first-parent gate fallback via `anchorShortCircuit`. The originally-planned algorithm rewrite was dropped.
 
 **Consequences:**
-- Laura's merge-topology friction class reaches zero pending without touching the core algorithm.
-- "documented" now surfaces as a distinct classify-reason in the `TIMBERS_DEBUG` trace and the auto-skip count.
-- `pickBatchAnchor` resolves HEAD best-effort via `git.HEAD()` and degrades to legacy behavior on git error, so a batch run never fails on anchor resolution.
-- The residual case — an off-first-parent anchor at *zero* detected pending — is left unaddressed here and handled later (see ADR-11).
+- Diagnostic surface tells users when the topology, not the code, is the cause
+- Solo-dev-feature-branch flows preserved; no regression
+- `pickBatchAnchor` + gate fallback resolve Laura's class without algorithm-level changes
+- Multi-reviewer, multi-context collaboration caught the regression a single context missed
+- Residual cross-agent-debt cases (where `pickBatchAnchor` falls back to `commits[0]`) remain visible via the diagnostic surface but unresolved
 
-## ADR-5: Extend `.timbersignore` with `author:` and `msg:` identity globs as the single skip-config source
+---
+
+## ADR-2: `msg:` subject globs over path-based skip for housekeeping commits
 
 **Status:** Accepted
 **Date:** 2026-05-27
 
-**Context:** The q-redshifted autofix pipeline needed a way to skip bot-authored commits, and release changelog commits were polluting pending. The first implementation put skip-authors in a dedicated `.timbers/skip-authors` file; the user pushed back on file sprawl.
+**Context:** Release changelog commits needed to be excluded from pending detection. Path-based skipping (`CHANGELOG.md` + `site/`) was the first instinct but could not work: `filterByRules` requires ALL files in a commit to match a skip rule, and the release commit also touches `site/layouts/index.html` (the version badge). Path-skipping that file would have globally hidden legitimate landing-page edits.
 
-**Decision:** Fold identity-based skipping into `.timbersignore` via line prefixes, mirroring the `.gitignore` family for a single source of truth. `author:<glob>` came first (v0.22.0); `msg:<glob>` followed for commit-subject matching. Message-based skipping was chosen over a path-based skip for release commits specifically because `filterByRules` requires *every* file in a commit to match — and release changelog commits also touch `site/layouts/index.html` (the version badge), so a path rule would hide legitimate landing-page edits. `msg:chore: changelog for v*` skips them precisely. `.timbersignore` was allowlisted in `.gitignore` so every clone and CI reads the same config.
+**Decision:** Add a third rule kind to `.timbersignore`: `msg:` commit-subject globs, mirroring the existing `author:` glob design. Release commits skip via `msg:chore: changelog for v*`. Allowlisted `.timbersignore` in `.gitignore` so every clone and CI reads the same config — without this, the skip would have been silently clone-local.
 
 **Consequences:**
-- One file holds all repo skip config in `.gitignore`-idiomatic form, rather than a proliferation of per-concern files.
-- `msg:` rules generalize to other housekeeping subjects (version bumps, release commits) where path rules cannot be precise.
-- `filepath.Match` character-class semantics make `author:dependabot[bot]` a silent no-op glob; a `doctor` lint now flags literal-looking `[..]` classes in `author:`/`msg:` globs, and the canonical bot recipe uses a prefix wildcard. Discoverability surfaces (pending hint, `--explain`, `help timbersignore`, onboard blurb) were added so the lever doesn't require source-diving.
-- The `author:`/`msg:` prefixes collide with literal paths beginning with those strings — accepted as extremely rare (`:` is forbidden in Windows filenames).
+- Precise targeting of housekeeping subjects without hiding files globally
+- Generalizes to other subject-driven housekeeping (version bumps, release commits)
+- Three rule kinds now: path glob, `author:`, `msg:` — parser and `classifyByIdentity` carry a third branch each
+- `filterByRules` refactored to reuse `classifyByIdentity`, single-sourcing skip semantics with the debug trace
 
-## ADR-6: Migrate beads from server-mode Dolt + JSONL-in-git to embedded Dolt + canonical `refs/dolt/data` sync
+---
+
+## ADR-3: Migrate beads to embedded Dolt + canonical `refs/dolt/data` sync
 
 **Status:** Accepted
 **Date:** 2026-05-27
 
-**Context:** The repo's beads setup was in a broken hybrid state. Server-mode Dolt couldn't persist under the sandbox — it re-imported JSONL on every call because the localhost TCP it needs was blocked. A stale CLI remote and a three-week-old `refs/dolt/data` existed while the steering docs claimed "no remote." JSONL was the only current source of truth (server Dolt last modified Mar 22; `refs/dolt/data` topped out May 7).
+**Context:** The repo was in a broken hybrid beads state: server-mode Dolt could not persist under the sandbox (it re-imported JSONL on every call), a stale CLI remote and three-week-old `refs/dolt/data` existed while steering claimed "no remote", and JSONL was the only current source of truth (server Dolt last modified Mar 22; `refs/dolt/data` topped out May 7). The osprey-strike repo had already migrated to the canonical embedded model.
 
-**Decision:** Align to the canonical embedded model already validated in osprey-strike. Embedded Dolt at `.beads/embeddeddolt/` (gitignored) replaces the server; sync moves to `refs/dolt/data` on origin via `bd dolt push`/`pull`; `.beads/issues.jsonl` becomes a passive, gitignored export rather than git transport. Because JSONL was the only trustworthy state, rebuild-from-JSONL via `bd bootstrap` was safe and correct despite losing Dolt audit history. The stale `refs/dolt/data` was dropped and re-seeded fresh.
+**Decision:** Align to the canonical embedded Dolt + `refs/dolt/data` sync model. Rebuild `embeddeddolt/` from the trusted 60-issue JSONL via `bd bootstrap`, drop and re-seed `refs/dolt/data`, flip `export.auto`/`export.git-add` to false, untrack and gitignore `issues.jsonl`, rewrite AGENTS.md sync sections. Followed osprey-strike's validated migration doc as the playbook, adapted for the server→embedded delta osprey did not have.
 
 **Consequences:**
-- Beads works under the sandbox — embedded mode avoids the TCP the server required.
-- Bead state syncs invisibly to PR diffs via `refs/dolt/data`; `metadata.json` (`dolt_mode: embedded`) and `config.yaml` are committed so fresh clones inherit the model via `bd bootstrap`.
-- Dolt audit history prior to the migration is lost — the rebuild started from the 60-issue JSONL snapshot.
-- Bootstrap detection order matters: `refs/dolt/data` had to be dropped *and* `.beads/backup` set aside so bootstrap fell through to current JSONL instead of cloning stale state.
-- Hand-edits to the Sync / Landing-the-Plane sections landed inside bd's managed markers; relocating them is tracked separately (timbers-069).
+- Works under the sandbox; embedded avoids the TCP dependency server mode required
+- Loses Dolt audit history (rebuild-from-JSONL); acceptable because JSONL was authoritative anyway
+- Bootstrap detection order matters — dropping `refs/dolt/data` AND setting aside `.beads/backup` was required so bootstrap fell through to current JSONL instead of stale state
+- Fresh clones onboard via `bd bootstrap` with no JSONL gymnastics
+- AGENTS.md hand-edits landed inside bd's managed markers; relocation tracked as separate work
 
-## ADR-7: `just release` polls the GitHub release endpoint and installs the published artifact as a normal consumer
+---
+
+## ADR-4: Document ack-for-rebase pattern over building content-matching relink
 
 **Status:** Accepted
 **Date:** 2026-05-27
 
-**Context:** After tagging, the locally built binary is byte-identical to what CI publishes, but installing the local build verifies nothing about the release pipeline — CI build, GitHub release creation, `install.sh`. The user's intent was to validate the release "as if a normal consumer."
+**Context:** A feature request proposed five alternatives for handling rebased commits whose old SHAs no longer exist on the first-parent line but whose content lives in the new history. The requester's preferred option was "auto content-match relink" via byte-identical-diff or reflog heuristics. Audit found timbers has no content-matching today — `docSet` is literal SHAs — so this would be built from scratch. Naive byte-identical-diff is unsound (rebases shift context lines); reflog is absent on fresh clones and CI; a sound version would require patch-id stored at log time, which is a schema change.
 
-**Decision:** Append a bounded poll loop to `just release` after `git push` — `gh release view <tag>` until assets appear (~10m deadline, 15s interval) — then run `just install-release` to install the published build and verify the installed `--version` contains the tag. A cron follow-up was considered (the user's initial framing) but rejected: a poll-and-install at the tail of `just release` has no moving parts, and CI can't install on the dev's laptop anyway, so the step has to be local. Relies on `.goreleaser draft:false` so `latest` equals the just-pushed tag once assets publish.
+**Decision:** Document the existing path instead of building new machinery. `ack` already satisfies the rebase-relink requirement — a structured record that counts as documented. Added a `RebaseRelinkGuidance` protocol section wired into both prime and MCP compose sites, sharpened pending/doctor ack hints with a copy-pasteable `rebased; content in <entry-id>` form, and added a DX-guide subsection. Inverted the requester's preference order to D→B→maybe-A per Gall's Law: ship the doc now, graduate to typed `ack --to <entry>` only if free-text linking proves insufficient, build patch-id gating only with real volume evidence.
 
 **Consequences:**
-- Each release exercises the full publish→install path end to end, and the local binary stays current with no manual follow-up.
-- On poll timeout the release is already pushed, so the recipe prints a recovery hint rather than failing.
-- `install-release` (not a pinned `VERSION`) remains the real consumer path under test.
+- Zero new code surface for the immediate need
+- Free-text reason field carries the link — readable by humans, not parseable by tools
+- Distinct from the existing stale-anchor section (there the anchor is GC'd and self-heals; here it stays reachable and does not)
+- Whether free-text linking holds up or pushes toward typed `ack --to <entry>` references remains an open observation
+- Patch-id stored at log time deferred until real volume justifies the schema change
 
-## ADR-8: Add a `doctor` Binary Shadowing check instead of debugging stale-hook commit blocks reactively
+---
+
+## ADR-5: Surface PATH-shadowing via `timbers doctor` rather than enforcing single-install
 
 **Status:** Accepted
 **Date:** 2026-05-27
 
-**Context:** Discovered live during the v0.22.3 release — a `dev` go-install binary in mise's GOBIN shadowed the current `~/.local/bin` build on PATH. The git hook runs whatever `timbers` is first on PATH, so the stale binary didn't recognize acks and silently gate-blocked an ack's auto-commit, surfacing only as a confusing "failed to commit ack file."
+**Context:** A stale `dev` go-install binary in mise's `GOBIN` shadowed the current `~/.local/bin` install during the v0.22.3 release. The git hook ran the stale binary, which did not recognize acks and silently blocked commits with a confusing "failed to commit ack file" error. The choice was between enforcing a canonical install location or detecting divergence at runtime and reporting it.
 
-**Decision:** Surface the divergence proactively. `doctor` enumerates `timbers` binaries on PATH (deduped by resolved path) and warns when the first reports a different version *token* than a shadowed one. Comparison is on the version token, not the full `--version` string, so two builds of the same version with differing commit/date suffixes don't false-warn; `?` tokens are skipped to avoid false positives on broken shims. `WriteAck`'s commit-failure path now explains the staged-but-uncommitted state and points at upgrade + doctor + `git commit` recovery.
+**Decision:** Add a "Binary Shadowing" check to `timbers doctor` that enumerates timbers binaries on PATH (deduped by resolved path) and warns when the first reports a different version token than a shadowed one. Compare version *tokens* (not full `--version` strings) so two builds of the same version with different commit/date suffixes do not false-warn. Skip `?` tokens to avoid false positives on broken shims. Also rewrote `WriteAck`'s commit-failure error to explain the staged-but-uncommitted state and point at upgrade + doctor + `git commit` recovery.
 
 **Consequences:**
-- A shadowing stale binary is caught by a health check instead of through a misleading commit failure.
-- Token-level comparison trades exactness for fewer false alarms — two genuinely different builds of the same version number won't be flagged.
-- The ack commit-failure error now guides recovery rather than reporting a bare failure.
+- Users discover stale-binary issues via a check they are already running, not by debugging mysterious gate failures
+- Does not prevent shadowing — only surfaces it
+- Escalation to install-time refusal remains open if shadowing keeps biting users
 
-## ADR-9: Satisfy rebase-relink by documenting the existing `ack` path, deferring content-matching
+---
+
+## ADR-6: `.timbersignore` discoverability over new filtering machinery
 
 **Status:** Accepted
 **Date:** 2026-05-27
 
-**Context:** A five-proposal feature request asked for "auto content-match relink" (the requester's preferred option A) so a ledger entry survives a rebase that rewrites its anchor SHA. The key correction: timbers has no content-matching today — `docSet` is literal SHAs — so option A would be built from scratch, and its naive byte-identical-diff/reflog form is unsound (rebases shift context lines; reflog is absent on fresh clones and CI). A sound version needs patch-id stored at log time, i.e. a schema change.
+**Context:** An agent had to research whether author-matching existed in `.timbersignore` and could silently write `author:dependabot[bot]` — a no-op glob, because `filepath.Match` treats `[..]` as a character class. The exemption lever existed but was invisible, and the footgun was undetectable until pending counts proved the rule was inert.
 
-**Decision:** `ack` already produces a structured record that counts as documented, so it satisfies the rebase-relink requirement today. Invert the requester's preference order to D→B→maybe-A per Gall's Law: ship documentation now (a `RebaseRelinkGuidance` protocol section in `internal/protocol`, wired into both prime and MCP compose sites — see ADR-2), graduate to a typed `ack --to <entry>` only if the free-text link bites, and build patch-id gating only with real volume evidence. A copy-pasteable `rebased; content in <entry-id>` ack reason replaces the generic placeholder.
+**Decision:** Make the existing surface discoverable rather than add new filtering machinery. Five touches in one commit: `doctor` lint flags literal-looking `[..]` classes in `author:`/`msg:` globs; `pending` prints a `.timbersignore` hint when non-empty; `pending --explain` classifies every commit via a new shared `pendingRange()` extracted from `getPendingCommits`; a `help timbersignore` topic and an `onboard` blurb document the three rule kinds and the canonical bot recipe.
 
 **Consequences:**
-- The rebase-relink need is met with documentation and an existing command — no new code paths or schema changes shipped.
-- The relink is a free-text convention, not an enforced/typed link; correctness depends on the operator pasting the right entry id.
-- Distinct from the existing stale-anchor guidance: there the anchor is GC'd and self-heals, whereas a rebased anchor stays reachable and does not.
-- A protocol test locks the new section in place.
+- Research-and-trap becomes a one-liner for future agents
+- `pendingRange()` extraction means the filtering gate and the new classifier share one range-resolution path; the 40K-line gate test suite is the regression net
+- Four beads bundled into one commit because `pending.go` carries changes for two of them; a clean split would have needed `git add -p`
+- Reinforces a pattern: surface existing levers before building new ones
 
-## ADR-10: Make `just release` site-example regeneration non-fatal so an LLM hiccup can't block a tag
+---
+
+## ADR-7: Release pipeline tolerates ancillary content-generation failures
 
 **Status:** Accepted
 **Date:** 2026-05-27
 
-**Context:** A version release was aborted entirely when the ancillary site-content step (`just examples`, which fans out to parallel `claude -p` calls) flaked on the decision-log example. A transient LLM hiccup in non-critical content generation was blocking the shipping of a tag.
+**Context:** `just release` regenerated site examples via parallel `claude -p` calls. A transient LLM hiccup on the decision-log generator aborted the entire release, even though the version tag and binary were ready to ship.
 
 **Decision:** Wrap `just examples` in the release recipe with `|| echo WARNING` so a failure warns and the release proceeds to commit/tag/push. Examples regenerate separately.
 
 **Consequences:**
-- The critical release path (commit/tag/push) is decoupled from best-effort content generation and can't be held hostage by it.
-- Site examples may briefly lag the tag when generation flakes, and must be regenerated out of band.
+- Transient LLM flakes can no longer block a version release
+- Site-example freshness no longer guaranteed by the release pipeline; relies on the separate regeneration path being run
+- Sets a precedent: ancillary tooling that can re-run independently should not be on the release critical path
 
-## ADR-11: Honor `timbers log --anchor` at zero pending and name the off-first-parent situation
+---
+
+## ADR-8: `just release` polls GH then installs the published build as a normal consumer
+
+**Status:** Accepted
+**Date:** 2026-05-27
+
+**Context:** After tagging and pushing a release, the dev's local binary stayed at the pre-release build until manually reinstalled. Installing the *published* artifact — not the identical local build — would sanity-check the entire release pipeline (CI build, GH release, `install.sh`). The choice was between a cron follow-up or extending `just release` itself.
+
+**Decision:** Append a bounded poll loop (`gh release view <tag> --jq 'assets|length'`, ~10m deadline, 15s interval) to `just release`. On publish, run `just install-release` and verify the installed `--version` contains the tag. On timeout, print a recovery hint since the release is already pushed. Cron was rejected because the install must happen on the dev's laptop, not in CI — a poll at the tail of `just release` has no moving parts.
+
+**Consequences:**
+- Every release tests the full consumer install path
+- Dev's local binary stays current without a manual follow-up
+- Adds seconds-to-minutes to `just release` while waiting for assets to publish
+- Relies on `.goreleaser draft:false` so `latest` equals the just-pushed tag once assets appear
+
+---
+
+## ADR-9: `--anchor` honors single-commit documentation at 0 pending; `--range` is the escape hatch
 
 **Status:** Accepted
 **Date:** 2026-05-28
 
-**Context:** The v0.22.2 fixes (ADR-4) got the normal merge-topology case to zero pending but left a residual osprey hit: when the anchor sits off the first-parent line and pending is 0, `timbers log --anchor` still refused — contradicting the flag's name, which promises "use this anchor" — and `timbers pending` printed a bare "No pending commits" that conflated a genuinely clean tree with one computed from an off-line anchor.
+**Context:** The `--anchor` flag's name promises "use this anchor", but at 0 detected pending commits it refused to run — a contradiction that hit osprey-strike's off-first-parent/0-pending case. The user-visible refusal pointed at no clean recovery path.
 
-**Decision:** Honor the flag. At zero detected pending with `--anchor` set, `getLogCommits` falls back to `LogRange(anchor^, anchor)` to document the single commit, and the refusal path now names `--range` as the explicit escape hatch. Separately, `timbers pending`'s count:0 branch prints a conditional note keyed on `AnchorOffFirstParentLine` that names the situation and points at `--explain`/`--range`.
+**Decision:** When `--anchor` is set and pending is empty, `getLogCommits` falls back to `LogRange(anchor^, anchor)` to document the single commit. The refusal message for the remaining error cases names `--range` as the explicit escape hatch. Extracted commit-resolution helpers to `log_resolve.go` to stay under the file-length limit; a ref-aware mock and `TestLogAnchorBypassesZeroPending` lock the contract in.
 
 **Consequences:**
-- `--anchor` does what its name promises even at zero pending, closing the off-first-parent/zero-pending gap.
-- "Clean" and "computed from an off-line anchor" are now distinguishable in pending output rather than collapsed into one message.
-- Commit-resolution helpers were extracted to `log_resolve.go` to stay under the file-length limit; a ref-aware mock and `TestLogAnchorBypassesZeroPending` lock the behavior in.
+- `--anchor` semantics now match its name in the 0-pending case
+- `--range` becomes the canonical broader-escape-hatch in error messaging
+- `--anchor` and `--range` overlap in capability (both can document a single commit); they diverge in intent rather than capability
+- File-split into `log_resolve.go` driven by complexity budget
+
+---
+
+## ADR-10: Single source of truth for skip classification (`classifyByIdentity`)
+
+**Status:** Accepted
+**Date:** 2026-05-28
+
+**Context:** v0.22.5 introduced the `msg:` glob rule (see ADR-2). A parallel inline identity chain in `countAutoSkipped` was not updated, causing `timbers status` to undercount housekeeping-skipped tallies when `msg:` globs matched. Both arch and code reviewers caught it independently. The fork: keep `countAutoSkipped`'s loop as a separate-but-symmetric structure (matching the historical `filterByRules` vs `ExplainPending` split), or collapse the visibility path onto the same classifier the gate uses.
+
+**Decision:** Delegate identity classification in `countAutoSkipped` to the same `classifyByIdentity` chain `filterByRules` uses. The bug WAS that the loops drifted; preserving them as separate would invite the same class of bug on the next rule addition. Added `msg:` and `author:` regression cases to `TestCountInfraSkippedSinceLatest`.
+
+**Consequences:**
+- Visibility (status counts) and the gate (filtering decisions) cannot diverge on identity rules
+- New rule kinds only need to be added in one place
+- The remaining split between `filterByRules` and `ExplainPending` becomes harder to justify; future work may converge those as well

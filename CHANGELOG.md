@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.7] - 2026-05-28
+
+### Fixed
+- Fixed `timbers status` undercounting housekeeping-skipped commits when a `msg:` rule in `.timbersignore` matched — the auto-skip tally now shares its classification path with the pending gate, so `msg:` and `author:` rules are reflected accurately.
+
+
 ## [0.22.6] - 2026-05-27
 
 ### Changed
@@ -623,3 +629,4 @@ Initial public release.
 [0.22.4]: https://github.com/gorewood/timbers/releases/tag/v0.22.4
 [0.22.5]: https://github.com/gorewood/timbers/releases/tag/v0.22.5
 [0.22.6]: https://github.com/gorewood/timbers/releases/tag/v0.22.6
+[0.22.7]: https://github.com/gorewood/timbers/releases/tag/v0.22.7
