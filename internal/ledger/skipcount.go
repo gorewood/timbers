@@ -102,6 +102,10 @@ func (s *Storage) countAutoSkipped(commits []git.Commit) int {
 		}
 		if classifyByIdentity(commit, docSet, ackedSet, s.skipAuthors, s.skipMessages) != "" {
 			count++
+			continue
+		}
+		if classifyByProvenance(commit, s.provenance) != "" {
+			count++
 		}
 	}
 	return count
@@ -156,14 +160,19 @@ func (s *Storage) filterByRules(
 	filtered := make([]git.Commit, 0, len(commits))
 	for _, commit := range commits {
 		// A commit is dropped if it's infrastructure-only (all files match
-		// skip rules) or matches any identity-based skip (author/message
-		// glob, direct docSet membership, ack, documented revert).
-		// classifyByIdentity encodes that chain; reusing it keeps this loop
-		// flat and the skip semantics single-sourced with the debug trace.
+		// skip rules), or matches any identity-based skip (author/message
+		// glob, direct docSet membership, ack, documented revert), or is
+		// out-of-session (foreign author or stale CommitDate — the cross-
+		// agent debt classifier). The three checks compose by short-circuit:
+		// earlier reasons take precedence and the loop stays flat. Skip
+		// semantics are single-sourced with classifyCommit's chain.
 		if isInfrastructureOnlyCommit(rules, fileMap[commit.SHA]) {
 			continue
 		}
 		if classifyByIdentity(commit, docSet, ackedSet, s.skipAuthors, s.skipMessages) != "" {
+			continue
+		}
+		if classifyByProvenance(commit, s.provenance) != "" {
 			continue
 		}
 		filtered = append(filtered, commit)

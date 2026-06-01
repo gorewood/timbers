@@ -14,6 +14,16 @@ import (
 // in-session commit during a real Bob-active session.
 const DefaultSessionWindow = 24 * time.Hour
 
+// SetProvenance overrides the storage's provenance configuration. Used by
+// tests that need to disable the classifier (zero config) or pin it to
+// reproducible values, and by external callers that compose Storage with
+// custom configuration (e.g. wrapping for sandboxed integration tests).
+// Production code should not call this — NewStorage already loads the
+// correct config from the environment.
+func (s *Storage) SetProvenance(cfg ProvenanceConfig) {
+	s.provenance = cfg
+}
+
 // LoadProvenanceConfig builds a ProvenanceConfig from environment state:
 // `git config user.email` for the in-session identity, DefaultSessionWindow
 // for the staleness threshold, and the supplied now for the comparison

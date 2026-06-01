@@ -64,9 +64,10 @@ type Storage struct {
 // Loader errors are not fatal — the built-in defaults are used as a safe
 // fallback so a malformed .timbersignore never inverts the gate.
 //
-// Also loads the cross-agent debt provenance config (git config user.email
-// + default session window). Empty user.email degrades safely — see
-// LoadProvenanceConfig + classifyByProvenance.
+// The cross-agent debt provenance config is left at zero (disabled). Use
+// NewDefaultStorage for production code — it loads provenance from the
+// real git config — or call SetProvenance explicitly when you need to
+// pin it (custom configuration, integration tests).
 func NewStorage(ops GitOps, files *FileStorage) *Storage {
 	if ops == nil {
 		ops = realGitOps{}
@@ -83,25 +84,24 @@ func NewStorage(ops GitOps, files *FileStorage) *Storage {
 			messages = loadedMessages
 		}
 	}
-	return &Storage{
-		git:          ops,
-		files:        files,
-		skipRules:    rules,
-		skipAuthors:  authors,
-		skipMessages: messages,
-		provenance:   LoadProvenanceConfig(time.Now()),
-	}
+	return &Storage{git: ops, files: files, skipRules: rules, skipAuthors: authors, skipMessages: messages}
 }
 
 // NewDefaultStorage creates a Storage using real git operations
 // and the .timbers/ directory in the repository root.
+//
+// Production entry point: loads the cross-agent debt provenance config
+// from the real environment (git config user.email + DefaultSessionWindow).
+// Empty user.email degrades safely — see LoadProvenanceConfig.
 func NewDefaultStorage() (*Storage, error) {
 	root, err := git.RepoRoot()
 	if err != nil {
 		return nil, err
 	}
 	files := NewFileStorage(filepath.Join(root, ".timbers"), DefaultGitAdd, DefaultGitCommit)
-	return NewStorage(nil, files), nil
+	store := NewStorage(nil, files)
+	store.SetProvenance(LoadProvenanceConfig(time.Now()))
+	return store, nil
 }
 
 // --- Entry CRUD (delegated to FileStorage) ---
