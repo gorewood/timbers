@@ -165,6 +165,21 @@ func HasUncommittedChanges() bool {
 	return strings.TrimSpace(out) != ""
 }
 
+// HasStagedChanges reports whether the index differs from HEAD. The pre-commit
+// hook uses this to tell the user "your staged changes are still there" when
+// the gate aborted their commit — leaving the index untouched is what makes
+// the timbers log → phantom-entry path so easy to stumble into.
+//
+// Returns false on any git failure: this is a diagnostic helper for hook
+// messaging, not a correctness check, and the hook must not leak errors.
+func HasStagedChanges() bool {
+	out, err := Run("diff", "--cached", "--name-only")
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(out) != ""
+}
+
 // IsInteractiveGitOp returns true when git is in the middle of a rebase,
 // merge, cherry-pick, or revert. Hooks should suppress blocking behavior
 // during these operations because:

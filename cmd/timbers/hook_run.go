@@ -137,7 +137,17 @@ func runPreCommitHook(cmd *cobra.Command) error {
 	printer := output.NewPrinter(cmd.OutOrStdout(), false, useColor(cmd))
 	printer.Println()
 	printer.Print("[timbers] Commit blocked: undocumented commit(s) exist\n")
-	printer.Print("[timbers] Run 'timbers log \"what\" --why \"why\" --how \"how\"' first\n")
+	// When the gate aborts, the user's `git commit` did NOT run — but
+	// `git add` already moved their work into the index. Surface that
+	// explicitly so the caller doesn't follow up with `timbers log`
+	// thinking the gate ate their staging. (timbers log will now refuse
+	// on a dirty tree anyway since v0.22.8; this hint short-circuits the
+	// confusion.) Only emit when there's actually staged work — silent
+	// otherwise.
+	if git.HasStagedChanges() {
+		printer.Print("[timbers] Your staged changes remain in the index — inspect with: git diff --cached\n")
+	}
+	printer.Print("[timbers] Document the prior commit(s) first: timbers log \"what\" --why \"why\" --how \"how\"\n")
 	printer.Print("[timbers] Or TIMBERS_SKIP_CROSS_AGENT_DEBT=1 (parallel-agent flows), or --no-verify\n")
 	printer.Println()
 

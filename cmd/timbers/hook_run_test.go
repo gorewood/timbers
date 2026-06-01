@@ -260,6 +260,52 @@ func TestPreCommitHookGating(t *testing.T) {
 			t.Errorf("expected block message; got: %s", out)
 		}
 	})
+
+	// The "staged changes remain in the index" hint is the v0.22.9 follow-up
+	// to the phantom-entry fix: when the gate aborts a real-world commit,
+	// `git add` already populated the index — and an unwary agent that
+	// followed up with `timbers log` was exactly the trip wire that produced
+	// upstream phantoms. The hint short-circuits the confusion. It must
+	// appear ONLY when the index is actually dirty, otherwise the message
+	// is misleading noise.
+	t.Run("staged changes hint fires when index is dirty", func(t *testing.T) {
+		repo := newHookRepo(t)
+		repo.commitFile(t, "internal/feature.go", "package internal\n", "feat: prior undocumented work")
+
+		// Stage a NEW file (do not commit) to simulate the user mid-`git commit`
+		// when the gate aborts.
+		stagedPath := filepath.Join(repo.dir, "internal/wip.go")
+		if err := os.WriteFile(stagedPath, []byte("package internal // wip\n"), 0o600); err != nil {
+			t.Fatalf("write staged file: %v", err)
+		}
+		runGit(t, repo.dir, "add", "internal/wip.go")
+
+		out, err := repo.runHook(t, "pre-commit")
+		if err == nil {
+			t.Fatalf("pre-commit expected to error on undocumented work; got nil\noutput: %s", out)
+		}
+		if !strings.Contains(out, "staged changes remain in the index") {
+			t.Errorf("expected staged-changes hint; got: %s", out)
+		}
+		if !strings.Contains(out, "git diff --cached") {
+			t.Errorf("expected diagnostic command in hint; got: %s", out)
+		}
+	})
+
+	t.Run("staged changes hint stays silent on clean index", func(t *testing.T) {
+		repo := newHookRepo(t)
+		repo.commitFile(t, "internal/feature.go", "package internal\n", "feat: prior undocumented work")
+
+		// No staging — the gate still blocks (prior commit is undocumented),
+		// but the hint must NOT fire because there's nothing in the index.
+		out, err := repo.runHook(t, "pre-commit")
+		if err == nil {
+			t.Fatalf("pre-commit expected to error; got nil\noutput: %s", out)
+		}
+		if strings.Contains(out, "staged changes remain in the index") {
+			t.Errorf("hint must not fire on clean index; got: %s", out)
+		}
+	})
 }
 
 // TestPreCommitHookGating_SiblingMerge is the end-to-end regression for the
