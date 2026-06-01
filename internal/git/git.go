@@ -180,6 +180,19 @@ func HasStagedChanges() bool {
 	return strings.TrimSpace(out) != ""
 }
 
+// ConfigUserEmail returns the configured `git config user.email`, or ""
+// when unset or unreadable. Used by the cross-agent debt classifier to
+// identify in-session work: an empty result is the load-bearing safe-
+// degradation signal — the classifier treats every commit as in-session
+// rather than silently disabling the gate.
+func ConfigUserEmail() string {
+	out, err := Run("config", "--get", "user.email")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
 // IsInteractiveGitOp returns true when git is in the middle of a rebase,
 // merge, cherry-pick, or revert. Hooks should suppress blocking behavior
 // during these operations because:

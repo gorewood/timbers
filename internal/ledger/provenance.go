@@ -6,6 +6,31 @@ import (
 	"github.com/gorewood/timbers/internal/git"
 )
 
+// DefaultSessionWindow is the staleness threshold for the cross-agent debt
+// classifier when no .timbersignore session-window directive overrides it.
+// Phase 1 tally on osprey-strike validated 24h: covers realistic agent
+// sessions (interactive + long autonomous loops + orchestrator + subagent
+// fanouts) with margin. 4h would have silently stale-skipped a 7.4h-old
+// in-session commit during a real Bob-active session.
+const DefaultSessionWindow = 24 * time.Hour
+
+// LoadProvenanceConfig builds a ProvenanceConfig from environment state:
+// `git config user.email` for the in-session identity, DefaultSessionWindow
+// for the staleness threshold, and the supplied now for the comparison
+// reference. Empty user.email surfaces as empty UserEmail in the config,
+// which classifyByProvenance handles as "all commits in-session" — the
+// safe-degradation contract.
+//
+// Phase 6 will extend this to honor a .timbersignore session-window
+// directive override. For phase 4, the window is hardcoded.
+func LoadProvenanceConfig(now time.Time) ProvenanceConfig {
+	return ProvenanceConfig{
+		UserEmail:   git.ConfigUserEmail(),
+		StaleWindow: DefaultSessionWindow,
+		Now:         now,
+	}
+}
+
 // Provenance reason values returned by classifyByProvenance. Layered on top
 // of the existing skip chain (infra → identity → content) — provenance fires
 // only on commits that would otherwise be kept.

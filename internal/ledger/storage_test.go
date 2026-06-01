@@ -141,6 +141,12 @@ func makeTestEntry(anchor string, createdAt time.Time) *Entry {
 }
 
 // newTestStorage creates a Storage with a temp dir containing the given entries.
+//
+// Provenance is explicitly DISABLED (zero ProvenanceConfig) so existing tests
+// written before v0.23.0 keep their behavior — they construct commits without
+// matching AuthorEmail, and NewStorage would otherwise inherit the host's git
+// config and falsely classify every test commit as foreign-author. Tests that
+// exercise provenance set the config explicitly on the returned Storage.
 func newTestStorage(t *testing.T, mock *mockGitOps, entries ...*Entry) *Storage {
 	t.Helper()
 	dir := t.TempDir()
@@ -148,7 +154,9 @@ func newTestStorage(t *testing.T, mock *mockGitOps, entries ...*Entry) *Storage 
 		writeTestEntryFile(t, dir, entry)
 	}
 	files := NewFileStorage(dir, noopGitAdd, noopGitCommit)
-	return NewStorage(mock, files)
+	store := NewStorage(mock, files)
+	store.provenance = ProvenanceConfig{}
+	return store
 }
 
 // --- GetLatestEntry Tests ---

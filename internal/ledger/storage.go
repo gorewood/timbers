@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/output"
@@ -62,6 +63,10 @@ type Storage struct {
 // The repo root is derived as the parent of files.Dir (which is .timbers/).
 // Loader errors are not fatal — the built-in defaults are used as a safe
 // fallback so a malformed .timbersignore never inverts the gate.
+//
+// Also loads the cross-agent debt provenance config (git config user.email
+// + default session window). Empty user.email degrades safely — see
+// LoadProvenanceConfig + classifyByProvenance.
 func NewStorage(ops GitOps, files *FileStorage) *Storage {
 	if ops == nil {
 		ops = realGitOps{}
@@ -78,7 +83,14 @@ func NewStorage(ops GitOps, files *FileStorage) *Storage {
 			messages = loadedMessages
 		}
 	}
-	return &Storage{git: ops, files: files, skipRules: rules, skipAuthors: authors, skipMessages: messages}
+	return &Storage{
+		git:          ops,
+		files:        files,
+		skipRules:    rules,
+		skipAuthors:  authors,
+		skipMessages: messages,
+		provenance:   LoadProvenanceConfig(time.Now()),
+	}
 }
 
 // NewDefaultStorage creates a Storage using real git operations
