@@ -95,12 +95,27 @@ func runLog(cmd *cobra.Command, storage *ledger.Storage, isDirty dirtyChecker, a
 		return err
 	}
 
-	// Warn if working tree has uncommitted changes — risk of documenting uncommitted work
+	// Refuse if working tree is dirty: the auto-commit pathspec-scopes to the
+	// entry file (internal/ledger/filestorage.go: git commit -- <path>), so
+	// staged feature changes stay in the index while the entry rides on the
+	// old HEAD. Push then ships a phantom: an entry whose prose describes
+	// work that isn't in any commit below it. Most often hit when the
+	// pre-commit gate aborted the prior `git commit` and the caller chained
+	// `timbers log` after a newline (no &&). --dry-run is still allowed
+	// because it short-circuits before the auto-commit and only prints what
+	// the entry would look like.
 	if isDirty == nil {
 		isDirty = git.HasUncommittedChanges
 	}
-	if isDirty() {
-		printer.Warn("working tree has uncommitted changes; commit first to avoid phantom entries")
+	if isDirty() && !flags.dryRun {
+		err := output.NewUserError(
+			"working tree has uncommitted changes; commit (or stash) them " +
+				"first to avoid phantom entries. If the prior `git commit` " +
+				"was aborted by the pre-commit gate, your staged changes " +
+				"are still in the index — inspect with: git diff --cached. " +
+				"For a no-op peek, re-run with --dry-run.")
+		printer.Error(err)
+		return err
 	}
 
 	// Refuse to log during rebase/merge — we can't commit the entry file

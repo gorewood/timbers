@@ -516,53 +516,97 @@ func newLogCmdWithStorage(storage *ledger.Storage) *cobra.Command {
 	return newLogCmdInternal(storage, func() bool { return false })
 }
 
-func TestLogDirtyTreeWarning(t *testing.T) {
-	mock := newMockGitOpsForLog()
-	mock.head = "abc123def456789"
-	mock.reachableResult = []git.Commit{
-		{SHA: "abc123def456789", Short: "abc123d", Subject: "Latest commit"},
-	}
-	mock.diffstat = git.Diffstat{Files: 1, Insertions: 10, Deletions: 0}
+// TestLogDirtyTreeRefuses confirms that `timbers log` on a dirty tree
+// returns a UserError without creating or auto-committing an entry. This
+// closes the phantom-entry path where the pre-commit gate aborts a commit,
+// the caller follows up with `timbers log` (newline-chained, no &&), and
+// the entry's auto-commit (pathspec-scoped to .timbers/...) lands on the
+// old HEAD while the staged feature changes stay in the index.
+//
+// --dry-run is intentionally allowed even on a dirty tree because it
+// short-circuits before any write — useful for "what would this entry
+// look like?" inspections in the middle of a debugging session.
+func TestLogDirtyTreeRefuses(t *testing.T) {
+	t.Run("dirty tree refuses with no entry created", func(t *testing.T) {
+		mock := newMockGitOpsForLog()
+		mock.head = "abc123def456789"
+		mock.reachableResult = []git.Commit{
+			{SHA: "abc123def456789", Short: "abc123d", Subject: "Latest commit"},
+		}
+		mock.diffstat = git.Diffstat{Files: 1, Insertions: 10, Deletions: 0}
 
-	storage, _ := newLogTestStorage(t, mock)
+		storage, dir := newLogTestStorage(t, mock)
+		cmd := newLogCmdInternal(storage, func() bool { return true })
+		cmd.SetArgs([]string{"Test entry", "--why", "Testing", "--how", "Via test"})
 
-	// Test with dirty tree
-	cmd := newLogCmdInternal(storage, func() bool { return true })
-	cmd.SetArgs([]string{"Test entry", "--why", "Testing", "--how", "Via test"})
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
 
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
+		if err := cmd.Execute(); err == nil {
+			t.Fatalf("expected refusal error on dirty tree, got nil; output: %s", buf.String())
+		}
+		out := buf.String()
+		if !strings.Contains(out, "uncommitted changes") {
+			t.Errorf("expected 'uncommitted changes' in refusal output, got: %s", out)
+		}
+		if !strings.Contains(out, "phantom") {
+			t.Errorf("expected 'phantom' in refusal output (explains the why), got: %s", out)
+		}
+		// Critical: no entry file should be created when refusing.
+		if n := countJSONFilesInDir(dir); n != 0 {
+			t.Errorf("expected no entry files created on refusal, got %d", n)
+		}
+	})
 
-	_ = cmd.Execute()
-	out := buf.String()
+	t.Run("dirty tree with --dry-run succeeds without writing", func(t *testing.T) {
+		mock := newMockGitOpsForLog()
+		mock.head = "abc123def456789"
+		mock.reachableResult = []git.Commit{
+			{SHA: "abc123def456789", Short: "abc123d", Subject: "Latest commit"},
+		}
+		mock.diffstat = git.Diffstat{Files: 1, Insertions: 10, Deletions: 0}
 
-	if !strings.Contains(out, "Warning") || !strings.Contains(out, "uncommitted changes") {
-		t.Errorf("expected dirty-tree warning in output, got: %s", out)
-	}
+		storage, dir := newLogTestStorage(t, mock)
+		cmd := newLogCmdInternal(storage, func() bool { return true })
+		cmd.SetArgs([]string{"Test entry", "--why", "Testing", "--how", "Via test", "--dry-run"})
 
-	// Test with clean tree - need fresh storage since entry ID may conflict
-	mock2 := newMockGitOpsForLog()
-	mock2.head = "def456789012345"
-	mock2.reachableResult = []git.Commit{
-		{SHA: "def456789012345", Short: "def4567", Subject: "Another commit"},
-	}
-	mock2.diffstat = git.Diffstat{Files: 1, Insertions: 10, Deletions: 0}
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
 
-	storage2, _ := newLogTestStorage(t, mock2)
-	cmd2 := newLogCmdInternal(storage2, func() bool { return false })
-	cmd2.SetArgs([]string{"Test entry 2", "--why", "Testing", "--how", "Via test"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("dry-run on dirty tree should succeed, got error: %v (output: %s)", err, buf.String())
+		}
+		if n := countJSONFilesInDir(dir); n != 0 {
+			t.Errorf("dry-run must not create entry files, got %d", n)
+		}
+	})
 
-	var buf2 bytes.Buffer
-	cmd2.SetOut(&buf2)
-	cmd2.SetErr(&buf2)
+	t.Run("clean tree succeeds without warning", func(t *testing.T) {
+		mock := newMockGitOpsForLog()
+		mock.head = "def456789012345"
+		mock.reachableResult = []git.Commit{
+			{SHA: "def456789012345", Short: "def4567", Subject: "Another commit"},
+		}
+		mock.diffstat = git.Diffstat{Files: 1, Insertions: 10, Deletions: 0}
 
-	_ = cmd2.Execute()
-	out2 := buf2.String()
+		storage, _ := newLogTestStorage(t, mock)
+		cmd := newLogCmdInternal(storage, func() bool { return false })
+		cmd.SetArgs([]string{"Test entry 2", "--why", "Testing", "--how", "Via test"})
 
-	if strings.Contains(out2, "Warning") {
-		t.Errorf("expected no warning with clean tree, got: %s", out2)
-	}
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("clean tree should not error: %v (output: %s)", err, buf.String())
+		}
+		out := buf.String()
+		if strings.Contains(out, "uncommitted changes") {
+			t.Errorf("clean tree should not mention uncommitted changes, got: %s", out)
+		}
+	})
 }
 
 func TestExtractAutoContent(t *testing.T) {
