@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2026-06-01
+
+### Added
+- Added the `TIMBERS_SKIP_CROSS_AGENT_DEBT=1` environment variable to disable cross-agent debt classification and its post-commit notes.
+
+### Changed
+- **BREAKING:** The commit gate is now provenance-aware and auto-skips commits not authored in the current session, so `pending.count` (and the prime pending count) now reflects only in-session work to document rather than every undocumented commit. Foreign-author commits (author email differs from `user.email`, with `.mailmap` honored) and stale commits (older than the session window, measured by commit date) are excluded; agents that anchored on the raw pending total will see lower counts.
+- Added a `session-window:` directive to `.timbersignore` to set a per-repo staleness window (defaults to 24h).
+- `timbers prime` pending output now breaks out out-of-session and stale commit counts alongside the in-session count.
+- The post-commit hook now emits a note when a session's own commits are auto-skipped as stale (e.g. a session running past the session window), so the skip is no longer silent.
+- `timbers doctor` now warns when `user.email` is unset (provenance cannot be determined) and when a `.timbersignore` `session-window:` value is malformed.
+
+
 ## [0.22.9] - 2026-06-01
 
 ### Changed
@@ -644,3 +657,4 @@ Initial public release.
 [0.22.7]: https://github.com/gorewood/timbers/releases/tag/v0.22.7
 [0.22.8]: https://github.com/gorewood/timbers/releases/tag/v0.22.8
 [0.22.9]: https://github.com/gorewood/timbers/releases/tag/v0.22.9
+[0.23.0]: https://github.com/gorewood/timbers/releases/tag/v0.23.0
