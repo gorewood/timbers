@@ -41,9 +41,22 @@ type primeResult struct {
 }
 
 // primePending holds pending commit information.
+//
+// Count is the IN-SESSION blocking count — the number an agent should
+// drive to zero before session end. OutOfSession and Stale are sibling
+// fields surfacing the provenance-classified commits the gate silently
+// skips; they are visible-but-not-blocking so an operator can still see
+// foreign work for ack/backfill flows, but agents that read Count and
+// stop there get the right answer.
+//
+// Without this semantic split, an agent that sees Count=5 (raw total)
+// will try to document 5 things — wasting tokens on commits whose
+// reasoning context is no longer recoverable.
 type primePending struct {
-	Count   int             `json:"count"`
-	Commits []commitSummary `json:"commits,omitempty"`
+	Count        int             `json:"count"`
+	OutOfSession int             `json:"out_of_session,omitempty"`
+	Stale        int             `json:"stale,omitempty"`
+	Commits      []commitSummary `json:"commits,omitempty"`
 }
 
 // primeEntry is a simplified entry for prime output.
@@ -206,6 +219,12 @@ func gatherPrimeContext(storage *ledger.Storage, lastN int, verbose bool) (*prim
 		pendingCommits = nil
 	}
 
+	// Bucket provenance reasons for the in-session vs out-of-session
+	// breakdown that drives Count semantics. ExplainPending walks the
+	// display range and classifies each commit; errors here are non-fatal
+	// (we still ship the in-session count from GetPendingCommits).
+	classified, _, _ := storage.ExplainPending()
+
 	recentEntries, err := storage.GetLastNEntries(lastN)
 	if err != nil {
 		return nil, err
@@ -221,7 +240,7 @@ func gatherPrimeContext(storage *ledger.Storage, lastN int, verbose bool) (*prim
 		Head:           head,
 		TimbersDir:     filepath.Join(root, ".timbers"),
 		EntryCount:     len(allEntries),
-		Pending:        buildPrimePending(pendingCommits),
+		Pending:        buildPrimePending(pendingCommits, classified),
 		StaleAnchor:    staleAnchor,
 		RecentEntries:  buildPrimeEntries(recentEntries, verbose),
 		Health:         health,
@@ -240,54 +259,6 @@ func loadWorkflowContent(repoRoot string) (string, bool) {
 		return defaultWorkflowContent, false
 	}
 	return string(data), true
-}
-
-// buildPrimePending constructs the pending section from commits.
-func buildPrimePending(commits []git.Commit) primePending {
-	pending := primePending{
-		Count:   len(commits),
-		Commits: make([]commitSummary, 0, len(commits)),
-	}
-
-	for _, c := range commits {
-		pending.Commits = append(pending.Commits, commitSummary{
-			SHA:     c.SHA,
-			Short:   c.Short,
-			Subject: c.Subject,
-		})
-	}
-
-	return pending
-}
-
-// buildPrimeEntries constructs the recent entries section.
-// When verbose is true, includes why and how fields.
-func buildPrimeEntries(entries []*ledger.Entry, verbose bool) []primeEntry {
-	result := make([]primeEntry, 0, len(entries))
-
-	for _, entry := range entries {
-		prime := primeEntry{
-			ID:        entry.ID,
-			What:      entry.Summary.What,
-			CreatedAt: entry.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		}
-		if verbose {
-			prime.Why = entry.Summary.Why
-			prime.How = entry.Summary.How
-			prime.Notes = truncateNotes(entry.Notes, 200)
-		}
-		result = append(result, prime)
-	}
-
-	return result
-}
-
-// truncateNotes truncates notes to maxLen characters, appending "..." if truncated.
-func truncateNotes(notes string, maxLen int) string {
-	if len(notes) <= maxLen {
-		return notes
-	}
-	return notes[:maxLen] + "..."
 }
 
 // outputPrimeFullHuman outputs the full guide in human-readable format.

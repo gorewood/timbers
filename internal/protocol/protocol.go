@@ -29,7 +29,8 @@ Session checklist (in order):
 - [ ] git add && git commit (commit code first — entry references this SHA)
 - [ ] timbers log "what" --why "why" --how "how" (auto-commits the entry)
 - [ ] git push (sends both content commit AND entry commit together)
-- [ ] timbers pending (should be zero before session end)
+- [ ] timbers pending (in-session blocking count should be zero before session end;
+      out-of-session and stale commits auto-skip — run with --explain to inspect)
 </protocol>`
 
 // StaleAnchorGuidance is the canonical stale-anchor text injected by
