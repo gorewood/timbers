@@ -91,8 +91,11 @@ func NewStorage(ops GitOps, files *FileStorage) *Storage {
 // and the .timbers/ directory in the repository root.
 //
 // Production entry point: loads the cross-agent debt provenance config
-// from the real environment (git config user.email + DefaultSessionWindow).
-// Empty user.email degrades safely — see LoadProvenanceConfig.
+// from the real environment (git config user.email + the .timbersignore
+// session-window directive when present, falling back to
+// DefaultSessionWindow otherwise). Empty user.email and a malformed
+// session-window value both degrade safely — see LoadProvenanceConfig
+// and LoadSessionWindow.
 func NewDefaultStorage() (*Storage, error) {
 	root, err := git.RepoRoot()
 	if err != nil {
@@ -100,7 +103,9 @@ func NewDefaultStorage() (*Storage, error) {
 	}
 	files := NewFileStorage(filepath.Join(root, ".timbers"), DefaultGitAdd, DefaultGitCommit)
 	store := NewStorage(nil, files)
-	store.SetProvenance(LoadProvenanceConfig(time.Now()))
+	cfg := LoadProvenanceConfig(time.Now())
+	cfg.StaleWindow = LoadSessionWindow(root).Window
+	store.SetProvenance(cfg)
 	return store, nil
 }
 

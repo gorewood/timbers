@@ -1,7 +1,10 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/gorewood/timbers/internal/git"
+	"github.com/gorewood/timbers/internal/ledger"
 )
 
 // checkSessionIdentity reports the git config user.email value that the
@@ -28,5 +31,44 @@ func checkSessionIdentity() checkResult {
 		Name:    "Session Identity",
 		Status:  checkPass,
 		Message: email,
+	}
+}
+
+// checkSessionWindow reports the staleness window the cross-agent debt
+// classifier is using. A present-but-malformed .timbersignore
+// session-window: directive surfaces as a warning so the operator sees
+// that what they configured did not take. A missing directive (default
+// 24h in force) reports pass with the value.
+func checkSessionWindow() checkResult {
+	root, err := git.RepoRoot()
+	if err != nil {
+		return checkResult{
+			Name:    "Session Window",
+			Status:  checkPass,
+			Message: fmt.Sprintf("%s (default, not in a git repo)", ledger.DefaultSessionWindow),
+		}
+	}
+	result := ledger.LoadSessionWindow(root)
+	if result.ParseErr != nil {
+		return checkResult{
+			Name:    "Session Window",
+			Status:  checkWarn,
+			Message: fmt.Sprintf("malformed session-window: %q — using default %s", result.Raw, ledger.DefaultSessionWindow),
+			Hint: "Format: Go time.ParseDuration grammar. " +
+				"Accepts \"4h\", \"2h30m\", \"15m\", \"90m\". " +
+				"Day suffixes (\"1d\") and capitalized hours (\"4H\") are NOT supported.",
+		}
+	}
+	if result.Raw == "" {
+		return checkResult{
+			Name:    "Session Window",
+			Status:  checkPass,
+			Message: fmt.Sprintf("%s (default)", result.Window),
+		}
+	}
+	return checkResult{
+		Name:    "Session Window",
+		Status:  checkPass,
+		Message: fmt.Sprintf("%s (.timbersignore: %s)", result.Window, result.Raw),
 	}
 }
