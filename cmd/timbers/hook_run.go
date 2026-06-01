@@ -155,21 +155,79 @@ func runPreCommitHook(cmd *cobra.Command) error {
 }
 
 // runPostCommitHook executes the post-commit hook logic.
-// It reminds users/agents to document the commit with timbers log, but only
-// when there is at least one actionable pending commit. Infrastructure-only
-// commits (.timbers/, .beads/, lockfiles, .timbersignore matches) are skipped
-// so the reminder agrees with `timbers pending` and `timbers log`.
 //
-// This is non-blocking — it never returns an error.
+// Two independent surfaces fire from here:
+//
+//  1. Actionable-pending reminder — "[timbers] document this commit". Fires
+//     when at least one in-session commit is undocumented. Identical to
+//     pre-v0.23.0 behavior, just routed through the provenance-aware count
+//     so foreign-author and stale commits don't trigger the nudge.
+//
+//  2. Stale-self auto-skip note — "[timbers] auto-skipped N stale commit(s)".
+//     Fires when the cross-agent debt classifier silently dropped at least
+//     one of the user's OWN commits on staleness (NOT email-mismatch). This
+//     is the visibility safety net for the worst-case failure mode: a long
+//     autonomous loop or marathon session running past the 24h window would
+//     otherwise silently lose its own signal. Foreign-author skips stay
+//     silent per the reframe — the operator chose to not be that author.
+//
+// Non-blocking — never returns an error. Errors from the classifier are
+// swallowed (hooks must never break git operations).
 func runPostCommitHook(cmd *cobra.Command) error {
-	if !hasActionablePending() {
+	actionable, staleSelf := classifyPostCommitState()
+	if actionable == 0 && staleSelf == 0 {
 		return nil
 	}
 
 	printer := output.NewPrinter(cmd.OutOrStdout(), false, useColor(cmd))
-	printer.Println(
-		"[timbers] document this commit — " +
-			"timbers log \"what\" --why \"why\" --how \"how\"",
-	)
+	if actionable > 0 {
+		printer.Println(
+			"[timbers] document this commit — " +
+				"timbers log \"what\" --why \"why\" --how \"how\"",
+		)
+	}
+	if staleSelf > 0 {
+		printer.Print(
+			"[timbers] auto-skipped %d stale commit(s) (>%s old, same author); "+
+				"run 'timbers pending --explain' to inspect, "+
+				"or 'timbers log --range' to backfill if needed\n",
+			staleSelf, ledger.DefaultSessionWindow,
+		)
+	}
 	return nil
+}
+
+// classifyPostCommitState walks the pending range and returns counts of
+// actionable (in-session blocking) and stale-self (same-author auto-skipped)
+// commits. Returns (0, 0) on any storage/classifier error — hooks must never
+// break git operations.
+func classifyPostCommitState() (actionable, staleSelf int) {
+	if envTruthy(envSkipCrossAgentDebt) {
+		return 0, 0
+	}
+	root, err := git.RepoRoot()
+	if err != nil {
+		return 0, 0
+	}
+	info, err := os.Stat(filepath.Join(root, ".timbers"))
+	if err != nil || !info.IsDir() {
+		return 0, 0
+	}
+	storage, err := ledger.NewDefaultStorage()
+	if err != nil {
+		return 0, 0
+	}
+	classified, _, classifyErr := storage.ExplainPending()
+	if classifyErr != nil {
+		return 0, 0
+	}
+	for _, item := range classified {
+		switch item.Reason {
+		case "":
+			actionable++
+		case "stale":
+			staleSelf++
+		}
+	}
+	return actionable, staleSelf
 }
