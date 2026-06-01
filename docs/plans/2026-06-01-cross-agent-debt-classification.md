@@ -34,7 +34,7 @@ The fix is to make the gate's decision **provenance-aware**: strict for in-sessi
 
 Two signals, OR-combined (either one demoting the commit to skipped):
 
-1. **Author-email mismatch.** `commit.AuthorEmail != git config user.email` → skip. Strict equality; no domain wildcards, no name fallback. Conservative.
+1. **Author-email mismatch (mailmap-resolved).** `commit.AuthorEmail != git config user.email` → skip. Strict equality on the **mailmap-resolved** email. Use `%aE` in `commitFormat()` (not `%ae`) so a repo's `.mailmap` coalesces alternate emails for the same operator (e.g. `Bob Bergman <bob@redshifted.io> <robert.bergman@gmail.com>`). No domain wildcards, no name fallback — `.mailmap` is the canonical mechanism for the multi-email case and git already honors it everywhere.
 
 2. **CommitDate staleness.** `now - commit.CommitDate > window` → skip. **Use `%ct` (CommitDate), not `%at` (AuthorDate).**
    - AuthorDate is preserved across rebases and `--amend` operations. Using it would cause the heuristic to silently skip work the user is *actively* touching in-session (rebase moves the commit, but AuthorDate stays old → stale → skip).
@@ -54,7 +54,7 @@ Two signals, OR-combined (either one demoting the commit to skipped):
 ### `.timbersignore` directive (one only)
 
 - `session-window: <duration>` — override the staleness window per repo. Parse via Go `time.ParseDuration`. Document the supported grammar explicitly: accepts `4h`, `2h30m`, `15m`, `90m`; rejects `1d`, `4 hours`, `4H`, `4hr`. Malformed → default + warning (per safe-degradation above).
-- `session-author:` (multi-email same-operator) — **deferred** to v0.23.x. The fallback to "all-in-session on empty user.email" plus the 24h window handle most cases; if tally or real use shows multi-email same-operator missing real signal, add then.
+- `session-author:` (multi-email same-operator) — **deferred indefinitely.** `.mailmap` is git's canonical mechanism for this case and timbers gets it for free by reading `%aE` (per Heuristics above). Phase 1 tally confirmed `.mailmap` handles real multi-email same-operator workflows (`Bob Bergman <bob@redshifted.io> <robert.bergman@gmail.com>` in osprey-strike). A timbers-specific directive would duplicate that without adding capability.
 
 ### Visibility surface — ONE place, not four
 
@@ -169,3 +169,78 @@ The plan was reviewed by three independent perspectives (pragmatist, correctness
 2. **Composite reason format in `--explain`.** Single column with composite values (`foreign-author+stale`) or two separate columns? Pick during phase 3.
 3. **JSON output schema for `out_of_session` / `stale`** — top-level sibling fields, or nested under `pending`? Pick during phase 7.
 4. **Whether the stale-self post-commit note should be repeatable** (every commit) or rate-limited (once per session). Defer until phase 8.
+
+---
+
+## Phase 1 Tally Results (2026-06-01)
+
+Ran the heuristic against two repos: `osprey-strike` (the real signal — multi-author, bot-heavy, multi-email same-operator) and `timbers` (single-author baseline).
+
+### Key discovery: `.mailmap` IS the right email resolver
+
+`osprey-strike/.mailmap` already coalesces Bob's two emails:
+
+```
+Bob Bergman <bob@redshifted.io> <robert.bergman@gmail.com>
+```
+
+Raw `%ae` would have caused **strict-equality to silently skip 11 of Bob's 18 first-parent commits** in the recent 100-commit window (61% false-negative on his own work). `%aE` (mailmap-resolved) coalesces them correctly. Git already supports this; timbers should use `%aE` in `commitFormat()`, not `%ae`.
+
+This makes the deferred `session-author:` directive even less urgent — `.mailmap` is git's canonical mechanism for the multi-email same-operator case, exists in industry-convention form already (`git shortlog`, `git blame`, `git log`, `gitsh` all honor it), and the osprey-strike repo already uses it for Conduit's per-person activity views. timbers gets the right answer for free by using `%aE`.
+
+### Sample 1: osprey-strike, 100 first-parent commits (mailmap-resolved)
+
+Per-author breakdown:
+
+| Author (mailmap-resolved) | Commits |
+|---|---|
+| `noreply@argoproj.io` (argocd-image-updater bot) | 51 |
+| `bob@redshifted.io` (Bob, with `robert.bergman@gmail.com` coalesced) | 18 |
+| `conduit-publish-bot@constructured.com` | 17 |
+| `gary@88keys.net` (human teammate) | 7 |
+| `laura.kolker@gmail.com` (human teammate) | 4 |
+| `noam@redshifted.io` (human teammate) | 3 |
+
+Two bots + three human teammates + Bob in a 100-commit window. This is the multi-author/bot reality the reframe is targeting.
+
+### Sample 2: osprey-strike, gate-decision simulation at a Bob-active moment
+
+Anchored "now" at Bob's most recent activity (`now = 1780087674`, 2026-05-30 17:27 UTC, 60s after his last commit). 87 prior commits in scope:
+
+| Bucket | Count |
+|---|---|
+| IN-SESSION (gate blocks) | 3 |
+| foreign-author (within 24h) | 4 |
+| stale (Bob's, > 24h) | 15 |
+| foreign+stale | 65 |
+
+**Gate would block on 3 in-session Bob commits.** All 3 are real, recent Bob work — no false-positives. Today's gate would have demanded documentation for all 87.
+
+Bob's active session in that cluster spanned 7.4h (Unix gap from 8acb53ce to e0d7dae5). With the proposed 24h window, the entire session is correctly classified in-session. **With the original 4h default, the 7.4h-old commit would have been stale-skipped — silent same-author miss.** Validates the agent-UX push to 24h.
+
+### Sample 3: timbers repo, 50 first-parent commits
+
+| Bucket | Count |
+|---|---|
+| IN-SESSION (gate blocks) | 8 |
+| stale (Bob's, > 24h) | 39 |
+| foreign+stale (github-actions[bot] daily devblog) | 3 |
+| foreign-author (within 24h) | 0 |
+
+Single-author repo modulo one scheduled GitHub Actions bot. All 8 in-session blocks are real and were documented this session. Heuristic produces correct results.
+
+### Decisions confirmed
+
+- ✅ **Use `%aE` (mailmap-resolved), not `%ae`.** Adds zero new timbers config; uses git's canonical convention. This is a load-bearing change — without it, multi-email same-operator repos silently misclassify 60%+ of in-session work.
+- ✅ **24h default window** (not 4h). Bob's recent session ran 7.4h; 4h would have caused silent stale-skip mid-session.
+- ✅ **OR composition** of email + staleness. Each catches a different real case (bots/teammates → email; long-ago-but-same-author → staleness).
+- ✅ **Strict equality on mailmap-resolved email.** No name-match fallback needed; mailmap handles the multi-email case.
+- ✅ **`session-author:` directive stays deferred.** `.mailmap` covers the same need with a standard tool.
+
+### Plan revision
+
+One new acceptance criterion lands from this phase:
+
+- [ ] **`git.Commit` populated from `%aE` (mailmap-resolved author email), not `%ae`.** Test: a repo with `.mailmap` coalescing two emails produces a single author identity in `git.Commit.AuthorEmail`. Without this, the strict-email heuristic silently misclassifies multi-email same-operator work as foreign — the exact case osprey-strike hit.
+
+No other plan changes from the tally. Phase 2 (extend `git.Commit` with `CommitDate` + `%aE`) is unblocked.
