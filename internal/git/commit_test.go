@@ -94,6 +94,9 @@ func TestLog(t *testing.T) {
 			if commit.Date.IsZero() {
 				t.Errorf("commits[%d].Date is zero", idx)
 			}
+			if commit.CommitDate.IsZero() {
+				t.Errorf("commits[%d].CommitDate is zero", idx)
+			}
 		}
 	})
 

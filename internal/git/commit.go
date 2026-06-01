@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -20,8 +19,9 @@ type Commit struct {
 	Subject     string    // First line of commit message
 	Body        string    // Rest of commit message (may be empty)
 	Author      string    // Author name
-	AuthorEmail string    // Author email
-	Date        time.Time // Commit date
+	AuthorEmail string    // Author email, mailmap-resolved (.mailmap coalesces alternate emails for the same person)
+	Date        time.Time // AuthorDate — when the commit was originally authored; preserved across rebase/amend
+	CommitDate  time.Time // CommitDate — when the commit was recorded on the current DAG; advances on rebase/amend
 	ParentCount int       // Number of parents (0=root, 1=normal, 2+=merge)
 }
 
@@ -82,6 +82,16 @@ func logRange(fromRef, toRef string, firstParent bool) ([]Commit, error) {
 // commitFormat returns the git log --pretty=format string used by Log,
 // LogFirstParent, and CommitsReachableFrom. Centralized so the field
 // order stays in sync with parseCommitFields.
+//
+// Uses %aE (mailmap-resolved author email) so a repo's .mailmap coalesces
+// alternate emails for the same operator — the canonical mechanism for
+// "same person, multiple emails." Without mailmap, %aE returns the raw
+// author email unchanged.
+//
+// Emits both %at (AuthorDate) and %ct (CommitDate). The two diverge on
+// rebase and amend: AuthorDate is preserved, CommitDate advances. Callers
+// that care about "when did this commit hit *this* DAG?" (provenance /
+// session staleness) must use CommitDate, not AuthorDate.
 func commitFormat() string {
 	return strings.Join([]string{
 		"%H",  // Full SHA
@@ -89,8 +99,9 @@ func commitFormat() string {
 		"%s",  // Subject
 		"%b",  // Body
 		"%an", // Author name
-		"%ae", // Author email
-		"%at", // Unix timestamp
+		"%aE", // Author email, mailmap-resolved
+		"%at", // AuthorDate (Unix timestamp) — preserved across rebase/amend
+		"%ct", // CommitDate (Unix timestamp) — advances on rebase/amend
 		"%P",  // Parent SHAs (space-separated; empty for root commit)
 	}, fieldSeparator) + commitSeparator
 }
@@ -133,20 +144,35 @@ func parseCommits(out string) ([]Commit, error) {
 
 // parseCommitFields parses a single commit string into a Commit struct.
 // Returns the commit and true if successful, zero value and false otherwise.
+//
+// Field order must match commitFormat:
+//
+//	0: %H   full SHA
+//	1: %h   short SHA
+//	2: %s   subject
+//	3: %b   body
+//	4: %an  author name
+//	5: %aE  author email (mailmap-resolved)
+//	6: %at  AuthorDate (Unix)
+//	7: %ct  CommitDate (Unix)
+//	8: %P   parent SHAs
 func parseCommitFields(commitStr string) (Commit, bool) {
 	fields := strings.Split(commitStr, fieldSeparator)
-	if len(fields) < 8 {
+	if len(fields) < 9 {
 		return Commit{}, false
 	}
 
-	// Parse Unix timestamp
-	timestamp, err := strconv.ParseInt(strings.TrimSpace(fields[6]), 10, 64)
+	authorTS, err := strconv.ParseInt(strings.TrimSpace(fields[6]), 10, 64)
 	if err != nil {
-		timestamp = 0
+		authorTS = 0
+	}
+	commitTS, err := strconv.ParseInt(strings.TrimSpace(fields[7]), 10, 64)
+	if err != nil {
+		commitTS = 0
 	}
 
 	// Count parent SHAs (space-separated; empty string = 0 parents = root commit).
-	parentField := strings.TrimSpace(fields[7])
+	parentField := strings.TrimSpace(fields[8])
 	parentCount := 0
 	if parentField != "" {
 		parentCount = len(strings.Fields(parentField))
@@ -159,78 +185,10 @@ func parseCommitFields(commitStr string) (Commit, bool) {
 		Body:        strings.TrimSpace(fields[3]),
 		Author:      strings.TrimSpace(fields[4]),
 		AuthorEmail: strings.TrimSpace(fields[5]),
-		Date:        time.Unix(timestamp, 0),
+		Date:        time.Unix(authorTS, 0),
+		CommitDate:  time.Unix(commitTS, 0),
 		ParentCount: parentCount,
 	}, true
-}
-
-// diffstatLineRegex matches the summary line of git diff --stat
-// Example: " 3 files changed, 45 insertions(+), 12 deletions(-)"
-var diffstatLineRegex = regexp.MustCompile(`(\d+)\s+files?\s+changed(?:,\s+(\d+)\s+insertions?\(\+\))?(?:,\s+(\d+)\s+deletions?\(-\))?`)
-
-// emptyTreeSHA is the SHA of git's empty tree object.
-// Used when diffing from a root commit (which has no parent).
-const emptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-
-// GetDiffstat returns the change statistics for the given commit range.
-// The 'fromRef' ref is exclusive, 'toRef' is inclusive.
-// If fromRef doesn't exist (e.g., parent of root commit), uses empty tree.
-func GetDiffstat(fromRef, toRef string) (Diffstat, error) {
-	resolvedFrom := resolveRefOrEmptyTree(fromRef)
-	rangeSpec := resolvedFrom + ".." + toRef
-	out, err := Run("diff", "--stat", rangeSpec)
-	if err != nil {
-		return Diffstat{}, output.NewSystemErrorWithCause("failed to get diffstat for range "+rangeSpec, err)
-	}
-
-	return parseDiffstat(out), nil
-}
-
-// resolveRefOrEmptyTree resolves a ref, returning empty tree SHA if it doesn't exist.
-// This handles the case of "SHA^" for root commits.
-func resolveRefOrEmptyTree(ref string) string {
-	if ref == "" {
-		return emptyTreeSHA
-	}
-	_, err := Run("rev-parse", "--verify", "--quiet", ref)
-	if err != nil {
-		return emptyTreeSHA
-	}
-	return ref
-}
-
-// parseDiffstat extracts file, insertion, and deletion counts from git diff --stat output.
-func parseDiffstat(out string) Diffstat {
-	summaryLine := findSummaryLine(out)
-	if summaryLine == "" {
-		return Diffstat{}
-	}
-
-	return extractDiffstatFromSummary(summaryLine)
-}
-
-// findSummaryLine finds the last non-empty line in the diff stat output.
-func findSummaryLine(out string) string {
-	lines := strings.Split(out, "\n")
-	for idx := len(lines) - 1; idx >= 0; idx-- {
-		line := strings.TrimSpace(lines[idx])
-		if line != "" {
-			return line
-		}
-	}
-	return ""
-}
-
-// parseMatchInt extracts an int from a regex match group, returning 0 on error.
-func parseMatchInt(matches []string, idx int) int {
-	if idx >= len(matches) || matches[idx] == "" {
-		return 0
-	}
-	val, err := strconv.Atoi(matches[idx])
-	if err != nil {
-		return 0
-	}
-	return val
 }
 
 // CommitFiles returns the list of files changed by the given commit.
@@ -326,18 +284,4 @@ func DiffNameOnly(fromRef, toRef, pathPrefix string) ([]string, error) {
 		}
 	}
 	return files, nil
-}
-
-// extractDiffstatFromSummary parses the diffstat summary line using regex.
-func extractDiffstatFromSummary(summaryLine string) Diffstat {
-	matches := diffstatLineRegex.FindStringSubmatch(summaryLine)
-	if matches == nil {
-		return Diffstat{}
-	}
-
-	return Diffstat{
-		Files:      parseMatchInt(matches, 1),
-		Insertions: parseMatchInt(matches, 2),
-		Deletions:  parseMatchInt(matches, 3),
-	}
 }
