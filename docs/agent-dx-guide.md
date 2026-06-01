@@ -903,6 +903,28 @@ Use this checklist when designing agent-oriented CLIs:
     a conflict resolution) but the current agent considers that work "not
     theirs." Cheaper than `--no-verify` because it doesn't disable other hooks.
 
+  - **Cross-agent debt classifier (v0.23.0):** the gate is provenance-aware.
+    Commits whose mailmap-resolved author email differs from `git config
+    user.email`, or whose CommitDate is older than the session window
+    (default 24h, override via `.timbersignore` `session-window: <duration>`),
+    auto-skip silently. The signal: capture LIVE in-session reasoning;
+    accept misses outside the session. Skipped commits remain visible via
+    `timbers pending --explain` and surface as sibling counts
+    (`out_of_session`, `stale`) in `timbers prime --json` so the operator
+    can still see and ack/backfill foreign work — but agents that read
+    `pending.count` and stop there correctly drive only the in-session
+    set to zero.
+
+  - **Stale-self visibility:** when the user's OWN commit auto-skips on
+    staleness (e.g., a marathon session running past the window), the
+    post-commit hook prints `[timbers] auto-skipped N stale commit(s) …`
+    so the signal isn't silently lost. Foreign-author skips stay silent.
+
+  - **Safe degradation:** empty `git config user.email` falls back to
+    "treat all commits as in-session" — the gate doesn't silently disable
+    itself in a misconfigured environment. `timbers doctor` warns when
+    user.email is unset or when a `session-window` directive is malformed.
+
 - `timbers ack <SHA> --reason "<one-line>"` — Record a decision-to-skip
   - Third bypass path alongside infrastructure rules and revert auto-skip, with
     audit trail (date, acker, reason). Use when a commit doesn't merit a
