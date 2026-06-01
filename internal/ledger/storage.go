@@ -50,6 +50,7 @@ type Storage struct {
 	skipRules    []skipRule
 	skipAuthors  []string
 	skipMessages []string
+	provenance   ProvenanceConfig // cross-agent debt classifier; zero-value = disabled
 }
 
 // NewStorage creates a Storage with the given git operations and file storage.

@@ -175,6 +175,14 @@ func (s *Storage) filterByRules(
 // under the current rules, or "" if the commit is kept. Used for both
 // filtering (when the caller doesn't care about the reason) and the
 // TIMBERS_DEBUG trace (where the reason is the whole point).
+//
+// Precedence chain (locked — must not reorder without explicit review):
+// infra → identity (author/message/documented/ack/revert) → content
+// (merge-empty/empty) → provenance (foreign-author/stale). Provenance is
+// last because the earlier reasons carry more decision-relevance for the
+// operator: a documented or acked commit shouldn't relabel as
+// "foreign-author" just because its email differs. Tests in
+// provenance_test.go lock the precedence in.
 func (s *Storage) classifyCommit(
 	commit git.Commit,
 	fileMap map[string][]string,
@@ -189,7 +197,10 @@ func (s *Storage) classifyCommit(
 	if reason := classifyByIdentity(commit, docSet, ackedSet, s.skipAuthors, s.skipMessages); reason != "" {
 		return reason
 	}
-	return classifyByContent(commit, files, gateStrict)
+	if reason := classifyByContent(commit, files, gateStrict); reason != "" {
+		return reason
+	}
+	return classifyByProvenance(commit, s.provenance)
 }
 
 // classifyByIdentity checks author globs, commit-subject globs, direct
