@@ -1,6 +1,6 @@
 +++
 title = 'Changelog'
-date = '2026-05-28'
+date = '2026-06-01'
 tags = ['example', 'changelog']
 +++
 
@@ -14,6 +14,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.22.8] - 2026-06-01
+
+### Changed
+- **BREAKING:** `timbers log` now refuses to run on a dirty working tree instead of warning and proceeding. An aborted gated commit leaves staged feature work in the index, which previously let `timbers log` auto-commit an entry against the old `HEAD` — producing phantom entries while the real work stayed unstaged. The error names the likely trigger, points to `git diff --cached` for diagnosis, and notes that `--dry-run` still works for inspecting an entry. To proceed, commit your staged changes first.
+
 
 ## [0.22.7] - 2026-05-28
 
@@ -640,3 +646,4 @@ Initial public release.
 [0.22.5]: https://github.com/gorewood/timbers/releases/tag/v0.22.5
 [0.22.6]: https://github.com/gorewood/timbers/releases/tag/v0.22.6
 [0.22.7]: https://github.com/gorewood/timbers/releases/tag/v0.22.7
+[0.22.8]: https://github.com/gorewood/timbers/releases/tag/v0.22.8
