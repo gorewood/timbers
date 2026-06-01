@@ -8,28 +8,29 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ---
 
-# Release Notes
-
 ## New Features
 
-- You can now record an `ack` to mark a commit as documented elsewhere — useful after a rebase, when the reasoning already lives in another ledger entry.
-- You can now skip commits by author with `author:` rules in `.timbersignore` (for example, to exclude bot commits like `dependabot[bot]`).
-- You can now skip commits by subject line with `msg:` rules in `.timbersignore` — handy for release and housekeeping commits that touch otherwise-tracked files.
-- Run `timbers pending --explain` to see every commit classified, with the reason each one is or isn't pending.
-- A new `help timbersignore` topic documents the three rule types and shows the canonical recipe for excluding bot commits.
-- `timbers doctor` now flags a stale `timbers` binary earlier in your `PATH` that could silently block commits, and warns when an `author:`/`msg:` glob uses a literal `[..]` that won't match anything.
-- Set `TIMBERS_DEBUG` to trace how each commit is classified when you're tuning your skip rules.
+- You can now skip commits from the ledger by subject line with `msg:` rules in `.timbersignore` — handy for excluding release and changelog commits.
+- Run `timbers pending --explain` to see exactly why each commit is, or isn't, counted as pending.
+- `timbers doctor` now flags malformed `author:` and `msg:` globs (such as the `author:dependabot[bot]` pattern that silently matches nothing).
+- `timbers doctor` now warns when an older `timbers` binary earlier on your `PATH` is shadowing your current install — a common cause of commits being unexpectedly blocked.
+- A new `help timbersignore` topic documents the available rule types and the recommended recipe for ignoring bot commits.
 
 ## Improvements
 
-- `timbers log --anchor <commit>` now documents that single commit even when nothing is pending, instead of refusing; the refusal message points you to `--range` for explicit control.
-- When your anchor sits off the first-parent line, `timbers pending` now explains the situation and points at `--explain`/`--range` rather than reporting a bare "No pending commits".
-- `timbers pending` shows a `.timbersignore` hint when skip rules are active, and surfaces when merge commits are being skipped.
-- When a stale hook binary blocks an `ack` commit, the error now explains the staged-but-uncommitted state and points you at the upgrade, `timbers doctor`, and `git commit` recovery steps.
+- `timbers log --anchor` now documents the commit you name even when no pending commits are detected, instead of refusing.
+- When your tree is clean but the anchor sits off the first-parent line, `timbers pending` now explains the situation rather than just reporting "No pending commits".
+- `timbers pending` and `timbers doctor` now surface side-branch anchor topology, so merge-related pending behavior is no longer opaque.
+- After an aborted commit, the pre-commit gate now tells you your staged changes are still in the index and points you at `git diff --cached` to inspect them.
+- The `ack` commit-blocked message now explains the staged-but-uncommitted state and how to recover.
+- `.timbersignore` rules are easier to discover, with hints surfaced in `timbers pending` and during onboarding.
 
 ## Bug Fixes
 
-- `timbers log` now refuses to run on a dirty working tree instead of warning and proceeding, which previously produced phantom entries that rode the wrong commit. Commit your work first, or use `--dry-run` to inspect an entry while debugging.
-- `timbers status` now counts commits skipped by a `msg:` rule correctly — it previously undercounted, so a newly added rule looked like it wasn't filtering anything.
-- `timbers log --batch` now anchors entries to a commit on your first-parent line instead of sometimes landing on a side-branch commit.
-- Pending detection now correctly recognizes already-documented commits and handles merged side-branch topologies, so fewer commits are wrongly reported as pending.
+- `timbers status` now correctly counts commits skipped by `msg:` rules; it previously undercounted, making it look like a new rule wasn't filtering anything.
+- `timbers log --batch` now anchors entries to a commit on the main line instead of sometimes selecting a side-branch commit.
+- Pending detection now correctly recognizes already-documented commits in merge and side-branch histories, clearing spurious "pending" reports.
+
+## Breaking Changes
+
+- **`timbers log` now refuses to run on a dirty working tree** (it previously warned and proceeded, which could create phantom entries after an aborted commit). Commit your work first, or pass `--dry-run` to preview an entry without writing it; use `git diff --cached` to see what's staged.

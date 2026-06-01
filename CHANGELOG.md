@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.9] - 2026-06-01
+
+### Changed
+- Improved the pre-commit gate's abort message to flag that staged changes remain in the index (inspect with `git diff --cached`), and reframed its guidance to "Document the PRIOR commit(s) first" so it's clear the gate keys off `HEAD` state rather than the current staging attempt.
+
+
 ## [0.22.8] - 2026-06-01
 
 ### Changed
@@ -637,3 +643,4 @@ Initial public release.
 [0.22.6]: https://github.com/gorewood/timbers/releases/tag/v0.22.6
 [0.22.7]: https://github.com/gorewood/timbers/releases/tag/v0.22.7
 [0.22.8]: https://github.com/gorewood/timbers/releases/tag/v0.22.8
+[0.22.9]: https://github.com/gorewood/timbers/releases/tag/v0.22.9
