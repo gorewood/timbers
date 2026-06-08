@@ -88,7 +88,8 @@ type logContext struct {
 
 // runLog executes the log command.
 func runLog(cmd *cobra.Command, storage *ledger.Storage, isDirty dirtyChecker, args []string, flags logFlags) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd)).
+		WithWidth(output.TerminalWidth(cmd.OutOrStdout(), 80))
 
 	storage, err := initLogStorage(storage, printer)
 	if err != nil {

@@ -3,6 +3,8 @@ package output
 import (
 	"io"
 	"os"
+
+	xterm "github.com/charmbracelet/x/term"
 )
 
 // ResolveColorMode determines the effective isTTY value based on the --color
@@ -34,4 +36,20 @@ func IsTTY(writer io.Writer) bool {
 		return false
 	}
 	return (stat.Mode() & os.ModeCharDevice) != 0
+}
+
+// TerminalWidth returns the column width of the terminal backing writer, or
+// fallback when writer is not a terminal or the size cannot be determined
+// (piped output, tests writing to a buffer). This keeps panel wrapping
+// deterministic off a TTY while fitting the real terminal when present.
+func TerminalWidth(writer io.Writer, fallback int) int {
+	file, ok := writer.(*os.File)
+	if !ok {
+		return fallback
+	}
+	width, _, err := xterm.GetSize(file.Fd())
+	if err != nil || width <= 0 {
+		return fallback
+	}
+	return width
 }

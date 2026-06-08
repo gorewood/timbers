@@ -273,8 +273,8 @@ func TestShowWithTags(t *testing.T) {
 
 	output := buf.String()
 
-	// Check tags are displayed
-	if !strings.Contains(output, "Tags: feature, docs") {
+	// Check tags are displayed (panel renders "Tags  feature, docs")
+	if !strings.Contains(output, "Tags") || !strings.Contains(output, "feature, docs") {
 		t.Errorf("output missing tags\noutput: %s", output)
 	}
 
@@ -286,11 +286,11 @@ func TestShowWithTags(t *testing.T) {
 		t.Errorf("output missing work item github:456\noutput: %s", output)
 	}
 
-	// Check diffstat is displayed
-	if !strings.Contains(output, "3 files") {
+	// Check diffstat is displayed (unified format: "3 changed, +45 -12")
+	if !strings.Contains(output, "3 changed") {
 		t.Errorf("output missing diffstat files\noutput: %s", output)
 	}
-	if !strings.Contains(output, "+45/-12") {
+	if !strings.Contains(output, "+45 -12") {
 		t.Errorf("output missing diffstat lines\noutput: %s", output)
 	}
 }

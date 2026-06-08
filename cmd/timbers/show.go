@@ -3,9 +3,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -46,7 +43,8 @@ Examples:
 
 // runShow executes the show command.
 func runShow(cmd *cobra.Command, storage *ledger.Storage, args []string, latestFlag bool) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd)).
+		WithWidth(output.TerminalWidth(cmd.OutOrStdout(), 80))
 
 	if err := validateShowArgs(args, latestFlag); err != nil {
 		printer.Error(err)
@@ -118,28 +116,12 @@ func outputShowJSON(printer *output.Printer, entry *ledger.Entry) error {
 	return printer.WriteJSON(entry)
 }
 
-// outputShowHuman outputs the entry in human-readable format.
+// outputShowHuman outputs the entry as an aligned panel: the ID is the title
+// (the thing you copy), substance (what/why/how/notes/tags/work) leads, and
+// workset bookkeeping trails after a separator. Rounded box at a TTY,
+// borderless plain text when piped.
 func outputShowHuman(printer *output.Printer, entry *ledger.Entry) {
-	outputShowHeader(printer, entry)
-	outputShowSummary(printer, entry)
-	outputShowNotes(printer, entry)
-	outputShowWorkset(printer, entry)
-	outputShowTags(printer, entry)
-	outputShowWorkItems(printer, entry)
-	outputShowTimestamps(printer, entry)
-}
-
-// outputShowHeader prints the entry ID.
-func outputShowHeader(printer *output.Printer, entry *ledger.Entry) {
-	printer.Println(entry.ID)
-}
-
-// outputShowSummary prints the what/why/how summary.
-func outputShowSummary(printer *output.Printer, entry *ledger.Entry) {
-	printer.Section("Summary")
-	printer.KeyValue("What", entry.Summary.What)
-	printer.KeyValue("Why", entry.Summary.Why)
-	printer.KeyValue("How", entry.Summary.How)
+	printer.FieldsBox(entry.ID, showFields(entry))
 }
 
 // shaExistsFunc is the function used to check if a SHA exists in the repo.
@@ -154,66 +136,6 @@ func anchorDisplay(sha string) string {
 		display += " (not in current history)"
 	}
 	return display
-}
-
-// outputShowNotes prints the notes if present.
-func outputShowNotes(printer *output.Printer, entry *ledger.Entry) {
-	if entry.Notes == "" {
-		return
-	}
-	printer.Section("Notes")
-	printer.Println(entry.Notes)
-}
-
-// outputShowWorkset prints the workset information.
-func outputShowWorkset(printer *output.Printer, entry *ledger.Entry) {
-	printer.Section("Workset")
-	printer.KeyValue("Anchor", anchorDisplay(entry.Workset.AnchorCommit))
-	if len(entry.Workset.Commits) > 0 {
-		commitValue := strconv.Itoa(len(entry.Workset.Commits))
-		if entry.Workset.Range != "" {
-			commitValue = strconv.Itoa(len(entry.Workset.Commits)) + " (" + entry.Workset.Range + ")"
-		}
-		printer.KeyValue("Commits", commitValue)
-	}
-	if entry.Workset.Diffstat != nil {
-		files := entry.Workset.Diffstat.Files
-		suffix := "s"
-		if files == 1 {
-			suffix = ""
-		}
-		changedValue := fmt.Sprintf("%d file%s, +%d/-%d lines",
-			files, suffix, entry.Workset.Diffstat.Insertions, entry.Workset.Diffstat.Deletions)
-		printer.KeyValue("Changed", changedValue)
-	}
-}
-
-// outputShowTags prints the tags if present.
-func outputShowTags(printer *output.Printer, entry *ledger.Entry) {
-	if len(entry.Tags) == 0 {
-		return
-	}
-	printer.Println()
-	printer.KeyValue("Tags", strings.Join(entry.Tags, ", "))
-}
-
-// outputShowWorkItems prints work items if present.
-func outputShowWorkItems(printer *output.Printer, entry *ledger.Entry) {
-	if len(entry.WorkItems) == 0 {
-		return
-	}
-	items := make([]string, len(entry.WorkItems))
-	for i, wi := range entry.WorkItems {
-		items[i] = fmt.Sprintf("%s:%s", wi.System, wi.ID)
-	}
-	printer.Println()
-	printer.KeyValue("Work Items", strings.Join(items, ", "))
-}
-
-// outputShowTimestamps prints the created timestamp.
-func outputShowTimestamps(printer *output.Printer, entry *ledger.Entry) {
-	printer.Println()
-	printer.KeyValue("Created", entry.CreatedAt.Format("2006-01-02 15:04:05 UTC"))
 }
 
 // shortSHA returns a shortened SHA (first 7 characters).
