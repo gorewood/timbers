@@ -17,6 +17,7 @@ type Printer struct {
 	errW   io.Writer
 	json   bool
 	isTTY  bool
+	width  int
 	styles *Styles
 }
 
@@ -82,6 +83,14 @@ func NewPrinter(writer io.Writer, jsonMode bool, isTTY bool) *Printer {
 // Returns the printer for chaining.
 func (p *Printer) WithStderr(w io.Writer) *Printer {
 	p.errW = w
+	return p
+}
+
+// WithWidth sets the terminal width used to wrap panel values (FieldsBox).
+// A non-positive width falls back to a default (defaultPanelWidth).
+// Returns the printer for chaining.
+func (p *Printer) WithWidth(w int) *Printer {
+	p.width = w
 	return p
 }
 

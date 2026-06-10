@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/gorewood/timbers/internal/ledger"
@@ -11,6 +10,9 @@ import (
 )
 
 // outputDryRun outputs what would be written without actually writing.
+// The human path renders the entry as an aligned panel (rounded box at a TTY,
+// borderless plain text when piped) with substance leading and bookkeeping
+// (ID, Anchor) at the bottom.
 func outputDryRun(printer *output.Printer, entry *ledger.Entry) error {
 	if printer.IsJSON() {
 		return printer.Success(map[string]any{
@@ -19,30 +21,8 @@ func outputDryRun(printer *output.Printer, entry *ledger.Entry) error {
 		})
 	}
 
-	printer.Section("Dry Run Preview")
-	printer.KeyValue("ID", entry.ID)
-	printer.KeyValue("Anchor", entry.Workset.AnchorCommit)
-	printer.KeyValue("What", entry.Summary.What)
-	printer.KeyValue("Why", entry.Summary.Why)
-	printer.KeyValue("How", entry.Summary.How)
-	outputDryRunOptionalFields(printer, entry)
-	printer.KeyValue("Files", formatDiffstat(entry.Workset.Diffstat))
-
+	printer.FieldsBox("Dry Run Preview", dryRunFields(entry))
 	return nil
-}
-
-// outputDryRunOptionalFields outputs optional entry fields in dry-run mode.
-func outputDryRunOptionalFields(printer *output.Printer, entry *ledger.Entry) {
-	if len(entry.Tags) > 0 {
-		printer.KeyValue("Tags", strings.Join(entry.Tags, ", "))
-	}
-	if len(entry.WorkItems) > 0 {
-		items := make([]string, len(entry.WorkItems))
-		for i, wi := range entry.WorkItems {
-			items[i] = wi.System + ":" + wi.ID
-		}
-		printer.KeyValue("Work", strings.Join(items, ", "))
-	}
 }
 
 // formatDiffstat formats a diffstat as a human-readable string.
