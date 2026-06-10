@@ -1,6 +1,6 @@
 +++
 title = 'Release Notes'
-date = '2026-06-01'
+date = '2026-06-10'
 tags = ['example', 'release-notes']
 +++
 
@@ -8,27 +8,30 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ---
 
-**New Features**
+## Timbers v0.23.0
 
-- You can now set a per-repo staleness window in `.timbersignore` with a `session-window:` directive, so long-running sessions aren't treated as stale.
-- `timbers pending --explain` classifies every commit and shows you why each one is or isn't pending.
-- A new `help timbersignore` topic (and onboarding blurb) documents the three `.timbersignore` rule types and the canonical bot-exemption recipe.
+### New Features
 
-**Improvements**
+- A new readable panel renders multi-line **what / why / how / notes** in aligned, wrapped columns when you run `timbers show` and `timbers log --dry-run` — long fields no longer collapse into one bleeding line.
+- You can now tune the staleness window per repo with a `session-window:` directive in `.timbersignore`, so long-running sessions (multi-hour refactors, agent fan-outs) aren't treated as stale. `timbers doctor` warns if the value is malformed.
 
-- The commit gate now skips commits authored by someone else and commits older than the session window (default 24h), so you're only nudged to document your own in-session work.
-- timbers now honors your `.mailmap`, so a multi-email setup is no longer mistaken for another author's work.
-- When your own work is auto-skipped because the session ran past the window, a post-commit note tells you what happened instead of skipping silently.
-- The `timbers prime` pending count now reflects only the in-session commits you actually need to document.
-- When the pre-commit gate aborts a commit, it now tells you your staged changes are still in the index and how to inspect them (`git diff --cached`).
-- `timbers pending` now explains when the anchor is off the first-parent line, instead of just reporting "No pending commits".
-- `timbers log --anchor` now documents a single commit even when nothing is detected as pending, and the refusal message points you to `--range`.
-- `timbers doctor` now warns when `git user.email` is unset, flags literal-looking character classes in `author:`/`msg:` globs (e.g. `author:dependabot[bot]`), and warns on malformed `session-window:` values.
+### Improvements
 
-**Bug Fixes**
+- The commit gate now recognizes work that isn't yours to document — commits from a different author (resolved through your `.mailmap`) and commits older than the session window are skipped automatically instead of nagging you to log them.
+- `timbers prime` now counts only in-session commits as pending, so the number you're asked to drive to zero reflects work you can actually document.
+- When the gate aborts a commit, `timbers` now tells you your staged changes are still in the index and points you at `git diff --cached` to inspect them.
+- `.timbersignore` is now discoverable: `timbers pending` hints at it when rules exist, `timbers pending --explain` classifies every commit, and `timbers help timbersignore` documents the rule types.
+- `timbers doctor` now flags a common footgun — an `author:dependabot[bot]`-style glob that silently matches nothing — and warns when `user.email` is unset.
+- `timbers log --anchor <sha>` now documents that single commit even when nothing is detected as pending, and refusals point you at `--range` as the explicit escape hatch.
+- `timbers pending` now distinguishes a genuinely clean state from one computed off an off-first-parent anchor, instead of b-showing a bare "No pending commits."
+- When a long session skips its own stale work, a post-commit note now surfaces that something was auto-skipped so it doesn't vanish silently.
 
-- `timbers status` no longer undercounts auto-skipped commits when a `msg:` rule matches.
+### Bug Fixes
 
-**Breaking Changes**
+- `timbers log --dry-run` no longer drops the **Notes** field from its preview.
+- The diffstat now renders consistently between `timbers show` and `timbers log --dry-run`.
+- `timbers status` now counts commits skipped by a `msg:` rule correctly — previously it could under-report whether a newly added rule was filtering anything.
 
-- `timbers log` now refuses to run on a dirty working tree instead of warning and proceeding (this prevents phantom ledger entries after an aborted commit). Commit your changes first, or use `--dry-run` to inspect an entry without writing one.
+### Breaking Changes
+
+- **`timbers log` now refuses to run on a dirty working tree** instead of warning and proceeding — this closes a hole where an aborted commit could produce a phantom ledger entry. Commit your work first, or use `timbers log --dry-run` to inspect an entry without writing it. There is intentionally no `--allow-dirty` flag.

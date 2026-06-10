@@ -1,6 +1,6 @@
 +++
 title = 'Decision Log'
-date = '2026-06-01'
+date = '2026-06-10'
 tags = ['example', 'decision-log']
 +++
 
@@ -8,197 +8,160 @@ Generated with `timbers draft decision-log --last 20 | claude -p --model opus`
 
 ---
 
-## ADR-1: Poll the GitHub release then install the published artifact as a normal consumer
+## ADR-1: Migrate beads sync from server-mode Dolt to embedded Dolt + `refs/dolt/data`
 
 **Status:** Accepted
 **Date:** 2026-05-27
 
-**Context:** The `just release` recipe tagged and pushed, but the dev's local binary always came from an identical *local* build — so the actual release pipeline (CI build, GH release, `install.sh`) went unverified on every cut. The user framed the fix as wanting the recipe to install "as if a normal consumer."
+**Context:** The repo was in a broken hybrid state. Server-mode Dolt couldn't persist under the sandbox (it re-imported JSONL on every call), and a stale CLI remote plus a 3-week-old `refs/dolt/data` existed while the steering docs claimed "no remote." A coherent sync model was needed, and osprey-strike's already-embedded setup was the reference.
 
-**Decision:** Append a bounded poll loop (`gh release view <tag> --jq assets length`, ~10m deadline, 15s interval) after `git push`; once assets appear, run `just install-release` and assert the installed `--version` contains the tag. A cron follow-up (the user's initial framing) was rejected — CI can't install on the dev's laptop so it has to be local anyway, and a poll-and-install at the tail of the recipe has no moving parts. Relies on `.goreleaser draft:false` so `latest` equals the just-pushed tag.
-
-**Consequences:**
-- Every release sanity-checks the full publish pipeline and leaves the local binary current with no manual follow-up.
-- Adds up to ~10m of polling to `just release`; on timeout it prints a recovery hint since the release is already pushed.
-- Verification is local-only — a consumer install on a *different* platform remains unverified.
-
-## ADR-2: Migrate beads from server-mode Dolt + JSONL-in-git to embedded Dolt + canonical refs/dolt/data
-
-**Status:** Accepted
-**Date:** 2026-05-27
-
-**Context:** The repo sat in a broken hybrid: server-mode Dolt couldn't persist under the sandbox (it re-imported JSONL on every call), and a stale CLI remote plus a 3-week-old `refs/dolt/data` existed while the steering docs claimed "no remote." JSONL was the only current source of truth (server Dolt last modified Mar 22; `refs/dolt/data` topped out May 7), so the state was incoherent and partly silently broken.
-
-**Decision:** Align to the canonical embedded model already validated in osprey-strike. Stop/kill the server, set aside the stale DB and backup dir, flip `metadata.json` to embedded, `bd bootstrap` to rebuild `embeddeddolt` from the trusted 60-issue JSONL, drop and re-seed `refs/dolt/data` fresh, flip `export.auto`/`git-add` to false, and untrack + gitignore `issues.jsonl`. Rebuild-from-JSONL was judged safe precisely because JSONL was the freshest state.
+**Decision:** Adopt the canonical embedded-Dolt + `refs/dolt/data` model. Rebuild `embeddeddolt` from the trusted 60-issue `issues.jsonl` — the only current source of truth (server Dolt last modified Mar 22, `refs/dolt/data` topped out May 7) — then drop the stale ref, re-seed fresh, flip `export.auto`/`export.git-add` to false, and untrack/gitignore the JSONL. Followed osprey-strike's migration doc as the playbook, adapted for the server→embedded delta osprey didn't have.
 
 **Consequences:**
-- Sync works under the sandbox (no localhost TCP); clones inherit the mode via committed `metadata.json`/`config.yaml` and onboard via `bd bootstrap`.
-- Dolt audit history was lost in the rebuild — accepted, since the prior Dolt state was already stale.
-- Bootstrap detection order is load-bearing: `refs/dolt/data` had to be dropped *and* `.beads/backup` set aside so bootstrap fell through to current JSONL instead of cloning stale state.
-- Hand-edits to the Sync/Landing sections landed inside bd's managed markers (tracked separately for relocation).
+- Sync works under the sandbox (no TCP); clones inherit via `bd bootstrap`; verified by a fresh-clone round-trip.
+- Lost Dolt audit history (rebuild-from-JSONL discards it) — accepted because JSONL was the only current truth.
+- Bootstrap detection order is load-bearing: had to drop `refs/dolt/data` *and* set aside `.beads/backup` so bootstrap fell through to the current JSONL instead of cloning stale state.
+- Hand-edits landed inside `bd`'s managed markers (timbers-069 tracks relocating them).
 
-## ADR-3: Make .timbersignore discoverable and lint the `author:dependabot[bot]` glob footgun
-
-**Status:** Accepted
-**Date:** 2026-05-27
-
-**Context:** An agent had to research whether author-matching even existed, and could silently write `author:dependabot[bot]` — a no-op glob, because `[..]` is a character class, not a literal. The exemption lever was invisible and the footgun failed silently.
-
-**Decision:** Surface the lever across four surfaces (a `pending` hint when `.timbersignore` is non-empty, `pending --explain`, a `help timbersignore` topic, and an onboard blurb), and add a doctor lint that flags literal-looking `[..]` classes in `author:`/`msg:` globs with the canonical bot recipe. Extracted a shared `pendingRange()` so the filtering gate and the new `--explain` classifier resolve the range through one path instead of duplicating the side-branch short-circuits.
-
-**Consequences:**
-- Turns a research-and-trap into a one-liner; doctor catches the no-op glob before it silently fails to filter.
-- Four beads landed in one commit (a cohesive `.timbersignore`-UX theme; `pending.go` carried two of them and a clean split would have needed `git add -p`).
-- Shared `pendingRange()` means the gate and `--explain` cannot drift on range resolution; the 40K-line gate test suite is the regression net.
-
-## ADR-4: Make the just-release site-example regeneration non-fatal
-
-**Status:** Accepted
-**Date:** 2026-05-27
-
-**Context:** Site-content generation runs parallel `claude -p` calls during release. A transient LLM flake on the decision-log example aborted an entire version release — a publish step being held hostage by an ancillary content step.
-
-**Decision:** Wrap `just examples` in the release recipe with `|| echo WARNING` so a failure warns and the release proceeds to commit/tag/push; examples regenerate separately.
-
-**Consequences:**
-- A transient LLM hiccup can no longer block shipping a tag.
-- A released version may briefly ship with stale site examples until the separate regeneration runs.
-
-## ADR-5: Honor `--anchor` at zero pending and name the off-first-parent state
+## ADR-2: Honor `--anchor` at zero pending instead of refusing
 
 **Status:** Accepted
 **Date:** 2026-05-28
 
-**Context:** osprey hit a gap when the workset anchor sat off the first-parent line: `timbers pending` reported a bare "No pending commits" (conflating *clean* with *computed from an off-line anchor*), and `timbers log --anchor` still refused at zero detected pending — despite the flag's name promising "use this anchor."
+**Context:** osprey hit a gap where an anchor off the first-parent line yielded 0 detected pending, and `timbers log --anchor` refused — despite the flag's name promising "use this anchor." Separately, a bare "No pending commits" conflated "clean" with "computed from an off-line anchor."
 
-**Decision:** `getLogCommits` falls back to `LogRange(anchor^, anchor)` (a single-commit range) when pending is empty and `--anchor` is set; the refusal now names `--range` as the explicit escape hatch; and `pending` at count:0 prints a note keyed on `AnchorOffFirstParentLine`. Commit-resolution helpers were extracted to `log_resolve.go` for the file-length limit.
-
-**Consequences:**
-- `--anchor` now does what its name promises even at zero pending, and the off-first-parent situation is named rather than left ambiguous.
-- A ref-aware mock and `TestLogAnchorBypassesZeroPending` lock the behavior in.
-
-## ADR-6: Converge `countAutoSkipped` onto the shared identity classifier
-
-**Status:** Accepted
-**Date:** 2026-05-28
-
-**Context:** `timbers status` undercounted housekeeping-skipped commits when a `msg:` glob matched — `countAutoSkipped` ran a parallel inline identity chain that was never updated for the new `msg:` rule, so status silently misreported whether a freshly-added `msg:` rule was filtering anything. Both arch and code reviewers caught it independently in the deep review pass.
-
-**Decision:** Delegate identity classification to `classifyByIdentity` (the same chain `filterByRules` already uses) so visibility and the gate share one source of truth. Keeping a separate loop for symmetry with the gate's `filterByRules`/`ExplainPending` split was considered and rejected — the bug *was* the loops drifting, so re-converging is the fix, not a separation to preserve.
+**Decision:** At 0 pending with `--anchor` set, `getLogCommits` falls back to `LogRange(anchor^, anchor)` to document the single commit, and the refusal now names `--range` as the explicit escape hatch. In pending's `count:0` branch, print a note keyed on `AnchorOffFirstParentLine` so the off-line-anchor case is named rather than hidden.
 
 **Consequences:**
-- Status counts and gate decisions can no longer diverge on identity rules.
-- One fewer parallel classification path to keep in sync as new rule types are added.
+- `--anchor` honors its name; off-first-parent work is documentable without guessing.
+- `pending` no longer silently presents an off-line-anchor computation as "clean."
+- Commit-resolution helpers extracted to `log_resolve.go` for the file-length limit; required a ref-aware mock to lock in via `TestLogAnchorBypassesZeroPending`.
 
-## ADR-7: Close the gate-abort phantom-entry footgun — refuse dirty-tree log, then hint staged changes
+## ADR-3: Refuse `timbers log` on a dirty tree
 
 **Status:** Accepted
 **Date:** 2026-06-01
 
-**Context:** A field report from an agent in osprey-strike observed two phantom ledger entries in one v0.22.7 session. The mechanism: an aborted gated commit leaves staged changes in the index, then `timbers log` auto-commits an entry pathspec-scoped to the entry file only — the entry rides the old HEAD while the feature work stays unstaged. v0.22.7 only warned-and-proceeded, and the gate refusal itself never explained why the caller's commit had vanished.
+**Context:** v0.22.7 warned-and-proceeded on a dirty tree, which let phantom entries reach upstream — an aborted gated commit leaves staged work in the index, then `timbers log` auto-commits an entry pathspec-scoped to the entry file only, riding the old HEAD while the feature work stays unstaged. A field report from an agent in osprey-strike observed two phantoms in one session against v0.22.7.
 
-**Decision:** Two moves on the same footgun. First (v0.22.8), replace the dirty-tree `printer.Warn` with a `UserError` return guarded by `!flags.dryRun`; deliberately *not* add `--allow-dirty`, since the protocol has no case for logging uncommitted work and the flag would reopen the exact hole. The report's Option B (create entry but skip auto-commit) was rejected — the trigger is the gate *aborting*, so a dirty entry would sit indefinitely and compound. Second, add a `HasStagedChanges()`-gated hint after gate abort that names the trigger and points at `git diff --cached`, and reframe "Run timbers log first" → "Document the PRIOR commit(s) first." An unconditional hint was rejected because "staged changes remain" would mislead a `git commit --amend --no-edit` against an undocumented HEAD.
+**Decision:** Replace the `printer.Warn` with a `UserError`, guarded by `!flags.dryRun` so `--dry-run` stays usable for inspecting an entry mid-debug. Deliberately did **not** add `--allow-dirty` — the protocol has no case for logging uncommitted work, and the flag would reopen the exact footgun. Rejected the report's Option B (create the entry, skip the auto-commit): since the trigger is the gate *aborting* commits, a deferred entry would sit dirty indefinitely and dirty entries compound. A follow-up added a `HasStagedChanges()`-gated hint pointing at `git diff --cached`, so the caller learns *why* their commit vanished before reaching the now-refusing `log` call.
 
 **Consequences:**
-- Phantom entries can no longer reach upstream, and the confusing post-abort state is explained before the caller reaches the now-refusing `timbers log`.
-- `--dry-run` remains usable for inspecting an entry mid-debugging.
-- One extra `git diff --cached` call per hook invocation (within budget); the hint stays silent on a clean index.
-- No path exists to log against a deliberately dirty tree — accepted, since the protocol has no such case.
+- Phantom entries closed; the tool now enforces what the warning previously only asked.
+- One extra `git` call per hook invocation for the conditional hint — the unconditional version was rejected because it would mislead `git commit --amend --no-edit` against an undocumented HEAD.
+- No path to log genuinely uncommitted work — accepted as outside the protocol.
 
-## ADR-8: Reframe the gate as in-session reasoning capture, lenient about foreign and stale work
+## ADR-4: Reframe the commit gate to capture in-session reasoning, accepting misses outside the session
 
 **Status:** Accepted
 **Date:** 2026-06-01
 
-**Context:** The user reframed the gate's purpose — it exists to capture *live, in-session* reasoning, accepting misses outside the session — but the existing gate didn't distinguish, so it fired on foreign-author and stale commits that can't be productively documented. timbers-vlh was bumped P3→P1 to make the gate provenance-aware.
+**Context:** The user reframed the gate's purpose — capture *live in-session* reasoning, accept misses outside the session. The existing gate didn't distinguish, so it fired on foreign/stale work that can't be productively documented. timbers-vlh was bumped P3→P1 and a plan doc was authored, then reviewed by three independent Opus subagents (pragmatist, correctness-skeptic, agent-UX advocate).
 
-**Decision:** Author a plan reviewed by three independent Opus subagents with focused lenses. The pragmatist cut four items (status breakdown, default footer, `--include-foreign`, the session-author directive); the correctness-skeptic surfaced the load-bearing AuthorDate-vs-CommitDate issue; the agent-UX advocate identified the `pending.count` semantic flip as the single most important UX decision, pushed the default window 4h→24h, and flagged the silent same-author stale-skip as the unrecoverable failure mode. Explicit tensions were resolved on the record: kept the `.timbersignore` session-window directive (the rebase finding makes window correctness load-bearing); moved the stale-self warning *off* the gate to a non-blocking post-commit note (a gate warning would defeat the leniency reframe); cut `--include-foreign` entirely (a backfill workflow with no real user yet).
+**Decision:** Make the gate provenance-aware via OR-composed heuristics (foreign-author OR stale) with a 24h default window. The reviewers materially reshaped the spec: the pragmatist cut four items (status breakdown, default footer, `--include-foreign`, `session-author`) and shrank the tally; the correctness-skeptic surfaced the `AuthorDate`-vs-`CommitDate` hazard (see ADR-5); the agent-UX advocate named `pending.count` as the load-bearing UX field (see ADR-9), pushed the window 4h→24h, and flagged the silent same-author stale-skip as the unrecoverable failure mode (see ADR-10). The rationale was synthesized into a durable Decided-in-Review section.
 
 **Consequences:**
-- Establishes the contract every downstream v0.23.0 phase implements; the rationale is captured in a Decided-in-Review section so it's durable.
-- Accepts by design that the gate will *miss* out-of-session work rather than nag about it.
-- Defers `--include-foreign` — an open question if a backfill consumer ever materializes.
+- The gate stops firing on un-documentable foreign/stale work; rationale is durable for implementers across the phased rollout.
+- Kept the `.timbersignore` `session-window` directive over the pragmatist's objection, because the rebase/amend finding made window correctness load-bearing (see ADR-8).
+- Did **not** add a stale-self warning to the gate itself — it would defeat the lenience reframe; moved to a non-blocking post-commit note (ADR-10).
+- `--include-foreign` cut entirely from v0.23.0 — it serves a backfill workflow with no real user yet.
 
-## ADR-9: Use mailmap-resolved author email (`%aE`) and CommitDate, grounded by a real-repo tally
+## ADR-5: Use `CommitDate` and `%aE` (mailmap-resolved) for the classifier's staleness and identity signals
 
 **Status:** Accepted
 **Date:** 2026-06-01
 
-**Context:** Before locking heuristic defaults, the plan required an empirical tally; the user pointed at osprey-strike (multi-author, bot-heavy, the origin of most timbers feature work) as the best signal. The provenance classifier needed both an author identity and a staleness clock, and the naive choices were both wrong.
+**Context:** Before locking heuristic defaults, the plan called for a tally against `osprey-strike` (multi-author, bot-heavy, real-world multi-agent workflows — the origin of most recent timbers feature work). Two signal choices were at stake: which date drives staleness, and which email format drives authorship.
 
-**Decision:** Use `%aE` (mailmap-resolved), not `%ae` — osprey-strike's `.mailmap` coalesces the operator's two emails, and `%ae` would have produced a **61% silent false-negative rate** on the operator's own work; `.mailmap` is git's canonical multi-email mechanism and gets the right answer for free (this also killed the planned session-author directive as redundant). Use `CommitDate` (`%ct`), not `AuthorDate`, for staleness — AuthorDate stays put across rebase/amend, so it would silently auto-skip work the user just touched. Implemented by keeping the existing `Date` field as `AuthorDate` (backward compat) and adding `CommitDate` as a sibling; diffstat code was extracted to `diffstat.go` for the 350-line limit. The tally also confirmed the 24h window, OR composition, and strict mailmap-equality.
+**Decision:** Use `CommitDate`, not `AuthorDate` — `AuthorDate` stays put across rebase/amend, so a staleness check keyed on it would silently auto-skip work the user just touched. Use `%aE`, not `%ae` — osprey-strike's existing `.mailmap` coalesces Bob's two emails (`bob@redshifted.io` ↔ `robert.bergman@gmail.com`), and `%ae` would have produced a 61% false-negative rate on Bob's own work. Mailmap is git's canonical multi-email mechanism and gets the right answer for free; this single tally finding also killed the proposed `session-author` directive. Kept the existing `Date` field as `AuthorDate` for backward compat and added `CommitDate` as a sibling.
 
 **Consequences:**
-- A multi-email operator is no longer misread as a foreign author, and recently-rebased in-session work is no longer mis-skipped as stale.
-- `%aE` requires the operator to maintain a `.mailmap` for the multi-email case — repos without one fall back to raw author email.
-- The session-author directive was dropped as superseded by mailmap.
+- Rebased/amended in-session commits retain in-session status; multi-email operators aren't misread as foreign.
+- Mailmap reuse means no new config surface for the multi-email case.
+- `commitFormat` now emits `%aE`/`%at`/`%ct` in fixed positions; diffstat code (~90 lines) extracted to `diffstat.go` for the 350-line limit.
+- The tally ran ~30 min (two repos, three "now" anchors) vs the ~10 min projected — judged worth it for the mailmap finding.
 
-## ADR-10: Land the provenance classifier as the last step in the skip chain, configured on Storage
+## ADR-6: Run the provenance classifier last in the skip chain
 
 **Status:** Accepted
 **Date:** 2026-06-01
 
-**Context:** Phase 3 of v0.23.0 — the classifier had to become part of `classifyCommit` *without* yet being wired into the gate decision (that came in phase 5), so precedence and safe-degradation could be locked in by tests independent of the gate-path wiring.
+**Context:** Phase 3 landed the classifier as a standalone, fully tested unit before wiring it into the gate decision. Where it sits in `classifyCommit`'s chain determines whether provenance can override an existing classification.
 
-**Decision:** Place `classifyByProvenance` at the END of the chain (after infra → identity → content) so a documented or acked commit keeps its decision-relevant reason rather than relabeling as foreign-author just because the email differs. Passing `ProvenanceConfig` as a parameter to `classifyCommit` was rejected — it bloats the signature across `filterByRules`, `classifyCommit`, `traceFilterDecisions`, and `ExplainPending`, and the config shares the Storage's per-repo lifecycle, so it lives as a `provenance` field (zero value = disabled). Deliberately no clock-injection pattern: `ProvenanceConfig.Now` is a plain `time.Time` callers populate (`time.Now()` in production, a fixed instant in tests).
+**Decision:** Thread `classifyByProvenance` at the **end** of the chain (after infra → identity → content) so earlier reasons keep their decision-relevance — a documented or acked commit doesn't relabel as foreign-author just because the email differs. Held `ProvenanceConfig` on `Storage` (zero-valued = disabled) rather than passing it as a parameter; the parameter form was rejected because it would bloat the signature across `filterByRules`, `classifyCommit`, `traceFilterDecisions`, and `ExplainPending`, and the config shares `Storage`'s per-repo lifecycle. Landed with empty config (not yet wired into the gate) so chain order is verified independently of the phase-5 gate wiring.
 
 **Consequences:**
-- Earlier-wins precedence is verified by tests against a foreign+stale commit before any gate wiring exists; the change is observable only via `--explain` until phase 5.
-- Provenance config is per-Storage, not global — matches repo lifecycle but means every Storage must be configured to enable it.
-- Tests get reproducibility from a fixed `Now` with no clock plumbing.
+- Precedence (earlier-wins) is locked by 4 subtests against a foreign+stale commit before any gate-path wiring exists.
+- `ProvenanceConfig.Now` is a plain `time.Time` field — tests pin a fixed instant (`Now=2026-06-01` noon) with no clock-injection plumbing.
+- Provenance must be set explicitly per `Storage`; a caller that forgets gets disabled classification from the zero value (the failure mode ADR-7 addresses).
 
-## ADR-11: Split `NewStorage` (raw) from `NewDefaultStorage` (production-wired) to keep host config out of tests
+## ADR-7: Split construction into `NewStorage` (zero-config) and `NewDefaultStorage` (production-wired)
 
 **Status:** Accepted
 **Date:** 2026-06-01
 
-**Context:** Wiring provenance into `NewStorage` made it load the host's `user.email` at construction, so every test that built mock commits without a matching `AuthorEmail` was falsely classified as foreign-author — three test suites failed immediately on `just check` (the host leaked `robert.bergman@gmail.com`).
+**Context:** Wiring provenance loading into `NewStorage` made it read the host's `user.email` at construction, so every test that built mock commits without a matching `AuthorEmail` was falsely classified foreign-author — three test suites failed on the first `just check`. The fix went through two iterations.
 
-**Decision:** Two iterations. The first attempt zeroed out `newTestStorage`'s provenance after construction — but that only covered the ledger package's tests. The final shape: `NewStorage` no longer auto-loads provenance (returns a zero-config Storage), `NewDefaultStorage` is the production entry point that calls `LoadProvenanceConfig`, and `Storage.SetProvenance` is the public way for tests and external callers to pin config. A `NewStorageForTest` variant was rejected because Storage already has multiple test entry points (mcp, cmd/timbers, ledger) and a new variant would force changes in 10+ places; the raw/production split mirrors an existing pattern and minimizes churn.
+**Decision:** The first attempt zeroed `s.provenance` inside `newTestStorage`, but that only covered the ledger package's tests. The accepted second attempt moved `LoadProvenanceConfig` out of `NewStorage` into a new `NewDefaultStorage` production entry point: `NewStorage` returns zero-config `Storage`, and `Storage.SetProvenance` is the public pin for tests and external callers. This mirrors the existing raw-vs-production constructor pattern and avoids a `NewStorageForTest` variant that would have forced changes across 10+ call sites in `mcp`, `cmd/timbers`, and `ledger` tests.
 
 **Consequences:**
-- Tests no longer inherit host git config; provenance is explicit per Storage (matching v0.22.7's skipMessages pattern).
-- Production callers must use `NewDefaultStorage` to get provenance — a raw `NewStorage` silently disables it.
-- A doctor check warns when `user.email` is unset (the safe-degradation contract: `ConfigUserEmail()` returns empty on any error).
+- Test and production paths cleanly separated with minimal test churn; surfaces the load-bearing semantic that provenance must be explicit per `Storage`.
+- Two construction entry points to keep straight — production code must call `NewDefaultStorage` or silently get disabled provenance.
+- Doctor tests need `GIT_CONFIG_GLOBAL=/dev/null` to defeat host-config leakage (`robert.bergman@gmail.com` leaked during initial runs).
 
-## ADR-12: Add a per-repo `.timbersignore` session-window directive, coercing invalid values to the default
+## ADR-8: Add a per-repo `session-window` directive to `.timbersignore`
 
 **Status:** Accepted
 **Date:** 2026-06-01
 
-**Context:** The 24h staleness default is safe per the tally, but the agent-UX review flagged long-running sessions (orchestrator + subagent fanouts running 4–10h, all-day refactors) that would exceed it and silently stale-skip their own work. The plan review carried a standing tension — the pragmatist wanted to cut the directive; the agent-UX advocate wanted per-repo tuning.
+**Context:** The tally confirmed 24h as a safe default, but the agent-UX advocate flagged that long-running sessions (orchestrator + subagent fanouts running 4–10h, all-day refactors) could exceed it and silently stale-skip their own work. The pragmatist had wanted to cut the directive; the correctness-skeptic's rebase/amend finding made window correctness load-bearing, so it was kept as cheap insurance.
 
-**Decision:** Keep the directive as opt-in (repos that don't set it get 24h). Parse it via a separate `LoadSessionWindow(root)` pass over `.timbersignore`, isolated from `loadSkipConfig` to avoid threading a 4-tuple→5-tuple change through 10+ call sites that destructure it (the file is tiny, so dual-parse cost is negligible). A unified struct return from `readTimbersIgnore` was rejected because the existing parser is well-tested and the dual-pass is the smallest viable change. Coerce negative or zero durations to the default rather than treating them as parse errors, because Go's `time.ParseDuration` accepts negatives as valid `Duration` values and diverging would break the documented grammar. A `checkSessionWindow` doctor check warns on malformed values.
+**Decision:** Parse `session-window` via a separate `LoadSessionWindow(root)` pass over `.timbersignore` rather than threading a new return value through `loadSkipConfig`'s 10+ call sites (a 4-tuple→5-tuple break for every test that destructures it); the file is tiny, so the dual-parse cost is negligible. Coerce zero/negative durations to the default rather than erroring — Go's `time.ParseDuration` accepts negatives as valid, and treating them as malformed would diverge from the documented grammar. Doctor's `checkSessionWindow` warns on malformed values with the grammar in the hint.
 
 **Consequences:**
-- Long-session repos can extend the window; default repos are unaffected.
-- The well-tested 4-tuple parser stays untouched, at the cost of a second parse pass over the file.
-- Malformed/negative/zero values degrade safely to 24h (with a doctor warning) rather than erroring.
+- Long-running sessions can opt into a wider window; repos that set nothing get the safe 24h default.
+- The isolated pass keeps the well-tested existing parser untouched at the cost of reading the file twice (accepted: negligible).
+- Negative/zero windows silently coerce to default rather than erroring at parse time — surfaced only via doctor.
 
-## ADR-13: Redefine prime's `pending.count` as in-session blocking work only, surfacing foreign work as counts without subjects
+## ADR-9: Redefine `pending.count` as in-session blocking work only
 
 **Status:** Accepted
 **Date:** 2026-06-01
 
-**Context:** The agent-UX review identified `pending.count` as the field every agent prompt anchors on. Under the new gate semantics, if it stayed the raw total, agents would overcount and burn tokens trying to document foreign work they shouldn't touch — flagged as the single most important agent-UX change in v0.23.0.
+**Context:** The agent-UX review identified `pending.count` as the field every agent prompt anchors on. Under the new gate semantics, if it remained the raw total, agents would silently overcount and waste tokens trying to document foreign work.
 
-**Decision:** `gatherPrimeContext` now calls both `GetPendingCommits` (the in-session set that drives `Count`) and `ExplainPending` (for bucketing into `OutOfSession`/`Stale`); `buildPrimePending` takes both and was extracted to `prime_build.go` for the 350-line limit. Foreign-author commits are deliberately NOT placed in the `Commits` slice — only their count surfaces — because surfacing subject lines leads agents to fabricate what/why/how rather than respect "not yours to document." `ExplainPending` errors are non-fatal: it's visibility-only, so a classify failure still ships the correct in-session `Count` from the existing filtered path.
+**Decision:** `Count` reflects only the in-session blocking set. `gatherPrimeContext` calls both `GetPendingCommits` (drives `Count`) and `ExplainPending` (buckets `OutOfSession`/`Stale`); `buildPrimePending` was extracted to `prime_build.go` for the 350-line limit. Foreign-author commits surface as a count only — deliberately **not** in the `Commits` slice — because the review flagged that showing subject lines leads agents to hallucinate documentation for work that isn't theirs. The flip is invisible to in-session-only cases (`Count` unchanged) but reframes the contract for everyone.
 
 **Consequences:**
-- In-session-only cases see an unchanged `Count` (the flip is invisible to them) while the contract is reframed for everyone; agents target zero on in-session work only.
-- Agents cannot fabricate documentation for foreign commits because they never see the subjects — only the count.
-- The compact human-output "n out-of-session commits skipped" diagnostic was deferred to the post-commit-note phase; the JSON schema change is the load-bearing part here.
+- Agents target a meaningful zero, waste no tokens on foreign work, and can't fabricate what/why/how from leaked subjects.
+- `ExplainPending` errors are deliberately non-fatal — a visibility-only feature must not break the correct in-session `Count` from the existing filtered path.
+- The compact human-output "n out-of-session commits skipped" diagnostic was deferred to the post-commit note (ADR-10); only the JSON schema change landed here.
 
-## ADR-14: Surface auto-skipped stale-self commits via a non-blocking post-commit note
+## ADR-10: Surface stale-self auto-skips as a non-blocking post-commit note
 
 **Status:** Accepted
 **Date:** 2026-06-01
 
-**Context:** The agent-UX review named one failure mode as unrecoverable in-session — a marathon session running past the 24h window silently stale-skips its own work, and the agent never learns it happened. The reframe (ADR-8) forbids putting a warning on the gate itself, since that would defeat the leniency.
+**Context:** The agent-UX review named one failure mode unrecoverable in-session: a marathon session running past the 24h window silently stale-skips its *own* work, and the agent never knows. The reframe forbids blocking on it, so visibility had to come without a gate.
 
-**Decision:** Restructure `runPostCommitHook` around a `classifyPostCommitState` helper that walks `ExplainPending` and buckets reasons into actionable (in-session — the existing "document this" nudge) and stale-self (a new note). The note doesn't block — it preserves the signal that something was auto-skipped, references `DefaultSessionWindow` so the operator sees what threshold tripped, and points at `--explain`. Foreign-author skips deliberately stay silent (the operator already chose not to be that author). `TIMBERS_SKIP_CROSS_AGENT_DEBT=1` short-circuits both surfaces. Listing the stale-self SHAs was rejected as noisy in long sessions (count + an `--explain` pointer is the balance); once-per-session rate-limiting was deferred, since a count-based note doesn't grow with repetition.
+**Decision:** `classifyPostCommitState` walks `ExplainPending` and buckets reasons into actionable (in-session — the existing "document this commit" nudge) and stale-self (the new note); both fire independently and silently when their count is zero. The note references `DefaultSessionWindow` so the operator sees which threshold tripped, but does **not** block — blocking would defeat the lenience reframe. Rejected listing the stale-self SHAs (the list could grow large and noisy in long sessions; count plus a pointer to `--explain` is the balance) and rejected per-session rate-limiting (deferred — a count-based note doesn't grow with repetition). Foreign-author skips stay silent (the operator already chose not to be that author). `TIMBERS_SKIP_CROSS_AGENT_DEBT=1` short-circuits both surfaces.
 
 **Consequences:**
-- The one unrecoverable failure mode now leaves a visible signal without reintroducing a blocking gate.
-- Foreign-author skips remain silent by design — no signal if foreign work is unexpectedly large.
-- The note fires per-commit; the operator's commit cadence bounds its frequency rather than an explicit limiter.
+- The unrecoverable failure mode is now visible without re-introducing a blocking gate.
+- `ExplainPending`'s full-DAG display range is the right scope — it includes side-branch work relevant for visibility, vs the first-parent-strict gate range.
+- No SHA list in the note — the operator must run `--explain` to see which commits were skipped.
+
+## ADR-11: Keep `timbers log` output terse by default; render the readable panel only on demand
+
+**Status:** Accepted
+**Date:** 2026-06-08
+
+**Context:** Laura, a timbers user, couldn't scan log output — `output.KeyValue` rendered fields with no key alignment and no value wrapping, so long Why/How/Notes dumped as one soft-wrapped line and fields bled together. The fork: make the readable panel the default `log` output, or keep `log` terse and surface the panel elsewhere.
+
+**Decision:** Terse default + on-demand panel. Agents call `timbers log` without `--json`, so a default box would cost context tokens on every commit for no agent benefit. Added a shared `output.FieldsBox` renderer that finally wires up the previously-unused `output.Box` helper (rounded border at TTY, borderless when piped; keys align to a common column, values wrap with a hanging indent under the value column). Dropped the originally-proposed `--preview` flag once it was clear `timbers show --latest` already renders the same panel — fewer flags, and no semantically odd "preview that also writes." Folded in two bug fixes (dry-run dropped Notes; diffstat was formatted differently in `show` vs dry-run).
+
+**Consequences:**
+- `show` and `log --dry-run` are scannable, with no per-commit token cost for agents.
+- Reuses the dormant `output.Box` helper; one renderer serves both surfaces.
+- Wide-rune wrapping (display-width vs byte-len) is still wrong — deferred to timbers-qbm.
+- Terminal width falls back to 80 cols when `charmbracelet/x/term` can't detect it.

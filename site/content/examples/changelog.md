@@ -1,6 +1,6 @@
 +++
 title = 'Changelog'
-date = '2026-06-01'
+date = '2026-06-10'
 tags = ['example', 'changelog']
 +++
 
@@ -14,6 +14,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.24.0] - 2026-06-10
+
+### Added
+- Added a readable entry panel for `timbers show` and `timbers log --dry-run`, rendering fields with aligned keys and wrapped values (rounded border at a TTY, borderless when piped) so long Why/How/Notes are easy to scan.
+
+### Fixed
+- Fixed `timbers log --dry-run` dropping the Notes field.
+- Fixed diffstat being formatted inconsistently between `timbers show` and `timbers log --dry-run`.
+
 
 ## [0.23.0] - 2026-06-01
 
@@ -668,3 +678,4 @@ Initial public release.
 [0.22.8]: https://github.com/gorewood/timbers/releases/tag/v0.22.8
 [0.22.9]: https://github.com/gorewood/timbers/releases/tag/v0.22.9
 [0.23.0]: https://github.com/gorewood/timbers/releases/tag/v0.23.0
+[0.24.0]: https://github.com/gorewood/timbers/releases/tag/v0.24.0
