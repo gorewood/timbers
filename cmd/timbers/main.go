@@ -73,7 +73,10 @@ func main() {
 
 func run() int {
 	cmd := newRootCmd()
-	err := fang.Execute(context.Background(), cmd, fang.WithVersion(buildVersion()))
+	err := fang.Execute(context.Background(), cmd,
+		fang.WithVersion(buildVersion()),
+		fang.WithErrorHandler(newErrorHandler(output.IsTTY(os.Stderr))),
+	)
 	return output.GetExitCode(err)
 }
 
