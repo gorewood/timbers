@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.1] - 2026-06-11
+
+### Fixed
+- Fixed timbers errors rendering as a blank line when stderr is piped or redirected (non-TTY); errors now print as a single plain, actionable line so tools like `tail` and output compressors no longer crop the failure to nothing. The styled error box is retained for interactive terminals.
+- Made the pre-commit gate's rejection message self-contained (names the tool, cause, fix, and bypass) and routed its `[timbers]` advice to stderr, so a blocked commit can no longer be misread as success.
+
+
 ## [0.24.0] - 2026-06-10
 
 ### Added
@@ -669,3 +676,4 @@ Initial public release.
 [0.22.9]: https://github.com/gorewood/timbers/releases/tag/v0.22.9
 [0.23.0]: https://github.com/gorewood/timbers/releases/tag/v0.23.0
 [0.24.0]: https://github.com/gorewood/timbers/releases/tag/v0.24.0
+[0.24.1]: https://github.com/gorewood/timbers/releases/tag/v0.24.1
