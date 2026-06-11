@@ -134,7 +134,10 @@ func runPreCommitHook(cmd *cobra.Command) error {
 		return nil
 	}
 
-	printer := output.NewPrinter(cmd.OutOrStdout(), false, useColor(cmd))
+	// Route the block to stderr: it's diagnostic output for a blocked commit,
+	// so stdout stays clean and the advice rides the same stream as the final
+	// one-line error (the unmissable signal under `2>&1 | tail -1`).
+	printer := output.NewPrinter(cmd.ErrOrStderr(), false, useColor(cmd))
 	printer.Println()
 	printer.Print("[timbers] Commit blocked: undocumented commit(s) exist\n")
 	// When the gate aborts, the user's `git commit` did NOT run — but
@@ -151,7 +154,11 @@ func runPreCommitHook(cmd *cobra.Command) error {
 	printer.Print("[timbers] Or TIMBERS_SKIP_CROSS_AGENT_DEBT=1 (parallel-agent flows), or --no-verify\n")
 	printer.Println()
 
-	return output.NewUserError("undocumented commits exist — run 'timbers log' first")
+	// Self-contained, unmistakable headline: this may be the only line that
+	// survives `2>&1 | tail -1` or an output compressor, so it must name the
+	// tool, the cause, the fix, and the bypass without relying on the block above.
+	return output.NewUserError("timbers: commit blocked — undocumented commit(s) exist; " +
+		"run 'timbers log' first (or 'git commit --no-verify' to bypass)")
 }
 
 // runPostCommitHook executes the post-commit hook logic.
