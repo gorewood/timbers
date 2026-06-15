@@ -3,9 +3,30 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"strings"
 
 	"github.com/gorewood/timbers/internal/output"
 )
+
+// defaultOpenAIBaseURL is the public OpenAI API root. Users can override the
+// base URL via the OPENAI_BASE_URL environment variable to target
+// OpenAI-compatible gateways such as AWS Bedrock Mantle, Azure OpenAI,
+// OpenRouter, LiteLLM, or vLLM. This matches the convention used by the
+// official OpenAI SDKs.
+const defaultOpenAIBaseURL = "https://api.openai.com/v1"
+
+// openAIChatCompletionsURL returns the chat-completions endpoint, honoring
+// OPENAI_BASE_URL when set. The env var is expected to point at the API root
+// (e.g. "https://example.com/v1"); the "/chat/completions" path is appended
+// here. Trailing slashes on the base URL are tolerated.
+func openAIChatCompletionsURL() string {
+	base := os.Getenv("OPENAI_BASE_URL")
+	if base == "" {
+		base = defaultOpenAIBaseURL
+	}
+	return strings.TrimRight(base, "/") + "/chat/completions"
+}
 
 // OpenAI API types.
 type openaiRequest struct {
@@ -46,7 +67,7 @@ func (c *Client) completeOpenAI(ctx context.Context, req Request) (*Response, er
 		body.Temperature = req.Temperature
 	}
 
-	respBody, err := c.doRequest(ctx, "https://api.openai.com/v1/chat/completions", body, map[string]string{
+	respBody, err := c.doRequest(ctx, openAIChatCompletionsURL(), body, map[string]string{
 		"Authorization": "Bearer " + c.apiKey,
 	})
 	if err != nil {
