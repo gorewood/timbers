@@ -493,3 +493,72 @@ func setupGitRepoWithCommit(t *testing.T, dir string) {
 		}
 	}
 }
+
+func TestHasUncommittedChanges(t *testing.T) {
+	// setupRepo creates a temp git repo with one committed file, chdirs into
+	// it, and returns a mustRun helper. Cleanup restores the original cwd.
+	setupRepo := func(t *testing.T) func(args ...string) {
+		t.Helper()
+		dir := t.TempDir()
+		origDir, _ := os.Getwd()
+		t.Cleanup(func() { _ = os.Chdir(origDir) })
+		if err := os.Chdir(dir); err != nil {
+			t.Fatalf("chdir: %v", err)
+		}
+		mustRun := func(args ...string) {
+			t.Helper()
+			if _, err := Run(args...); err != nil {
+				t.Fatalf("git %v failed: %v", args, err)
+			}
+		}
+		mustRun("init")
+		mustRun("config", "user.email", "test@test.com")
+		mustRun("config", "user.name", "Test")
+		if err := os.WriteFile("tracked.txt", []byte("v1"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		mustRun("add", "tracked.txt")
+		mustRun("commit", "-m", "first")
+		return mustRun
+	}
+
+	t.Run("clean tree returns false", func(t *testing.T) {
+		setupRepo(t)
+		if HasUncommittedChanges() {
+			t.Error("expected false on a clean working tree")
+		}
+	})
+
+	t.Run("staged tracked change returns true", func(t *testing.T) {
+		mustRun := setupRepo(t)
+		if err := os.WriteFile("tracked.txt", []byte("v2"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		mustRun("add", "tracked.txt")
+		if !HasUncommittedChanges() {
+			t.Error("expected true with a staged tracked change")
+		}
+	})
+
+	t.Run("unstaged tracked modification returns true", func(t *testing.T) {
+		setupRepo(t)
+		if err := os.WriteFile("tracked.txt", []byte("v2"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if !HasUncommittedChanges() {
+			t.Error("expected true with an unstaged tracked modification")
+		}
+	})
+
+	// The fix: untracked scratch must NOT count as uncommitted changes — it
+	// cannot produce the phantom entry the log gate guards against.
+	t.Run("untracked file only returns false", func(t *testing.T) {
+		setupRepo(t)
+		if err := os.WriteFile("scratch.md", []byte("notes"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if HasUncommittedChanges() {
+			t.Error("expected false when the only change is an untracked file")
+		}
+	})
+}

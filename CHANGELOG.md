@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- `timbers log` no longer refuses on a working tree whose only changes are untracked files. The dirty-tree guard now ignores untracked files (`git status --untracked-files=no`): they cannot produce the phantom entry the guard exists for — that arises only from staged/unstaged *tracked* work staying out of the commit the entry rides on, and untracked files are never in the index nor in the pathspec-scoped auto-commit. Staged and unstaged tracked changes still block as before. Unblocks logging when unrelated scratch (build output, notes, `.bak` files) is present.
+
 ## [0.24.1] - 2026-06-11
 
 ### Fixed
