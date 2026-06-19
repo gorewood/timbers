@@ -156,9 +156,16 @@ func IsPushedToUpstream(sha string) bool {
 	return IsAncestorOf(sha, upstream)
 }
 
-// HasUncommittedChanges returns true if the working tree has staged or unstaged changes.
+// HasUncommittedChanges returns true if the working tree has staged or
+// unstaged changes to tracked files. Untracked files are deliberately
+// excluded (--untracked-files=no): the phantom-entry footgun this guards
+// (see cmd/timbers/log.go) arises when staged/unstaged tracked work stays
+// out of the commit the entry rides on — untracked files are never in the
+// index and the pathspec-scoped auto-commit never includes them, so they
+// cannot produce a phantom. Counting them only blocks `timbers log` when
+// unrelated scratch (build output, notes, .bak files) is lying around.
 func HasUncommittedChanges() bool {
-	out, err := Run("status", "--porcelain")
+	out, err := Run("status", "--porcelain", "--untracked-files=no")
 	if err != nil {
 		return false
 	}
