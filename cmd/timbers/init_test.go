@@ -3,8 +3,10 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -638,6 +640,77 @@ func TestInitPostRewriteHook(t *testing.T) {
 		}
 		if !strings.Contains(string(content), "sed") {
 			t.Error("post-rewrite hook missing sed command for SHA remapping")
+		}
+	})
+}
+
+// runPostRewriteHook executes the generated post-rewrite hook in dir with the
+// given "old new" rewrite pairs on stdin (one per line, as git supplies them),
+// returning combined stderr. Skips on platforms without /bin/sh.
+func runPostRewriteHook(t *testing.T, dir, stdin string) string {
+	t.Helper()
+	// #nosec G204 -- hook content is a compile-time constant, test-only
+	cmd := exec.CommandContext(context.Background(), "sh", "-c", generatePostRewriteHook())
+	cmd.Dir = dir
+	cmd.Stdin = strings.NewReader(stdin)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("post-rewrite hook failed: %v\nstderr: %s", err, stderr.String())
+	}
+	return stderr.String()
+}
+
+// TestPostRewriteHookWarnsOnRelink verifies the hook remaps an entry's SHA AND
+// warns loudly when it does — the relink is an uncommitted working-tree change,
+// so a silent remap can leave the ledger anchored to an orphaned SHA after a
+// rebase+push (the failure mode this warning guards).
+func TestPostRewriteHookWarnsOnRelink(t *testing.T) {
+	const (
+		oldSHA = "1111111111111111111111111111111111111111"
+		newSHA = "2222222222222222222222222222222222222222"
+	)
+
+	t.Run("relink remaps and warns", func(t *testing.T) {
+		dir := t.TempDir()
+		entryDir := filepath.Join(dir, ".timbers", "2026", "06", "26")
+		if err := os.MkdirAll(entryDir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		entry := filepath.Join(entryDir, "entry.json")
+		if err := os.WriteFile(entry, []byte(`{"anchor_commit":"`+oldSHA+`"}`), 0o600); err != nil {
+			t.Fatalf("write entry: %v", err)
+		}
+
+		stderr := runPostRewriteHook(t, dir, oldSHA+" "+newSHA+"\n")
+
+		got, err := os.ReadFile(entry)
+		if err != nil {
+			t.Fatalf("read entry: %v", err)
+		}
+		if strings.Contains(string(got), oldSHA) || !strings.Contains(string(got), newSHA) {
+			t.Errorf("entry not remapped: %s", got)
+		}
+		if !strings.Contains(stderr, "relinked") {
+			t.Errorf("expected relink warning on stderr, got: %q", stderr)
+		}
+	})
+
+	t.Run("no match is silent", func(t *testing.T) {
+		dir := t.TempDir()
+		entryDir := filepath.Join(dir, ".timbers")
+		if err := os.MkdirAll(entryDir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		entry := filepath.Join(entryDir, "entry.json")
+		if err := os.WriteFile(entry, []byte(`{"anchor_commit":"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"}`), 0o600); err != nil {
+			t.Fatalf("write entry: %v", err)
+		}
+
+		stderr := runPostRewriteHook(t, dir, oldSHA+" "+newSHA+"\n")
+
+		if strings.Contains(stderr, "relinked") {
+			t.Errorf("expected no warning when nothing matched, got: %q", stderr)
 		}
 	})
 }

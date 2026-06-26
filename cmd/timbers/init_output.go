@@ -99,7 +99,13 @@ func generatePostRewriteHook() string {
 // postRewriteTimbersSection returns the timbers SHA remapping section for the post-rewrite hook.
 func postRewriteTimbersSection() string {
 	return `# timbers post-rewrite hook
-# Remaps SHAs in .timbers/ entries after rebase
+# Remaps SHAs in .timbers/ entries after rebase, then warns so the relink
+# gets committed. Left uncommitted, the entry keeps pointing at the
+# pre-rebase SHA — orphaned once you push, and the rewritten commit then
+# shows up as pending for anyone who clones. We warn rather than auto-commit:
+# committing mid-rebase/pull would inject a commit into a flow the user
+# controls.
+_timbers_relinked="$(mktemp)"
 while IFS=' ' read -r old_sha new_sha _extra; do
   old_short="${old_sha%"${old_sha#???????}"}"
   new_short="${new_sha%"${new_sha#???????}"}"
@@ -110,8 +116,16 @@ while IFS=' ' read -r old_sha new_sha _extra; do
         -e "s/$old_short/$new_short/g" \
         "$f"
       rm -f "$f.bak"
+      printf '%s\n' "$f" >> "$_timbers_relinked"
     fi
-  done
-done
+  done # per-file scan
+done # rewrite pairs
+if [ -s "$_timbers_relinked" ]; then
+  _timbers_n="$(sort -u "$_timbers_relinked" | wc -l | tr -d ' ')"
+  echo "timbers: relinked $_timbers_n ledger file(s) to rewritten commit SHAs after rebase." >&2
+  echo "timbers: these are UNCOMMITTED — commit them so the ledger does not point at" >&2
+  echo "timbers: orphaned SHAs (git add .timbers && git commit)." >&2
+fi
+rm -f "$_timbers_relinked"
 `
 }
