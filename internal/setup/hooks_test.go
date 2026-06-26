@@ -856,3 +856,86 @@ func TestMigrateOldFormatHook(t *testing.T) {
 		}
 	})
 }
+
+func TestSectionUpToDate(t *testing.T) {
+	const current = `# generated section v2
+echo current
+`
+
+	t.Run("true when installed section matches current", func(t *testing.T) {
+		dir := t.TempDir()
+		hookPath := filepath.Join(dir, "post-rewrite")
+		if err := AppendTimbersSection(hookPath, current); err != nil {
+			t.Fatalf("AppendTimbersSection() error: %v", err)
+		}
+		if !SectionUpToDate(hookPath, current) {
+			t.Error("expected up to date for matching section")
+		}
+	})
+
+	t.Run("false when installed section has drifted", func(t *testing.T) {
+		dir := t.TempDir()
+		hookPath := filepath.Join(dir, "post-rewrite")
+		if err := AppendTimbersSection(hookPath, "# generated section v1\necho old\n"); err != nil {
+			t.Fatalf("AppendTimbersSection() error: %v", err)
+		}
+		if SectionUpToDate(hookPath, current) {
+			t.Error("expected not up to date for drifted section")
+		}
+	})
+
+	t.Run("false when file missing", func(t *testing.T) {
+		dir := t.TempDir()
+		if SectionUpToDate(filepath.Join(dir, "post-rewrite"), current) {
+			t.Error("expected not up to date for missing file")
+		}
+	})
+
+	t.Run("false when no delimited section present", func(t *testing.T) {
+		dir := t.TempDir()
+		hookPath := filepath.Join(dir, "post-rewrite")
+		if err := os.WriteFile(hookPath, []byte("#!/bin/sh\necho hi\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if SectionUpToDate(hookPath, current) {
+			t.Error("expected not up to date when no timbers section")
+		}
+	})
+}
+
+func TestReplaceTimbersSection(t *testing.T) {
+	t.Run("swaps drifted section for current and preserves non-timbers content", func(t *testing.T) {
+		dir := t.TempDir()
+		hookPath := filepath.Join(dir, "post-rewrite")
+		// Existing hook: a non-timbers line plus an old timbers section.
+		original := "#!/bin/sh\necho keep-me\n# --- timbers section (do not edit) ---\necho OLD\n# --- end timbers section ---\n"
+		if err := os.WriteFile(hookPath, []byte(original), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := ReplaceTimbersSection(hookPath, "echo NEW\n"); err != nil {
+			t.Fatalf("ReplaceTimbersSection() error: %v", err)
+		}
+
+		got, err := os.ReadFile(hookPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content := string(got)
+		if strings.Contains(content, "echo OLD") {
+			t.Error("old section content should be gone")
+		}
+		if !strings.Contains(content, "echo NEW") {
+			t.Error("new section content should be present")
+		}
+		if !strings.Contains(content, "echo keep-me") {
+			t.Error("non-timbers content must be preserved")
+		}
+		if !SectionUpToDate(hookPath, "echo NEW\n") {
+			t.Error("expected up to date after replace")
+		}
+		if strings.Count(content, sectionStart) != 1 {
+			t.Errorf("expected exactly one timbers section, got %d", strings.Count(content, sectionStart))
+		}
+	})
+}

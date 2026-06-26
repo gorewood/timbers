@@ -310,9 +310,10 @@ func checkGitattributes() checkResult {
 
 // runIntegrationChecks performs integration-related checks.
 func runIntegrationChecks(flags *doctorFlags) []checkResult {
-	checks := make([]checkResult, 0, 3)
+	checks := make([]checkResult, 0, 4)
 	checks = append(checks, checkGitHooks(flags))
 	checks = append(checks, checkPostCommitHook(flags))
+	checks = append(checks, checkPostRewriteHookDrift(flags))
 	checks = append(checks, checkAgentIntegrations(flags)...)
 	return checks
 }

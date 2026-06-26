@@ -221,3 +221,61 @@ func checkPostCommitHook(flags *doctorFlags) checkResult {
 		Message: "not installed (optional). Run `timbers hooks install` to add.",
 	}
 }
+
+// checkPostRewriteHookDrift checks the post-rewrite hook (SHA relink after rebase).
+// Unlike the pre/post-commit hooks, which are thin shims to the timbers binary,
+// the post-rewrite hook carries self-contained shell logic — so generator fixes
+// only reach a repo if the installed section is refreshed. This check detects
+// drift between the installed section and the current generator output and, on
+// --fix, regenerates it.
+func checkPostRewriteHookDrift(flags *doctorFlags) checkResult {
+	hooksDir, err := setup.GetHooksDir()
+	if err != nil {
+		return checkResult{
+			Name:    "Post-rewrite Hook",
+			Status:  checkWarn,
+			Message: "could not determine hooks directory",
+		}
+	}
+
+	hookPath := filepath.Join(hooksDir, "post-rewrite")
+
+	if !setup.HasTimbersSection(hookPath) {
+		return checkResult{
+			Name:    "Post-rewrite Hook",
+			Status:  checkPass,
+			Message: "not installed (optional). Run `timbers hooks install` to add.",
+		}
+	}
+
+	if setup.SectionUpToDate(hookPath, postRewriteTimbersSection()) {
+		return checkResult{
+			Name:    "Post-rewrite Hook",
+			Status:  checkPass,
+			Message: "installed and up to date (relinks ledger entries after rebase)",
+		}
+	}
+
+	// Drift: an older generated section is installed.
+	if flags.fix {
+		if replaceErr := setup.ReplaceTimbersSection(hookPath, postRewriteTimbersSection()); replaceErr != nil {
+			return checkResult{
+				Name:    "Post-rewrite Hook",
+				Status:  checkWarn,
+				Message: "outdated section refresh failed: " + replaceErr.Error(),
+			}
+		}
+		return checkResult{
+			Name:    "Post-rewrite Hook",
+			Status:  checkPass,
+			Message: "outdated hook regenerated to current version (auto-fixed)",
+		}
+	}
+
+	return checkResult{
+		Name:    "Post-rewrite Hook",
+		Status:  checkWarn,
+		Message: "installed hook is outdated (missing newer fixes)",
+		Hint:    "Run `timbers doctor --fix` to regenerate it",
+	}
+}

@@ -158,6 +158,65 @@ func MigrateOldFormatHook(hookPath string, sectionContent string) error {
 	return AppendTimbersSection(hookPath, sectionContent)
 }
 
+// extractSectionContent returns the content between the timbers section
+// delimiters (exclusive of the delimiter lines), and whether a delimited
+// section was found. Trailing newlines are trimmed so the result can be
+// compared against a freshly generated section regardless of how the file
+// was terminated.
+func extractSectionContent(content string) (string, bool) {
+	lines := strings.Split(content, "\n")
+	var section []string
+	inSection := false
+	found := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == sectionStart {
+			inSection = true
+			found = true
+			continue
+		}
+		if inSection && trimmed == sectionEnd {
+			inSection = false
+			continue
+		}
+		if inSection {
+			section = append(section, line)
+		}
+	}
+
+	return strings.TrimRight(strings.Join(section, "\n"), "\n"), found
+}
+
+// SectionUpToDate reports whether the hook at hookPath contains a delimited
+// timbers section whose content matches sectionContent. Returns false when the
+// file is missing, has no delimited section (e.g. old-format hooks), or the
+// installed section has drifted from the current generator output. Comparing
+// content directly — rather than a stamped version number — means any change to
+// the generated hook is detected without anything to keep in sync.
+func SectionUpToDate(hookPath string, sectionContent string) bool {
+	data, err := os.ReadFile(hookPath)
+	if err != nil {
+		return false
+	}
+	installed, found := extractSectionContent(string(data))
+	if !found {
+		return false
+	}
+	return installed == strings.TrimRight(sectionContent, "\n")
+}
+
+// ReplaceTimbersSection refreshes the timbers section in the hook at hookPath to
+// sectionContent, preserving any non-timbers content in the file. Implemented as
+// remove-then-append so a drifted section is swapped for the current generator
+// output. Safe to call when no section is present (it simply installs one).
+func ReplaceTimbersSection(hookPath string, sectionContent string) error {
+	if err := RemoveTimbersSection(hookPath); err != nil {
+		return err
+	}
+	return AppendTimbersSection(hookPath, sectionContent)
+}
+
 // hasSectionDelimiters returns true if content contains the timbers section
 // start delimiter.
 func hasSectionDelimiters(content string) bool {
