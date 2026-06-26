@@ -20,6 +20,7 @@ func outputPrimeCompactHuman(printer *output.Printer, result *primeResult) {
 
 	printer.Println("Rules:")
 	printer.Println(`- After each git commit: timbers log "what" --why "why" --how "how"`)
+	printer.Println("- Order: commit → timbers log → push (never push before logging — it strands the entry)")
 	printer.Println("- Before handoff: timbers pending must be 0")
 	printer.Println("- Do not log secrets, customer data, private URLs, or credentials.")
 	printer.Println()

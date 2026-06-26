@@ -148,7 +148,7 @@ func TestPrimeCommand(t *testing.T) {
 				return writeEntries(t, makePrimeTestEntry("abc123def456", now, "Latest work"))
 			},
 			lastN:          3,
-			wantContains:   []string{"Pending: 0 (clear)", "Latest work", "Rules:"},
+			wantContains:   []string{"Pending: 0 (clear)", "Latest work", "Rules:", "commit → timbers log → push"},
 			wantNotContain: []string{"Session Protocol"},
 		},
 		{
