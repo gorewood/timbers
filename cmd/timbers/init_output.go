@@ -105,11 +105,14 @@ func postRewriteTimbersSection() string {
 # shows up as pending for anyone who clones. We warn rather than auto-commit:
 # committing mid-rebase/pull would inject a commit into a flow the user
 # controls.
+# Keep this POSIX sh: /bin/sh is dash on Debian/Ubuntu (and CI). No bash-isms
+# like 'read -d' — entry paths are date dirs + tb_<id>.json, so newline-
+# delimited 'find | read' is safe.
 _timbers_relinked="$(mktemp)"
 while IFS=' ' read -r old_sha new_sha _extra; do
   old_short="${old_sha%"${old_sha#???????}"}"
   new_short="${new_sha%"${new_sha#???????}"}"
-  find .timbers -name '*.json' -print0 | while IFS= read -r -d '' f; do
+  find .timbers -name '*.json' | while IFS= read -r f; do
     if grep -q "$old_sha\|$old_short" "$f"; then
       sed -i.bak \
         -e "s/$old_sha/$new_sha/g" \
