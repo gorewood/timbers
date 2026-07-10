@@ -167,6 +167,25 @@ func initLogStorage(storage *ledger.Storage, printer *output.Printer) (*ledger.S
 	return storage, nil
 }
 
+// resolveAnchorFlag resolves a symbolic --anchor (HEAD, a branch, a short SHA)
+// to a full SHA in place before it flows into range selection or the stored
+// anchor. Persisting a symbolic ref like "HEAD" yields entry ids suffixed
+// "_HEAD" and an anchor that changes meaning per-commit and per-worktree,
+// defeating the since-anchor model. An unresolvable ref errors here rather than
+// writing a phantom entry anchored on nothing. No-op when --anchor is unset.
+func resolveAnchorFlag(storage *ledger.Storage, flags *logFlags, printer *output.Printer) error {
+	if flags.anchor == "" {
+		return nil
+	}
+	resolved, err := storage.ResolveCommit(flags.anchor)
+	if err != nil {
+		printer.Error(err)
+		return err
+	}
+	flags.anchor = resolved
+	return nil
+}
+
 // prepareLogContext validates inputs and gathers all data needed for the entry.
 func prepareLogContext(
 	storage *ledger.Storage,
@@ -184,6 +203,10 @@ func prepareLogContext(
 	parsedWorkItems, err := parseWorkItems(flags.workItems)
 	if err != nil {
 		printer.Error(err)
+		return nil, err
+	}
+
+	if err = resolveAnchorFlag(storage, &flags, printer); err != nil {
 		return nil, err
 	}
 

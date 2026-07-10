@@ -30,11 +30,16 @@ type ListStats struct {
 
 // GitOps defines the git operations required by Storage.
 // Entry storage is handled by FileStorage; this interface covers
-// commit history and diff operations only.
+// commit history and diff operations only. It is a cohesive git-operations
+// facade; the interfacebloat 10-method threshold is arbitrary here and
+// splitting one coherent seam would only fragment the mock surface.
+//
+//nolint:interfacebloat // cohesive git facade; see doc comment above
 type GitOps interface {
 	HEAD() (string, error)
 	Log(fromRef, toRef string) ([]git.Commit, error)
 	LogFirstParent(fromRef, toRef string) ([]git.Commit, error)
+	ResolveCommit(ref string) (string, error)
 	CommitsReachableFrom(sha string) ([]git.Commit, error)
 	IsAncestorOf(ancestor, descendant string) bool
 	IsOnFirstParentLine(sha, head string) bool
@@ -292,6 +297,13 @@ func (s *Storage) HasPendingCommits() (bool, error) {
 // The 'fromRef' ref is exclusive, 'toRef' is inclusive.
 func (s *Storage) LogRange(fromRef, toRef string) ([]git.Commit, error) {
 	return s.git.Log(fromRef, toRef)
+}
+
+// ResolveCommit resolves a commit-ish ref to its full SHA via the underlying
+// git operations. Used to normalize a user-supplied --anchor before it becomes
+// a stored anchor, so a symbolic ref like "HEAD" is never persisted.
+func (s *Storage) ResolveCommit(ref string) (string, error) {
+	return s.git.ResolveCommit(ref)
 }
 
 // GetDiffstat returns the change statistics for the given commit range.

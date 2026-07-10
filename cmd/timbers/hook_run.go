@@ -19,7 +19,7 @@ import (
 // (e.g., a merge commit on the first-parent line that the current agent
 // considers "not theirs"). Mirrors existing bypass conventions and is
 // cheaper than --no-verify because it doesn't disable other hooks.
-const envSkipCrossAgentDebt = "TIMBERS_SKIP_CROSS_AGENT_DEBT"
+const envSkipCrossAgentDebt = ledger.SkipCrossAgentDebtEnv
 
 // envTruthy reports whether the named env var is set to a recognized
 // truthy value. Case-insensitive; whitespace-trimmed.

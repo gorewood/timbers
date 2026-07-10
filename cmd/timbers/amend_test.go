@@ -30,6 +30,10 @@ func (m *mockGitOpsForAmend) Log(_, _ string) ([]git.Commit, error) {
 	return nil, nil
 }
 
+func (m *mockGitOpsForAmend) ResolveCommit(ref string) (string, error) {
+	return ref, nil
+}
+
 func (m *mockGitOpsForAmend) LogFirstParent(_, _ string) ([]git.Commit, error) {
 	return nil, nil
 }

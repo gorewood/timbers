@@ -17,6 +17,10 @@ func (realGitOps) LogFirstParent(fromRef, toRef string) ([]git.Commit, error) {
 	return git.LogFirstParent(fromRef, toRef)
 }
 
+func (realGitOps) ResolveCommit(ref string) (string, error) {
+	return git.ResolveCommit(ref)
+}
+
 func (realGitOps) CommitsReachableFrom(sha string) ([]git.Commit, error) {
 	return git.CommitsReachableFrom(sha)
 }

@@ -24,7 +24,22 @@ func Run(args ...string) (string, error) {
 // It captures stdout and returns it as a trimmed string.
 // Returns an *output.ExitError on failure with appropriate exit code.
 func RunContext(ctx context.Context, args ...string) (string, error) {
+	return runContextEnv(ctx, nil, args...)
+}
+
+// RunWithEnv runs git with extra environment variables appended to the current
+// process environment (KEY=VALUE strings). Used when a git invocation — and any
+// hooks it spawns — must see a variable the parent doesn't already export, e.g.
+// exempting timbers' own entry commit from the cross-agent-debt gate.
+func RunWithEnv(extraEnv []string, args ...string) (string, error) {
+	return runContextEnv(context.Background(), extraEnv, args...)
+}
+
+func runContextEnv(ctx context.Context, extraEnv []string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
+	if len(extraEnv) > 0 {
+		cmd.Env = append(os.Environ(), extraEnv...)
+	}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -81,6 +96,24 @@ func HEAD() (string, error) {
 	sha, err := Run("rev-parse", "HEAD")
 	if err != nil {
 		return "", output.NewSystemErrorWithCause("failed to get HEAD", err)
+	}
+	return sha, nil
+}
+
+// ResolveCommit resolves a commit-ish ref (symbolic ref, branch, tag, short or
+// full SHA) to its full 40-char commit SHA. It exists so callers never persist
+// a symbolic ref like "HEAD" as an anchor — a symbolic anchor changes meaning
+// per-commit and per-worktree and defeats the since-anchor model. Returns a
+// user error when the ref is empty or does not resolve to a commit.
+func ResolveCommit(ref string) (string, error) {
+	if ref == "" {
+		return "", output.NewUserError("empty commit ref")
+	}
+	// The ^{commit} peel forces resolution to a commit object, so tags and
+	// tree-ish refs that aren't commits are rejected rather than half-resolved.
+	sha, err := Run("rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	if err != nil || sha == "" {
+		return "", output.NewUserError("could not resolve commit ref: " + ref)
 	}
 	return sha, nil
 }

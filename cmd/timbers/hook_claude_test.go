@@ -112,3 +112,70 @@ func TestRunClaudeStop_MalformedInput(t *testing.T) {
 		t.Errorf("malformed input should produce no output, got: %s", stdout.String())
 	}
 }
+
+// TestRunClaudeStop_EmptyStdin pins the parse-bailout: an empty stdin fails to
+// decode as hook JSON, so runClaudeStopWith returns nil BEFORE the pending
+// check. This is why a manual `timbers hook run claude-stop` (no stdin) exits 0
+// regardless of ledger state — it never runs the check. Documented so nobody
+// "fixes" the bailout into a false-clean verdict (the block only fires when the
+// harness supplies real stdin JSON).
+func TestRunClaudeStop_EmptyStdin(t *testing.T) {
+	stdin := strings.NewReader("")
+	var stdout bytes.Buffer
+
+	err := runClaudeStopWith(stdin, &stdout, &mockPendingChecker{pending: true})
+	if err != nil {
+		t.Fatalf("empty stdin should not error: %v", err)
+	}
+	if stdout.String() != "" {
+		t.Errorf("empty stdin should produce no output (parse bailout, no check), got: %s", stdout.String())
+	}
+}
+
+// TestRunClaudeStop_SkipCrossAgentDebt verifies the Stop hook honors the same
+// TIMBERS_SKIP_CROSS_AGENT_DEBT escape hatch as the pre-commit and post-commit
+// hooks. Without this, an operator who set the env var to tame the gate in a
+// parallel-agent repo still gets blocked at session end — the divergence the
+// bug report hit.
+func TestRunClaudeStop_SkipCrossAgentDebt(t *testing.T) {
+	validInput := func(t *testing.T) *bytes.Reader {
+		t.Helper()
+		data, err := json.Marshal(hookInput{StopHookActive: false})
+		if err != nil {
+			t.Fatalf("marshal input: %v", err)
+		}
+		return bytes.NewReader(data)
+	}
+
+	t.Run("truthy env var bypasses the block despite pending", func(t *testing.T) {
+		for _, val := range []string{"1", "true", "YES", "On"} {
+			t.Run(val, func(t *testing.T) {
+				t.Setenv(envSkipCrossAgentDebt, val)
+				var stdout bytes.Buffer
+				err := runClaudeStopWith(validInput(t), &stdout, &mockPendingChecker{pending: true})
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if stdout.String() != "" {
+					t.Errorf("expected no block with env var %q; got: %s", val, stdout.String())
+				}
+			})
+		}
+	})
+
+	t.Run("falsy env var still blocks on pending", func(t *testing.T) {
+		t.Setenv(envSkipCrossAgentDebt, "0")
+		var stdout bytes.Buffer
+		err := runClaudeStopWith(validInput(t), &stdout, &mockPendingChecker{pending: true})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		var resp stopOutput
+		if err := json.Unmarshal(stdout.Bytes(), &resp); err != nil {
+			t.Fatalf("expected block JSON; parse failed: %v\nraw: %s", err, stdout.String())
+		}
+		if resp.Decision != "block" {
+			t.Errorf("decision = %q, want block", resp.Decision)
+		}
+	})
+}

@@ -40,6 +40,10 @@ func (m *mockGitOpsForPending) LogFirstParent(fromRef, toRef string) ([]git.Comm
 	return m.commits, m.commitsErr
 }
 
+func (m *mockGitOpsForPending) ResolveCommit(ref string) (string, error) {
+	return ref, nil
+}
+
 func (m *mockGitOpsForPending) CommitsReachableFrom(sha string) ([]git.Commit, error) {
 	return m.reachableResult, m.reachableErr
 }

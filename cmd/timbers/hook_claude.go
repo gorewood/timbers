@@ -50,6 +50,16 @@ func runClaudeStopWith(stdin io.Reader, stdout io.Writer, checker pendingChecker
 		return nil // prevent infinite loops
 	}
 
+	// Cross-agent escape hatch: honor the same TIMBERS_SKIP_CROSS_AGENT_DEBT
+	// opt-out the pre-commit and post-commit hooks respect (see
+	// hasActionablePending / classifyPostCommitState). Without this, an
+	// operator who set the env var to tame the gate in a parallel-agent repo
+	// still gets blocked at session end — the hook and the CLI would diverge
+	// on the very flag meant to unify them.
+	if envTruthy(envSkipCrossAgentDebt) {
+		return nil
+	}
+
 	// Don't block session end during rebase/merge — pending counts are
 	// unreliable and timbers log can't commit entries mid-operation.
 	if git.IsInteractiveGitOp() {

@@ -68,6 +68,12 @@ func (m *mockGitOps) LogFirstParent(fromRef, toRef string) ([]git.Commit, error)
 	return m.logCommits, nil
 }
 
+// ResolveCommit returns the ref unchanged — the mock models a git that
+// resolves any ref to itself, which is all pending detection needs.
+func (m *mockGitOps) ResolveCommit(ref string) (string, error) {
+	return ref, nil
+}
+
 func (m *mockGitOps) CommitsReachableFrom(sha string) ([]git.Commit, error) {
 	if m.reachableErr != nil {
 		return nil, m.reachableErr

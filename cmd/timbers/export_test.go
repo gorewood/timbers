@@ -28,6 +28,10 @@ func (m *mockGitOpsForExport) LogFirstParent(_, _ string) ([]git.Commit, error) 
 	return nil, nil
 }
 
+func (m *mockGitOpsForExport) ResolveCommit(ref string) (string, error) {
+	return ref, nil
+}
+
 func (m *mockGitOpsForExport) CommitsReachableFrom(_ string) ([]git.Commit, error) {
 	return nil, nil
 }

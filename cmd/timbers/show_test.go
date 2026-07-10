@@ -31,6 +31,10 @@ func (m *mockGitOpsForShow) LogFirstParent(fromRef, toRef string) ([]git.Commit,
 	return nil, nil
 }
 
+func (m *mockGitOpsForShow) ResolveCommit(ref string) (string, error) {
+	return ref, nil
+}
+
 func (m *mockGitOpsForShow) CommitsReachableFrom(sha string) ([]git.Commit, error) {
 	return nil, nil
 }

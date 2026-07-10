@@ -37,6 +37,10 @@ func (m *mockGitOpsForPrime) LogFirstParent(fromRef, toRef string) ([]git.Commit
 	return m.commits, m.commitsErr
 }
 
+func (m *mockGitOpsForPrime) ResolveCommit(ref string) (string, error) {
+	return ref, nil
+}
+
 func (m *mockGitOpsForPrime) CommitsReachableFrom(sha string) ([]git.Commit, error) {
 	return m.reachableResult, m.reachableErr
 }

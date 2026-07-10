@@ -23,11 +23,26 @@ func DefaultGitAdd(path string) error {
 // GitCommitFunc commits a file at the given path with the given message.
 type GitCommitFunc func(path string, message string) error
 
+// SkipCrossAgentDebtEnv is the environment variable that stands down timbers'
+// cross-agent-debt gate (pre/post-commit and Stop hooks). It is defined here,
+// on the write path, so the entry commit can self-exempt; package main reads
+// the same constant when honoring the operator's opt-out.
+const SkipCrossAgentDebtEnv = "TIMBERS_SKIP_CROSS_AGENT_DEBT"
+
 // DefaultGitCommit commits a specific file using git commit with pathspec.
 // The -- before the path ensures only the entry file is committed,
 // not other staged files.
+//
+// The commit self-exempts from timbers' own cross-agent-debt gate: committing
+// the entry file IS the act of documenting work, so it must never be blocked by
+// the pre-commit hook seeing sibling debt in a parallel-agent repo (the "failed
+// to commit entry file" trap). Only timbers' gate stands down — other
+// pre-commit hooks still run, since --no-verify is deliberately not used.
 func DefaultGitCommit(path string, message string) error {
-	_, err := git.Run("commit", "-m", message, "--", path)
+	_, err := git.RunWithEnv(
+		[]string{SkipCrossAgentDebtEnv + "=1"},
+		"commit", "-m", message, "--", path,
+	)
 	return err
 }
 
