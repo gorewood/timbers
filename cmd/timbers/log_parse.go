@@ -27,7 +27,7 @@ func resolveLogContent(args []string, flags logFlags, commits []git.Commit) (str
 	if flags.auto {
 		return resolveAutoContent(args, flags, commits)
 	}
-	return resolveManualContent(args, flags)
+	return resolveManualContent(args, flags, commits)
 }
 
 // resolveAutoContent extracts what/why/how from commit messages.
@@ -55,15 +55,14 @@ func resolveAutoContent(args []string, flags logFlags, commits []git.Commit) (st
 }
 
 // resolveManualContent validates and returns manual input content.
-func resolveManualContent(args []string, flags logFlags) (string, logFlags, error) {
-	if len(args) == 0 {
-		return "", flags, output.NewUserError(
-			"missing required <what> argument; usage: timbers log \"<what>\" --why \"<why>\" --how \"<how>\"")
+func resolveManualContent(args []string, flags logFlags, commits []git.Commit) (string, logFlags, error) {
+	what := extractWhat(commits)
+	if len(args) > 0 {
+		what = args[0]
 	}
-	what := args[0]
 	if strings.TrimSpace(what) == "" {
 		return "", flags, output.NewUserError(
-			"missing required <what> argument; usage: timbers log \"<what>\" --why \"<why>\" --how \"<how>\"")
+			"could not derive what from commit subjects; provide an explicit <what> argument")
 	}
 
 	if !flags.minor {
@@ -83,14 +82,7 @@ func resolveManualContent(args []string, flags logFlags) (string, logFlags, erro
 // - why: first body paragraph from first commit with body content
 // - how: remaining body content after first paragraph
 func extractAutoContent(commits []git.Commit) (what, why, how string) {
-	// Build "what" from commit subjects
-	subjects := make([]string, 0, len(commits))
-	for _, c := range commits {
-		if c.Subject != "" {
-			subjects = append(subjects, c.Subject)
-		}
-	}
-	what = strings.Join(subjects, "; ")
+	what = extractWhat(commits)
 	if what == "" {
 		what = "Auto-documented"
 	}
@@ -127,6 +119,18 @@ func extractAutoContent(commits []git.Commit) (what, why, how string) {
 	}
 
 	return what, why, how
+}
+
+// extractWhat snapshots non-empty commit subjects in the order Git returned them.
+func extractWhat(commits []git.Commit) string {
+	subjects := make([]string, 0, len(commits))
+	for _, c := range commits {
+		if c.Subject != "" {
+			subjects = append(subjects, c.Subject)
+		}
+	}
+	what := strings.Join(subjects, "; ")
+	return what
 }
 
 // splitIntoParagraphs splits text into paragraphs separated by blank lines.

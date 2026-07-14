@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -304,6 +305,55 @@ func TestHandleLog_Success(t *testing.T) {
 	}
 }
 
+func TestHandleLog_DerivesWhat(t *testing.T) {
+	tests := []struct {
+		name    string
+		commits []git.Commit
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "multiple subjects",
+			commits: []git.Commit{
+				{SHA: "abc123", Short: "abc123", Subject: "Latest commit"},
+				{SHA: "def456", Short: "def456", Subject: "Previous commit"},
+			},
+			want: "Latest commit; Previous commit",
+		},
+		{
+			name:    "empty subject",
+			commits: []git.Commit{{SHA: "abc123", Short: "abc123"}},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gitOps := &mockGitOps{headSHA: tt.commits[0].SHA, reachableFrom: tt.commits}
+			storage := makeTestStorage(t, gitOps, nil)
+
+			_, out, err := handleLog(storage)(context.Background(), &mcp.CallToolRequest{}, LogInput{
+				Why: "authored reason", How: "authored approach",
+			})
+			if tt.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "provide what explicitly") {
+					t.Fatalf("error = %v, want explicit-what guidance", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if out.Entry.Summary.What != tt.want {
+				t.Errorf("What = %q, want %q", out.Entry.Summary.What, tt.want)
+			}
+			if out.Entry.Summary.Why != "authored reason" || out.Entry.Summary.How != "authored approach" {
+				t.Errorf("derived what changed authored why/how: %+v", out.Entry.Summary)
+			}
+		})
+	}
+}
+
 func TestHandleLog_MissingFields(t *testing.T) {
 	gitOps := &mockGitOps{headSHA: "abc123"}
 	storage := makeTestStorage(t, gitOps, nil)
@@ -313,7 +363,6 @@ func TestHandleLog_MissingFields(t *testing.T) {
 		name  string
 		input LogInput
 	}{
-		{"missing what", LogInput{Why: "w", How: "h"}},
 		{"missing why", LogInput{What: "w", How: "h"}},
 		{"missing how", LogInput{What: "w", Why: "w"}},
 	}

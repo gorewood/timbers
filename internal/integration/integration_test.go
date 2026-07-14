@@ -504,12 +504,6 @@ func TestErrorMissingArgs(t *testing.T) {
 		code    int
 	}{
 		{
-			name:    "log missing what",
-			args:    []string{"log", "--why", "reason", "--how", "method"},
-			wantErr: "what",
-			code:    1,
-		},
-		{
 			name:    "log missing why (not minor)",
 			args:    []string{"log", "work done", "--how", "method"},
 			wantErr: "--why",

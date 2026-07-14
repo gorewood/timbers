@@ -268,15 +268,33 @@ func TestLogCommand(t *testing.T) {
 			wantContains: []string{"--how"},
 		},
 		{
-			name: "validation error - missing what argument",
+			name: "derives missing what from commit subjects",
 			mock: func() *mockGitOpsForLog {
 				mock := newMockGitOpsForLog()
 				mock.head = "abc123def456789"
+				mock.reachableResult = []git.Commit{
+					{SHA: "abc123def456789", Short: "abc123d", Subject: "Latest commit"},
+					{SHA: "def456789012345", Short: "def4567", Subject: "Previous commit"},
+				}
 				return mock
 			}(),
 			args:         []string{"--why", "Because", "--how", "Did it"},
-			wantErr:      true,
-			wantContains: []string{"what"},
+			wantErr:      false,
+			wantContains: []string{"Created entry"},
+			checkDir: func(t *testing.T, dir string) {
+				walkJSONFiles(dir, func(_ string, data []byte) {
+					var entry ledger.Entry
+					if err := json.Unmarshal(data, &entry); err != nil {
+						t.Fatalf("unmarshal entry: %v", err)
+					}
+					if got, want := entry.Summary.What, "Latest commit; Previous commit"; got != want {
+						t.Errorf("What = %q, want %q", got, want)
+					}
+					if entry.Summary.Why != "Because" || entry.Summary.How != "Did it" {
+						t.Errorf("derived what changed authored why/how: %+v", entry.Summary)
+					}
+				})
+			},
 		},
 		{
 			name: "validation error - invalid work-item format",
@@ -738,6 +756,42 @@ func TestExtractAutoContent(t *testing.T) {
 				t.Errorf("how = %q, want %q", how, tt.wantHow)
 			}
 		})
+	}
+}
+
+func TestResolveManualContentWhat(t *testing.T) {
+	commits := []git.Commit{
+		{Subject: "Latest commit"},
+		{Subject: ""},
+		{Subject: "Previous commit"},
+	}
+	flags := logFlags{why: "Authored reason", how: "Authored approach"}
+
+	what, gotFlags, err := resolveManualContent(nil, flags, commits)
+	if err != nil {
+		t.Fatalf("derive what: %v", err)
+	}
+	if want := "Latest commit; Previous commit"; what != want {
+		t.Errorf("what = %q, want %q", what, want)
+	}
+	if gotFlags.why != flags.why || gotFlags.how != flags.how {
+		t.Errorf("why/how changed: got %+v, want %+v", gotFlags, flags)
+	}
+
+	what, _, err = resolveManualContent([]string{"Explicit summary"}, flags, commits)
+	if err != nil {
+		t.Fatalf("explicit what: %v", err)
+	}
+	if what != "Explicit summary" {
+		t.Errorf("explicit what = %q, want %q", what, "Explicit summary")
+	}
+
+	what, _, err = resolveManualContent(nil, flags, []git.Commit{{Subject: ""}})
+	if err == nil {
+		t.Fatalf("empty subject what = %q, want an explicit-what error", what)
+	}
+	if !strings.Contains(err.Error(), "provide an explicit <what>") {
+		t.Errorf("empty subject error = %q, want explicit-what guidance", err)
 	}
 }
 

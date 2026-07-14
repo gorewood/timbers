@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -14,7 +15,7 @@ import (
 
 // LogInput is the input for the log tool.
 type LogInput struct {
-	What     string   `json:"what"               jsonschema:"what was done (required)"`
+	What     string   `json:"what,omitempty"     jsonschema:"what was done; defaults to the pending commit subjects"`
 	Why      string   `json:"why"                jsonschema:"why - design decision, not feature description (required)"`
 	How      string   `json:"how"                jsonschema:"how - approach and implementation (required)"`
 	Notes    string   `json:"notes,omitempty"     jsonschema:"deliberation notes capturing the journey to a decision"`
@@ -54,12 +55,9 @@ func handleLog(storage *ledger.Storage) mcp.ToolHandlerFor[LogInput, LogOutput] 
 	}
 }
 
-// validateLogInput checks that required fields are non-empty.
-// The SDK schema enforces field presence (required), but this catches empty strings.
+// validateLogInput checks that required authored fields are non-empty.
+// The SDK schema enforces their presence, but this catches empty strings.
 func validateLogInput(input LogInput) error {
-	if input.What == "" {
-		return errors.New("what is required")
-	}
 	if input.Why == "" {
 		return errors.New("why is required")
 	}
@@ -75,6 +73,13 @@ func buildLogEntry(
 	commits []git.Commit,
 	input LogInput,
 ) (*ledger.Entry, error) {
+	what := input.What
+	if what == "" {
+		what = commitSubjects(commits)
+		if what == "" {
+			return nil, errors.New("could not derive what from commit subjects; provide what explicitly")
+		}
+	}
 	anchor := commits[0].SHA
 	commitSHAs := make([]string, len(commits))
 	for idx, commit := range commits {
@@ -116,7 +121,7 @@ func buildLogEntry(
 			},
 		},
 		Summary: ledger.Summary{
-			What: input.What,
+			What: what,
 			Why:  input.Why,
 			How:  input.How,
 		},
@@ -124,4 +129,14 @@ func buildLogEntry(
 		Tags:      input.Tags,
 		WorkItems: workItems,
 	}, nil
+}
+
+func commitSubjects(commits []git.Commit) string {
+	subjects := make([]string, 0, len(commits))
+	for _, commit := range commits {
+		if commit.Subject != "" {
+			subjects = append(subjects, commit.Subject)
+		}
+	}
+	return strings.Join(subjects, "; ")
 }
