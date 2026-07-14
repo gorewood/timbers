@@ -1,0 +1,27 @@
+{
+  "site": {
+    "title": "Timbers",
+    "description": "Git knows what changed. Timbers captures why.",
+    "path_prefix": "/timbers/"
+  },
+  "collections": [
+    {
+      "id": "examples",
+      "label": "Example artifacts",
+      "description": "Reports generated from Timbers' own development ledger.",
+      "kind": "generated",
+      "root": "site/content/examples",
+      "include": "[!_]*.md",
+      "route": "examples"
+    },
+    {
+      "id": "reports",
+      "label": "Development reports",
+      "description": "Dated narratives generated from the Timbers ledger.",
+      "kind": "generated",
+      "root": "site/content/posts",
+      "include": "*.md",
+      "route": "posts"
+    }
+  ]
+}

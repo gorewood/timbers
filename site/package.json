@@ -1,0 +1,13 @@
+{
+  "name": "timbers-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/materialize.mjs && eleventy && node scripts/check-output.mjs",
+    "serve": "node scripts/materialize.mjs && eleventy --serve",
+    "test": "node --test scripts/materialize.test.mjs"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "3.1.5"
+  }
+}

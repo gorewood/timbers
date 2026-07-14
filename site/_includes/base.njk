@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="{{ description or summary or site.description }}">
+    <meta name="color-scheme" content="light dark">
+    <title>{% if title and title != site.title %}{{ title }} | {% endif %}{{ site.title }}</title>
+    <link rel="stylesheet" href="{{ '/assets/site.css' | siteUrl }}">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="shell header-inner">
+        <a class="brand" href="{{ '/' | siteUrl }}" aria-label="Timbers home">timbers</a>
+        <nav class="desktop-nav" aria-label="Primary navigation">
+          {% for collection in timbermill.collections %}<a href="{{ ('/' + collection.route + '/') | siteUrl }}">{{ collection.label }}</a>{% endfor %}
+          <a href="https://github.com/gorewood/timbers/blob/main/docs/tutorial.md">Docs</a>
+          <a href="https://github.com/gorewood/timbers">GitHub</a>
+        </nav>
+        <details class="mobile-nav">
+          <summary>Menu</summary>
+          <nav aria-label="Mobile navigation">
+            {% for collection in timbermill.collections %}<a href="{{ ('/' + collection.route + '/') | siteUrl }}">{{ collection.label }}</a>{% endfor %}
+            <a href="https://github.com/gorewood/timbers/blob/main/docs/tutorial.md">Docs</a>
+            <a href="https://github.com/gorewood/timbers">GitHub</a>
+          </nav>
+        </details>
+      </div>
+    </header>
+    <main id="main">
+      {{ content | safe }}
+    </main>
+    <footer class="site-footer">
+      <div class="shell footer-inner">
+        <p><strong>Timbers</strong> records the reasoning Git cannot.</p>
+        <p><a href="https://github.com/gorewood/timbers">Open source under the MIT License</a></p>
+      </div>
+    </footer>
+  </body>
+</html>

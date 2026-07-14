@@ -1,10 +1,10 @@
-+++
-title = 'Building the Foundation'
-date = '2026-01-15'
-tags = ['development', 'architecture']
-+++
+---
+title: 'Building the Foundation'
+date: '2026-01-15'
+tags: ['development', 'architecture']
+---
 
-# Timbers: Building a Development Log That Works for Humans and AI
+## Timbers: Building a Development Log That Works for Humans and AI
 
 We're excited to share progress on **Timbers**, an open-source development logging tool that bridges the gap between how developers actually work and how teams need to document that work. Over the past few weeks, we've shipped the core functionality, and we want to pull back the curtain on what we built, why we made certain tradeoffs, and where we need community help.
 

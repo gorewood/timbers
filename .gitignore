@@ -89,18 +89,26 @@ Desktop.ini
 !.beads/
 !.beads/**
 
-# Hugo site (blog) - source files only
+# Eleventy publishing site - source files only
 !site/
-!site/hugo.toml
-!site/go.mod
-!site/go.sum
-!site/content/
-!site/content/**
-!site/layouts/
-!site/layouts/**
+!site/**
+site/node_modules/
+site/.generated/
+site/_site/
+site/public/
+site/resources/
+site/.hugo_build.lock
 
 # Allow directories to be traversed
 !*/
+
+# Generated site directories stay ignored after the traversal allowlist above.
+site/node_modules/**
+site/.generated/**
+site/_site/**
+site/public/**
+site/resources/**
+site/.hugo_build.lock
 
 # Dolt database files (added by bd init)
 .dolt/

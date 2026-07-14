@@ -1,10 +1,10 @@
-+++
-title = 'Documentation, Oversight, and Developer Experience'
-date = '2026-01-17'
-tags = ['documentation', 'dx', 'ci-cd']
-+++
+---
+title: 'Documentation, Oversight, and Developer Experience'
+date: '2026-01-17'
+tags: ['documentation', 'dx', 'ci-cd']
+---
 
-# Timbers Dev Update: Documentation, Oversight, and Developer Experience
+## Timbers Dev Update: Documentation, Oversight, and Developer Experience
 
 Hello, Timbers community! This week we focused on something that might seem understated but is actually critical to the project's mission: **making it easier for humans to understand and oversee agent-assisted development at scale**.
 

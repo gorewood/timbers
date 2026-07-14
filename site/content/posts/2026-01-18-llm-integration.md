@@ -1,10 +1,10 @@
-+++
-title = 'Modernizing CLI Output'
-date = '2026-01-18'
-tags = ['cli', 'ux', 'lipgloss']
-+++
+---
+title: 'Modernizing CLI Output'
+date: '2026-01-18'
+tags: ['cli', 'ux', 'lipgloss']
+---
 
-# Modernizing CLI Output: A Journey Toward Better Readability
+## Modernizing CLI Output: A Journey Toward Better Readability
 
 We've just shipped a significant quality-of-life improvement for anyone using our CLI tools: a comprehensive styling system that makes output more readable, scannable, and visually organized. This post walks through what we built, why we built it this way, and where we could use your help.
 

@@ -1,0 +1,30 @@
+---
+layout: base.njk
+---
+<header class="page-heading shell reading-shell">
+  <p class="eyebrow">{% if artifact_kind == "native" %}Native artifacts{% else %}Generated from the ledger{% endif %}</p>
+  <h1>{{ title }}</h1>
+  {% if description %}<p class="lede">{{ description }}</p>{% endif %}
+</header>
+
+<section class="collection shell reading-shell" aria-label="{{ title }}">
+  {% set items = collections[collection_tag] | byNewest %}
+  {% if items.length %}
+    <ol class="artifact-list">
+      {% for item in items %}
+        <li>
+          <a href="{{ item.url | siteUrl }}">
+            <span class="artifact-title">{{ item.data.title or item.fileSlug }}</span>
+            <span class="artifact-meta">
+              {% if item.data.artifact_kind == "native" %}Native{% else %}Generated{% endif %}
+              {% if item.data.date %} · {{ item.data.date | displayDate }}{% endif %}
+            </span>
+            {% if item.data.summary %}<span class="artifact-summary">{{ item.data.summary }}</span>{% endif %}
+          </a>
+        </li>
+      {% endfor %}
+    </ol>
+  {% else %}
+    <p>No artifacts have been published in this collection.</p>
+  {% endif %}
+</section>

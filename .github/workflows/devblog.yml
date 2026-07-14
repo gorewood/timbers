@@ -44,10 +44,10 @@ jobs:
           FILE="site/content/posts/${DATE}-devlog.md"
           mkdir -p site/content/posts
           {
-            echo "+++"
-            echo "title = 'Dev Log: ${DATE}'"
-            echo "date = '${DATE}'"
-            echo "+++"
+            echo "---"
+            echo "title: 'Dev Log: ${DATE}'"
+            echo "date: '${DATE}'"
+            echo "---"
             echo ""
             timbers draft devblog --since 1d --model opus
           } > "$FILE"

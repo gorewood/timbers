@@ -1,8 +1,8 @@
-+++
-title = 'Sprint Report'
-date = '2026-02-28'
-tags = ['example', 'sprint-report']
-+++
+---
+title: 'Sprint Report'
+date: '2026-02-28'
+tags: ['example', 'sprint-report']
+---
 
 Generated with `timbers draft sprint-report --since 2026-02-10 --until 2026-02-14 | claude -p --model opus`
 

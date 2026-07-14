@@ -1,10 +1,10 @@
-+++
-title = 'Building a Better Release Experience'
-date = '2026-01-19'
-tags = ['release', 'infrastructure', 'robustness']
-+++
+---
+title: 'Building a Better Release Experience'
+date: '2026-01-19'
+tags: ['release', 'infrastructure', 'robustness']
+---
 
-# Building a Better Release Experience: This Week in Timbers
+## Building a Better Release Experience: This Week in Timbers
 
 Last week, we shipped something we've been planning for a while: **automated releases and graceful handling of non-timbers git notes**. These might sound like small infrastructure improvements, but they represent real quality-of-life wins for both users and contributors. Let me walk you through what we built and why we made these choices.
 

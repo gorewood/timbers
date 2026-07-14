@@ -1,8 +1,8 @@
-+++
-title = 'Pr Description'
-date = '2026-02-28'
-tags = ['example', 'pr-description']
-+++
+---
+title: 'Pr Description'
+date: '2026-02-28'
+tags: ['example', 'pr-description']
+---
 
 Generated with `timbers draft pr-description --since 2026-02-10 --until 2026-02-11 | claude -p --model opus`
 

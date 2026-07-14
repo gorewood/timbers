@@ -1,8 +1,8 @@
-+++
-title = 'Standup'
-date = '2026-02-28'
-tags = ['example', 'standup']
-+++
+---
+title: 'Standup'
+date: '2026-02-28'
+tags: ['example', 'standup']
+---
 
 Generated with `timbers draft standup --since 2026-02-13 --until 2026-02-13 | claude -p --model opus`
 

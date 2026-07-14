@@ -1,8 +1,8 @@
-+++
-title = 'Release Notes'
-date = '2026-06-11'
-tags = ['example', 'release-notes']
-+++
+---
+title: 'Release Notes'
+date: '2026-06-11'
+tags: ['example', 'release-notes']
+---
 
 Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
