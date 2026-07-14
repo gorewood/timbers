@@ -203,6 +203,27 @@ Custom changelog template`
 	}
 }
 
+func TestLoadTemplateDoesNotHideInvalidProjectOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(".timbers/templates", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(".timbers/templates", "changelog.md")
+	if err := os.WriteFile(path, []byte("---\nname: [invalid\n---\nbody"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadTemplate("changelog")
+	if err == nil || !strings.Contains(err.Error(), "invalid frontmatter") {
+		t.Fatalf("LoadTemplate() error = %v, want invalid override error", err)
+	}
+}
+
 func TestListBuiltins(t *testing.T) {
 	templates := listBuiltins()
 
@@ -249,5 +270,8 @@ func TestDecisionDigestIsNonAuthoritative(t *testing.T) {
 
 	if _, err := loadBuiltin("decision-log"); err == nil {
 		t.Error("loadBuiltin(decision-log) succeeded; obsolete authoritative template should be removed")
+	}
+	if tmpl.Report == nil || tmpl.Report.Scope.Last != "20" || tmpl.Report.Projection != ProjectionDecision {
+		t.Errorf("decision-digest report profile = %#v", tmpl.Report)
 	}
 }

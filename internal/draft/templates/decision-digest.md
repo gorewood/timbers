@@ -1,7 +1,13 @@
 ---
 name: decision-digest
 description: Retrospective digest of explicit design decisions
-version: 1
+version: 2
+report:
+  scope:
+    last: 20
+  projection: decision
+  format: markdown
+  quiet_output: _No explicit design decisions in this range._
 ---
 Extract explicit design decisions from these development log entries and format them as a retrospective decision digest.
 

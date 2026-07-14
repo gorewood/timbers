@@ -3,6 +3,7 @@ package draft
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,8 @@ import (
 	"github.com/gorewood/timbers/internal/config"
 )
 
+var errNoTemplateDirectory = errors.New("no template directory")
+
 // Template represents a prompt template with metadata and content.
 type Template struct {
 	// Metadata from frontmatter
@@ -19,6 +22,7 @@ type Template struct {
 	Description string            `yaml:"description"`
 	Version     int               `yaml:"version,omitempty"`
 	Vars        map[string]string `yaml:"vars,omitempty"` // Default values for {{vars.*}} tokens
+	Report      *ReportProfile    `yaml:"report,omitempty"`
 
 	// Template content (after frontmatter)
 	Content string `yaml:"-"`
@@ -38,22 +42,30 @@ type TemplateInfo struct {
 // LoadTemplate finds and loads a template by name.
 // Resolution order: project-local → user global → built-in
 func LoadTemplate(name string) (*Template, error) {
-	// 1. Project-local
-	if tmpl, err := loadFromPath(projectTemplatesDir(), name); err == nil {
-		tmpl.Source = "project"
-		return tmpl, nil
+	for _, source := range []struct {
+		name string
+		dir  string
+	}{
+		{"project", projectTemplatesDir()},
+		{"global", globalTemplatesDir()},
+	} {
+		tmpl, err := loadFromPath(source.dir, name)
+		if err == nil {
+			tmpl.Source = source.name
+			return tmpl, nil
+		}
+		if !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, errNoTemplateDirectory) {
+			return nil, fmt.Errorf("loading %s template: %w", source.name, err)
+		}
 	}
 
-	// 2. User global
-	if tmpl, err := loadFromPath(globalTemplatesDir(), name); err == nil {
-		tmpl.Source = "global"
-		return tmpl, nil
-	}
-
-	// 3. Built-in
-	if tmpl, err := loadBuiltin(name); err == nil {
+	tmpl, err := loadBuiltin(name)
+	if err == nil {
 		tmpl.Source = "built-in"
 		return tmpl, nil
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("loading built-in template: %w", err)
 	}
 
 	return nil, fmt.Errorf("template %q not found", name)
@@ -130,7 +142,7 @@ func globalTemplatesDir() string {
 // loadFromPath attempts to load a template from a directory.
 func loadFromPath(dir, name string) (*Template, error) {
 	if dir == "" {
-		return nil, errors.New("no directory")
+		return nil, errNoTemplateDirectory
 	}
 
 	path := filepath.Join(dir, name+".md")
@@ -191,6 +203,9 @@ func parseTemplate(raw string) (*Template, error) {
 		if err := yaml.Unmarshal([]byte(frontmatter), &tmpl); err != nil {
 			return nil, fmt.Errorf("invalid frontmatter: %w", err)
 		}
+	}
+	if err := tmpl.Report.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid report profile: %w", err)
 	}
 
 	tmpl.Content = strings.TrimSpace(content)

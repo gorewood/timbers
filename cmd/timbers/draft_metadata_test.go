@@ -1,7 +1,11 @@
 package main
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/gorewood/timbers/internal/draft"
+	"github.com/gorewood/timbers/internal/ledger"
 )
 
 func TestParseVars(t *testing.T) {
@@ -71,5 +75,25 @@ func TestParseVars(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestGenerationMetadataFrontmatterIncludesSourceAndEntries(t *testing.T) {
+	tmpl := &draft.Template{Name: "decision-digest", Version: 2, Source: "project"}
+	entries := []*ledger.Entry{{ID: "tb_one"}, {ID: "tb_two"}}
+	metadata := buildGenerationMetadata(
+		"decision-digest", tmpl, entries, "local", draftSelectionFlags{last: "2"},
+	)
+	if metadata.TemplateSource != "project" {
+		t.Fatalf("TemplateSource = %q", metadata.TemplateSource)
+	}
+	frontmatter := formatTOMLFrontmatter(metadata)
+	for _, want := range []string{
+		`generated_template_source = "project"`,
+		`generated_entry_ids = ["tb_one", "tb_two"]`,
+	} {
+		if !strings.Contains(frontmatter, want) {
+			t.Errorf("frontmatter missing %q:\n%s", want, frontmatter)
+		}
 	}
 }

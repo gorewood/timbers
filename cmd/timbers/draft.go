@@ -97,7 +97,7 @@ func runDraft(cmd *cobra.Command, args []string, flags draftFlags) error {
 	// Load template
 	tmpl, err := draft.LoadTemplate(templateName)
 	if err != nil {
-		userErr := output.NewUserError(fmt.Sprintf("template %q not found", templateName))
+		userErr := output.NewUserError(err.Error())
 		printer.Error(userErr)
 		return userErr
 	}

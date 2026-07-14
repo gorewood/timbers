@@ -54,10 +54,16 @@ type draftSelectionFlags struct {
 type generationMetadata struct {
 	Template        string   `json:"template"`
 	TemplateVersion int      `json:"template_version"`
-	Model           string   `json:"model"`
-	Timestamp       string   `json:"timestamp"`
+	Model           string   `json:"model,omitempty"`
+	Timestamp       string   `json:"timestamp,omitempty"`
 	EntryIDs        []string `json:"entry_ids"`
 	Selection       string   `json:"selection"`
+	Profile         string   `json:"profile,omitempty"`
+	TemplateSource  string   `json:"template_source,omitempty"`
+	Projection      string   `json:"projection,omitempty"`
+	Format          string   `json:"format,omitempty"`
+	GitResolved     int      `json:"git_resolved,omitempty"`
+	GitUnresolved   int      `json:"git_unresolved,omitempty"`
 }
 
 // buildGenerationMetadata creates metadata about the generation.
@@ -91,6 +97,7 @@ func buildGenerationMetadata(
 	return generationMetadata{
 		Template:        templateName,
 		TemplateVersion: tmpl.Version,
+		TemplateSource:  tmpl.Source,
 		Model:           model,
 		Timestamp:       time.Now().UTC().Format(time.RFC3339),
 		EntryIDs:        entryIDs,
@@ -104,10 +111,27 @@ func formatTOMLFrontmatter(meta generationMetadata) string {
 	builder.WriteString("+++\n")
 	builder.WriteString(fmt.Sprintf("generated_template = \"%s\"\n", meta.Template))
 	builder.WriteString(fmt.Sprintf("generated_template_version = %d\n", meta.TemplateVersion))
+	if meta.TemplateSource != "" {
+		builder.WriteString(fmt.Sprintf("generated_template_source = %q\n", meta.TemplateSource))
+	}
 	builder.WriteString(fmt.Sprintf("generated_model = \"%s\"\n", meta.Model))
 	builder.WriteString(fmt.Sprintf("generated_at = \"%s\"\n", meta.Timestamp))
 	builder.WriteString(fmt.Sprintf("generated_selection = \"%s\"\n", meta.Selection))
 	builder.WriteString(fmt.Sprintf("generated_entry_count = %d\n", len(meta.EntryIDs)))
+	if len(meta.EntryIDs) > 0 {
+		quotedIDs := make([]string, len(meta.EntryIDs))
+		for idx, id := range meta.EntryIDs {
+			quotedIDs[idx] = fmt.Sprintf("%q", id)
+		}
+		builder.WriteString("generated_entry_ids = [" + strings.Join(quotedIDs, ", ") + "]\n")
+	}
+	if meta.Profile != "" {
+		builder.WriteString(fmt.Sprintf("generated_profile = %q\n", meta.Profile))
+		builder.WriteString(fmt.Sprintf("generated_projection = %q\n", meta.Projection))
+		builder.WriteString(fmt.Sprintf("generated_format = %q\n", meta.Format))
+		builder.WriteString(fmt.Sprintf("generated_git_resolved = %d\n", meta.GitResolved))
+		builder.WriteString(fmt.Sprintf("generated_git_unresolved = %d\n", meta.GitUnresolved))
+	}
 	builder.WriteString("+++\n")
 	return builder.String()
 }

@@ -13,6 +13,7 @@ import (
 // RenderContext provides data for template rendering.
 type RenderContext struct {
 	Entries            []*ledger.Entry
+	EntriesJSON        []byte // Optional compact report projection
 	RepoName           string
 	Branch             string
 	AppendText         string            // Optional extra instructions from --append
@@ -58,9 +59,13 @@ func buildVars(ctx *RenderContext) (map[string]string, error) {
 	vars := make(map[string]string)
 
 	// entries_json - full JSON array
-	entriesJSON, err := json.MarshalIndent(ctx.Entries, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal entries: %w", err)
+	entriesJSON := ctx.EntriesJSON
+	if entriesJSON == nil {
+		var err error
+		entriesJSON, err = json.MarshalIndent(ctx.Entries, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal entries: %w", err)
+		}
 	}
 	vars["entries_json"] = string(entriesJSON)
 
