@@ -420,7 +420,6 @@ Template resolution order:
 |----------|-------------------|
 | Quality content (changelogs, blog posts, decision logs) | `opus` (best reasoning and writing quality) |
 | Daily use | `local` (free, private, fast) |
-| Batch backfill (100+ entries) | `haiku`, `flash`, `nano` (cheap cloud) |
 
 **Quality matters for published artifacts.** Decision logs, blog posts, and changelogs benefit from frontier-model reasoning — the difference between shallow summaries and genuine insight is significant. Use `opus` for anything you'd share externally.
 

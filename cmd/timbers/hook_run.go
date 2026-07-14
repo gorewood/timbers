@@ -93,8 +93,7 @@ func hasActionablePending() bool {
 		return false
 	}
 	// Cross-agent escape hatch: when the user has explicitly opted out of
-	// the gate (typically because multiple agents are working in parallel
-	// and one of them is about to run timbers catchup), skip both the
+	// the gate while multiple agents are working in parallel, skip both the
 	// block and the nudge. Cheaper than --no-verify because it doesn't
 	// disable other hooks.
 	if envTruthy(envSkipCrossAgentDebt) {

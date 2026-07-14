@@ -48,7 +48,7 @@ func TestSessionProtocol_ChecklistOrdering(t *testing.T) {
 // squash merges.
 func TestStaleAnchorGuidance_ContainsCriticalRule(t *testing.T) {
 	wantSubstrs := []string{
-		"Do NOT try to catch up",
+		"Do NOT re-document",
 		"anchor self-heals",
 		"<stale-anchor>",
 		"</stale-anchor>",

@@ -218,7 +218,7 @@ func TestPreCommitHookGating(t *testing.T) {
 	// TIMBERS_SKIP_CROSS_AGENT_DEBT escape hatch: when set, the gate must
 	// stand down even if there is undocumented work on the current branch.
 	// Intended for parallel-agent flows where one agent will run timbers
-	// catchup later; not a replacement for documenting work.
+	// document the work later; not a replacement for documenting work.
 	t.Run("env var bypasses the gate", func(t *testing.T) {
 		repo := newHookRepo(t)
 		repo.commitFile(t, "internal/feature.go", "package internal\n", "feat: new code")

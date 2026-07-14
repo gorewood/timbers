@@ -1,6 +1,6 @@
 # LLM Commands
 
-Timbers provides four commands for LLM integration, forming a pipeline from raw data extraction to automated documentation.
+Timbers provides three commands for LLM integration, forming a pipeline from raw data extraction to automated documentation.
 
 ---
 
@@ -11,7 +11,6 @@ Timbers provides four commands for LLM integration, forming a pipeline from raw 
 | `export` | Raw data extraction | JSON/Markdown |
 | `draft` | Template rendering with entries | Text for piping OR LLM response (with --model) |
 | `generate` | Ad-hoc LLM completion primitive | LLM response text |
-| `catchup` | Auto-generate entries from undocumented commits | Ledger entries |
 
 ---
 
@@ -181,59 +180,6 @@ timbers generate "Summarize" --input ./notes.txt
 
 ---
 
-## 4. Catchup — Auto-Generate Entries
-
-Generate ledger entries for undocumented commits using an LLM. Groups pending commits by work-item or day and generates what/why/how summaries.
-
-```bash
-# Preview what would be created
-timbers catchup --model haiku --dry-run
-
-# Create entries
-timbers catchup --model haiku
-
-# With custom tags
-timbers catchup --model haiku --tag "historical" --tag "backfill"
-
-# Specific commit range
-timbers catchup --model haiku --range abc123..def456
-
-# Parallel processing
-timbers catchup --model sonnet --parallel 10
-
-# Push notes after creating
-timbers catchup --model haiku --push
-```
-
-**Flags:**
-- `-m, --model <name>` — Model name (default: local)
-- `-p, --provider <name>` — Provider override
-- `--dry-run` — Preview entries without writing
-- `--range A..B` — Specific commit range
-- `--batch-size <int>` — Max commits per LLM call (default: 20)
-- `--parallel <int>` — Concurrent LLM calls (default: 5)
-- `--tag <name>` — Tags to add to all entries (repeatable)
-- `--push` — Push notes after creating entries
-- `--json` — Structured JSON output
-
-### Catchup Workflow
-
-```bash
-# 1. Check what's undocumented
-timbers pending
-
-# 2. Preview what catchup would create
-timbers catchup --model haiku --dry-run
-
-# 3. Create the entries
-timbers catchup --model haiku
-
-# 4. Verify
-timbers pending  # Should show fewer/no pending commits
-```
-
----
-
 ## Environment Variables
 
 | Variable | Purpose |
@@ -260,7 +206,6 @@ timbers pending  # Should show fewer/no pending commits
 ### Practical Guidance
 
 - **Start with `local`**: If you have LM Studio or Ollama running, local models handle Timbers tasks well
-- **Use cheap cloud for batch**: `catchup` with 100+ commits? Use `haiku` or `flash` for speed and low cost
 - **Reserve premium for polish**: Only escalate to sonnet/opus if output quality isn't meeting expectations
 
 **Cost example:** Generating 50 changelog entries with haiku costs ~$0.02. Local is free.
@@ -269,7 +214,7 @@ timbers pending  # Should show fewer/no pending commits
 
 ## Flag Consistency
 
-These flags work consistently across `draft`, `generate`, and `catchup`:
+These flags work consistently across `draft` and `generate`:
 
 | Flag | Short | Description |
 |------|-------|-------------|
@@ -321,19 +266,7 @@ timbers draft changelog --since 7d | timbers generate --model haiku
 timbers export --last 3 --format md | timbers generate "Summarize these changes" --model sonnet
 ```
 
-### Pattern 4: Automated Backfill
-
-Catch up on undocumented history:
-
-```bash
-# Full backfill workflow
-timbers pending                           # See what's missing
-timbers catchup --model haiku --dry-run   # Preview
-timbers catchup --model haiku             # Execute
-git push                                  # Sync to remote
-```
-
-### Pattern 5: CI/CD Integration
+### Pattern 4: CI/CD Integration
 
 ```bash
 # In release workflow
@@ -361,8 +294,6 @@ timbers draft changelog --since 7d --json
 # Generate with response metadata
 timbers generate "Hello" --model haiku --json
 
-# Catchup results
-timbers catchup --model haiku --dry-run --json
 ```
 
 ---

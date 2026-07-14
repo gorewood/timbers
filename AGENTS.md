@@ -81,7 +81,7 @@ Examples:
 - `Work-item: jira:PROJ-123` — Jira ticket
 - `Work-item: gh:owner/repo#42` — GitHub issue
 
-**How catchup uses it**: `timbers log --batch` groups pending commits by Work-item trailer instead of by day, so all commits for a single work item become one ledger entry. Commits without trailers fall into an "untracked" group when other commits have trailers, or are grouped by day if no trailers exist.
+**How batching uses it**: `timbers log --batch` groups pending commits by Work-item trailer instead of by day, so all commits for a single work item become one ledger entry. Commits without trailers fall into an "untracked" group when other commits have trailers, or are grouped by day if no trailers exist.
 
 ### Quality gates per commit
 

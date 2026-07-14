@@ -252,7 +252,6 @@ func outputPendingHuman(printer *output.Printer, result *pendingResult, countOnl
 	// dumping the entire pre-timbers history as "pending" work.
 	if result.LastEntry == nil {
 		printer.Println("No entries yet — tracking starts with your first timbers log.")
-		printer.Println("Tip: Run 'timbers catchup' to backfill existing history (optional).")
 		return
 	}
 

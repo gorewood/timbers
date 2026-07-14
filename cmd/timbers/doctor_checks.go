@@ -160,8 +160,6 @@ func checkPendingCommits() checkResult {
 			Name:    "Pending Commits",
 			Status:  checkPass,
 			Message: "tracking starts with your first timbers log",
-			Hint: "Have existing history? 'timbers catchup' can backfill, " +
-				"but entries from commits alone are shallow. Most teams skip it.",
 		}
 	}
 

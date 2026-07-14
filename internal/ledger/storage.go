@@ -212,7 +212,7 @@ func (s *Storage) GetLastNEntries(count int) ([]*Entry, error) {
 //
 // Walks the full DAG — commits brought into HEAD via merge are included.
 // This is the right answer for display commands (timbers pending, prime,
-// status, catchup) that surface total documentation debt. The hook gate
+// and status) that surface total documentation debt. The hook gate
 // uses GetGatePendingCommits instead, which excludes merged-in work.
 func (s *Storage) GetPendingCommits() ([]git.Commit, *Entry, error) {
 	return s.getPendingCommits(false)

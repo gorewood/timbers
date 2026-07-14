@@ -169,11 +169,10 @@ func addCommands(cmd *cobra.Command) {
 	addGroupedCommand(cmd, newQueryCmd(), "query")
 	addGroupedCommand(cmd, newExportCmd(), "query")
 
-	// Agent commands: prime, draft, generate, catchup, serve
+	// Agent commands: prime, draft, generate, serve
 	addGroupedCommand(cmd, newPrimeCmd(), "agent")
 	addGroupedCommand(cmd, newDraftCmd(), "agent")
 	addGroupedCommand(cmd, newGenerateCmd(), "agent")
-	addGroupedCommand(cmd, newCatchupCmd(), "agent")
 	addGroupedCommand(cmd, newServeCmd(), "agent")
 
 	// Admin commands: init, uninstall, doctor, hooks, setup, onboard

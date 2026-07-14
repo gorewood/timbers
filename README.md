@@ -78,7 +78,7 @@ timbers draft --list
 
 The decision-log template is particularly valuable — it extracts the *why* behind each change into an architectural decision record, enriched by `--notes` when agents capture their deliberation process. No other tool produces this from structured commit data.
 
-**Model guidance:** Use `opus` for best output quality. For local generation, pipe to your LLM CLI of choice (`claude -p`, `gemini`, `codex exec`) — this uses your subscription instead of API tokens. For CI/CD, use `--model opus` with an API key. For high-volume batch operations (e.g., `catchup` over hundreds of commits), `haiku` or `local` models offer a lower-cost alternative.
+**Model guidance:** Use `opus` for best output quality. For local generation, pipe to your LLM CLI of choice (`claude -p`, `gemini`, `codex exec`) — this uses your subscription instead of API tokens. For CI/CD, use `--model opus` with an API key.
 
 ## Configuration
 
@@ -92,7 +92,7 @@ Timbers uses `~/.config/timbers/` as its global configuration directory (`%AppDa
 
 ### API Keys
 
-For LLM-powered commands (`draft --model`, `generate`, `catchup`), set API keys in `~/.config/timbers/env`:
+For LLM-powered commands (`draft --model`, `generate`), set API keys in `~/.config/timbers/env`:
 
 ```bash
 mkdir -p ~/.config/timbers
@@ -176,10 +176,10 @@ See [docs/design-decisions.md](docs/design-decisions.md) for the full rationale,
 
 ## Documentation
 
-- [Tutorial](docs/tutorial.md) — Setup, catching up history, agent integration
+- [Tutorial](docs/tutorial.md) — Setup, capture workflow, agent integration
 - [Publishing Artifacts](docs/publishing-artifacts.md) — CI/CD for changelogs, reports, blogs
 - [Agent Reference](docs/agent-reference.md) — Command reference for agent integration
-- [LLM Commands](docs/llm-commands.md) — Draft, generate, catchup commands
+- [LLM Commands](docs/llm-commands.md) — Export, draft, and generate commands
 - [Spec](docs/spec.md) — Full specification
 - [Agent DX Guide](docs/agent-dx-guide.md) — CLI design patterns for agents
 
@@ -196,7 +196,7 @@ Timbers' own development ledger is used to generate these examples via `timbers 
 | [Sprint Report](https://gorewood.github.io/timbers/examples/sprint-report/) | Categorized sprint summary with scope and highlights |
 | [Dev Blog](https://gorewood.github.io/timbers/posts/) | Weekly dev blog posts (Carmack .plan style) |
 
-> **A note on quality:** Most of these entries were backfilled using `timbers catchup`, which infers what/why/how from commit messages and diffs. Projects that use `timbers log` from day one will produce significantly richer output — especially in the decision-log, where the *why* field matters most.
+> **A note on quality:** Most of these entries were historically backfilled using the now-retired `timbers catchup` command, which inferred what/why/how from commit messages and diffs. Projects that use `timbers log` from day one produce significantly richer output — especially in the decision-log, where the *why* field matters most.
 
 ## Development
 
