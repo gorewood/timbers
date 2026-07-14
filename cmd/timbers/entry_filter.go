@@ -115,6 +115,18 @@ func getEntriesByLast(printer *output.Printer, storage *ledger.Storage, lastFlag
 // anchors from the feature branch. Running only anchor-based and falling back
 // on zero results misses the partial-stale case.
 func getEntriesByRange(printer *output.Printer, storage *ledger.Storage, rangeFlag string) ([]*ledger.Entry, error) {
+	allEntries, err := storage.ListEntries()
+	if err != nil {
+		printer.Error(err)
+		return nil, err
+	}
+	return getEntriesByRangeFromEntries(printer, storage, allEntries, rangeFlag)
+}
+
+// getEntriesByRangeFromEntries filters a caller-provided ledger scan by commit range.
+func getEntriesByRangeFromEntries(
+	printer *output.Printer, storage *ledger.Storage, allEntries []*ledger.Entry, rangeFlag string,
+) ([]*ledger.Entry, error) {
 	parts := strings.Split(rangeFlag, "..")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		err := output.NewUserError("--range must be in format A..B")
@@ -123,12 +135,6 @@ func getEntriesByRange(printer *output.Printer, storage *ledger.Storage, rangeFl
 	}
 
 	fromRef, toRef := parts[0], parts[1]
-
-	allEntries, err := storage.ListEntries()
-	if err != nil {
-		printer.Error(err)
-		return nil, err
-	}
 
 	// Path 1: match entries by anchor commit ancestry
 	commits, err := storage.LogRange(fromRef, toRef)

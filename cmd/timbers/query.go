@@ -73,7 +73,8 @@ func runQuery(
 	cmd *cobra.Command, storage *ledger.Storage,
 	lastFlag, sinceFlag, untilFlag, rangeFlag string, tagFlags []string, onelineFlag bool,
 ) error {
-	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd))
+	printer := output.NewPrinter(cmd.OutOrStdout(), isJSONMode(cmd), useColor(cmd)).
+		WithStderr(cmd.ErrOrStderr())
 
 	// Parse and validate flags
 	params, err := parseQueryFlags(lastFlag, sinceFlag, untilFlag, rangeFlag, tagFlags)
@@ -88,29 +89,50 @@ func runQuery(
 		return err
 	}
 
-	// Get entries based on filters
-	var entries []*ledger.Entry
-	if params.rangeStr != "" {
-		entries, err = getEntriesByRange(printer, storage, params.rangeStr)
-		if err != nil {
-			return err
-		}
-		// Apply additional filters on range results
-		entries = applyQueryFilters(entries, params.sinceCutoff, params.untilCutoff, params.tags)
-		sortEntriesByCreatedAt(entries)
-		if params.count > 0 && len(entries) > params.count {
-			entries = entries[:params.count]
-		}
-	} else {
-		entries, err = getQueryEntries(storage, params.count, params.sinceCutoff, params.untilCutoff, params.tags)
-		if err != nil {
-			printer.Error(err)
-			return err
-		}
+	allEntries, err := readQueryEntries(printer, storage)
+	if err != nil {
+		return err
+	}
+	entries, err := selectQueryEntries(printer, storage, allEntries, params)
+	if err != nil {
+		return err
 	}
 
 	// Output based on mode
 	return outputQueryResults(printer, entries, onelineFlag)
+}
+
+func readQueryEntries(printer *output.Printer, storage *ledger.Storage) ([]*ledger.Entry, error) {
+	entries, stats, err := storage.ListEntriesWithStats()
+	if err != nil {
+		printer.Error(err)
+		return nil, err
+	}
+	// JSON remains the established entry-array contract. Human reads warn;
+	// artifact-producing commands fail closed instead of emitting partial work.
+	if integrityErr := corruptEntriesError(stats); integrityErr != nil && !printer.IsJSON() {
+		printer.Stderr("timbers: warning: %s\n", integrityErr)
+	}
+	return entries, nil
+}
+
+func selectQueryEntries(
+	printer *output.Printer, storage *ledger.Storage, allEntries []*ledger.Entry, params *queryParams,
+) ([]*ledger.Entry, error) {
+	entries := allEntries
+	if params.rangeStr != "" {
+		var err error
+		entries, err = getEntriesByRangeFromEntries(printer, storage, entries, params.rangeStr)
+		if err != nil {
+			return nil, err
+		}
+	}
+	entries = applyQueryFilters(entries, params.sinceCutoff, params.untilCutoff, params.tags)
+	sortEntriesByCreatedAt(entries)
+	if params.count > 0 && len(entries) > params.count {
+		entries = entries[:params.count]
+	}
+	return entries, nil
 }
 
 // parseQueryFlags validates and parses the query flags.
@@ -223,38 +245,6 @@ func outputQueryResults(printer *output.Printer, entries []*ledger.Entry, onelin
 
 	outputQueryHuman(printer, entries)
 	return nil
-}
-
-// getQueryEntries retrieves entries based on --last, --since, --until, and --tag filters.
-func getQueryEntries(storage *ledger.Storage, count int, sinceCutoff, untilCutoff time.Time, tags []string) ([]*ledger.Entry, error) {
-	// If only --last is specified with no other filters, use the optimized path
-	if canUseOptimizedPath(count, sinceCutoff, untilCutoff, tags) {
-		return storage.GetLastNEntries(count)
-	}
-
-	// Otherwise, get all entries and filter
-	entries, err := storage.ListEntries()
-	if err != nil {
-		return nil, err
-	}
-
-	// Apply all filters
-	entries = applyQueryFilters(entries, sinceCutoff, untilCutoff, tags)
-
-	// Sort by created_at descending (most recent first)
-	sortEntriesByCreatedAt(entries)
-
-	// Apply --last limit if specified
-	if count > 0 && len(entries) > count {
-		entries = entries[:count]
-	}
-
-	return entries, nil
-}
-
-// canUseOptimizedPath checks if we can use the optimized GetLastNEntries path.
-func canUseOptimizedPath(count int, sinceCutoff, untilCutoff time.Time, tags []string) bool {
-	return sinceCutoff.IsZero() && untilCutoff.IsZero() && len(tags) == 0 && count > 0
 }
 
 // applyQueryFilters applies all query filters to the entry list.

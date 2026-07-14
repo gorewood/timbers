@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -125,20 +126,64 @@ func parseTimeCutoffs(printer *output.Printer, sinceFlag, untilFlag string) (tim
 	return sinceCutoff, untilCutoff, nil
 }
 
-// getEntriesByRangeWithFilters retrieves entries by commit range with time filters.
-func getEntriesByRangeWithFilters(
-	printer *output.Printer, storage *ledger.Storage,
-	rangeFlag string, sinceCutoff, untilCutoff time.Time,
+// getDraftEntries retrieves and validates the complete ledger before selecting entries.
+func getDraftEntries(
+	printer *output.Printer, lastFlag, sinceFlag, untilFlag, rangeFlag string,
 ) ([]*ledger.Entry, error) {
-	entries, err := getEntriesByRange(printer, storage, rangeFlag)
+	if !git.IsRepo() {
+		err := output.NewSystemError("not in a git repository")
+		printer.Error(err)
+		return nil, err
+	}
+	storage, err := ledger.NewDefaultStorage()
+	if err != nil {
+		printer.Error(err)
+		return nil, err
+	}
+	allEntries, stats, err := storage.ListEntriesWithStats()
+	if err != nil {
+		printer.Error(err)
+		return nil, err
+	}
+	if integrityErr := corruptEntriesError(stats); integrityErr != nil {
+		printer.Error(integrityErr)
+		return nil, integrityErr
+	}
+	return selectDraftEntries(printer, storage, allEntries, lastFlag, sinceFlag, untilFlag, rangeFlag)
+}
+
+func selectDraftEntries(
+	printer *output.Printer, storage *ledger.Storage, allEntries []*ledger.Entry,
+	lastFlag, sinceFlag, untilFlag, rangeFlag string,
+) ([]*ledger.Entry, error) {
+	sinceCutoff, untilCutoff, err := parseTimeCutoffs(printer, sinceFlag, untilFlag)
 	if err != nil {
 		return nil, err
 	}
-	if !sinceCutoff.IsZero() {
-		entries = filterEntriesSince(entries, sinceCutoff)
+	entries := allEntries
+	if rangeFlag != "" {
+		entries, err = getEntriesByRangeFromEntries(printer, storage, entries, rangeFlag)
+		if err != nil {
+			return nil, err
+		}
 	}
-	if !untilCutoff.IsZero() {
-		entries = filterEntriesUntil(entries, untilCutoff)
+	entries = applyQueryFilters(entries, sinceCutoff, untilCutoff, nil)
+	sortEntriesByCreatedAt(entries)
+	return limitDraftEntries(printer, entries, lastFlag)
+}
+
+func limitDraftEntries(printer *output.Printer, entries []*ledger.Entry, lastFlag string) ([]*ledger.Entry, error) {
+	if lastFlag == "" {
+		return entries, nil
+	}
+	count, err := strconv.Atoi(lastFlag)
+	if err != nil || count <= 0 {
+		userErr := output.NewUserError("--last must be a positive integer")
+		printer.Error(userErr)
+		return nil, userErr
+	}
+	if len(entries) > count {
+		entries = entries[:count]
 	}
 	return entries, nil
 }

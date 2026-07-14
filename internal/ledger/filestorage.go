@@ -192,7 +192,7 @@ func (fs *FileStorage) ListEntriesWithStats() ([]*Entry, *ListStats, error) {
 // non-nil only for fatal walk errors (read failures of individual files
 // are recorded as stats and swallowed).
 func (fs *FileStorage) walkEntryFile(
-	_ string, d os.DirEntry, walkErr error,
+	path string, d os.DirEntry, walkErr error,
 	entries *[]*Entry, stats *ListStats,
 ) error {
 	if walkErr != nil {
@@ -221,6 +221,7 @@ func (fs *FileStorage) walkEntryFile(
 			stats.NotTimbers++
 		} else {
 			stats.ParseErrors++
+			stats.CorruptFiles = append(stats.CorruptFiles, filepath.ToSlash(path))
 		}
 		//nolint:nilerr // per-file parse errors are recorded in stats and skipped; the walk continues
 		return nil

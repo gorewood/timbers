@@ -481,6 +481,14 @@ func TestFileStorage_ListEntriesWithStats(t *testing.T) {
 			if stats.ParseErrors != tt.wantStats.ParseErrors {
 				t.Errorf("stats.ParseErrors = %d, want %d", stats.ParseErrors, tt.wantStats.ParseErrors)
 			}
+			if stats.ParseErrors > 0 {
+				if len(stats.CorruptFiles) != stats.ParseErrors {
+					t.Fatalf("len(stats.CorruptFiles) = %d, want %d", len(stats.CorruptFiles), stats.ParseErrors)
+				}
+				if !strings.HasSuffix(stats.CorruptFiles[0], "/bad.json") {
+					t.Errorf("CorruptFiles[0] = %q, want bad.json path", stats.CorruptFiles[0])
+				}
+			}
 		})
 	}
 }

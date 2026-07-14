@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/gorewood/timbers/internal/draft"
-	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
 	"github.com/gorewood/timbers/internal/llm"
 	"github.com/gorewood/timbers/internal/output"
@@ -307,33 +306,4 @@ func runDraftShow(printer *output.Printer, tmpl *draft.Template) error {
 	printer.Print("Description: %s\n\n", tmpl.Description)
 	printer.Print("---\n%s\n", tmpl.Content)
 	return nil
-}
-
-// getDraftEntries retrieves entries based on flags.
-func getDraftEntries(
-	printer *output.Printer, lastFlag, sinceFlag, untilFlag, rangeFlag string,
-) ([]*ledger.Entry, error) {
-	if !git.IsRepo() {
-		err := output.NewSystemError("not in a git repository")
-		printer.Error(err)
-		return nil, err
-	}
-
-	storage, err := ledger.NewDefaultStorage()
-	if err != nil {
-		printer.Error(err)
-		return nil, err
-	}
-	sinceCutoff, untilCutoff, err := parseTimeCutoffs(printer, sinceFlag, untilFlag)
-	if err != nil {
-		return nil, err
-	}
-
-	if rangeFlag != "" {
-		return getEntriesByRangeWithFilters(printer, storage, rangeFlag, sinceCutoff, untilCutoff)
-	}
-	if !sinceCutoff.IsZero() || !untilCutoff.IsZero() {
-		return getEntriesByTimeRange(printer, storage, sinceCutoff, untilCutoff, lastFlag, nil)
-	}
-	return getEntriesByLast(printer, storage, lastFlag, nil)
 }

@@ -21,11 +21,12 @@ var ErrStaleAnchor = errors.New("anchor commit not found in current history")
 
 // ListStats contains statistics about listing entries.
 type ListStats struct {
-	Total       int // Total JSON files found
-	Parsed      int // Successfully parsed as timbers entries
-	Skipped     int // Skipped (not timbers entries or parse errors)
-	NotTimbers  int // Specifically: valid JSON but wrong schema
-	ParseErrors int // JSON parse failures
+	Total        int      // Total JSON files found
+	Parsed       int      // Successfully parsed as timbers entries
+	Skipped      int      // Skipped (not timbers entries or parse errors)
+	NotTimbers   int      // Specifically: valid JSON but wrong schema
+	ParseErrors  int      // JSON parse failures
+	CorruptFiles []string // Files that could not be parsed as Timbers entries
 }
 
 // GitOps defines the git operations required by Storage.

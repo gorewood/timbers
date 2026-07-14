@@ -310,6 +310,61 @@ func TestQueryCommand(t *testing.T) {
 	}
 }
 
+func TestQueryCorruptEntryDiagnostics(t *testing.T) {
+	dir := t.TempDir()
+	entry := createQueryTestEntryStruct("anchor1", "valid entry", time.Now().UTC())
+	writeQueryEntryFile(t, dir, entry)
+	badPath := filepath.Join(dir, "bad.json")
+	if err := os.WriteFile(badPath, []byte("not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	storage := ledger.NewStorage(
+		&mockGitOpsForQuery{},
+		ledger.NewFileStorage(dir, func(string) error { return nil }, func(string, string) error { return nil }),
+	)
+
+	t.Run("human warns once and returns valid entries", func(t *testing.T) {
+		cmd := newQueryCmdInternal(storage)
+		cmd.SetArgs([]string{"--last", "5"})
+		var stdout, stderr strings.Builder
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(stdout.String(), "valid entry") {
+			t.Fatalf("stdout = %q, want valid entry", stdout.String())
+		}
+		if got := strings.Count(stderr.String(), "malformed entry file"); got != 1 {
+			t.Fatalf("stderr = %q, want one warning", stderr.String())
+		}
+		if !strings.Contains(stderr.String(), badPath) {
+			t.Fatalf("stderr = %q, want path %q", stderr.String(), badPath)
+		}
+	})
+
+	t.Run("json shape remains an array without warning", func(t *testing.T) {
+		cmd := newQueryCmdInternal(storage)
+		cmd.PersistentFlags().Bool("json", false, "")
+		if err := cmd.PersistentFlags().Set("json", "true"); err != nil {
+			t.Fatal(err)
+		}
+		cmd.SetArgs([]string{"--last", "5"})
+		var stdout, stderr strings.Builder
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasPrefix(strings.TrimSpace(stdout.String()), "[") {
+			t.Fatalf("stdout = %q, want JSON array", stdout.String())
+		}
+		if stderr.Len() != 0 {
+			t.Fatalf("stderr = %q, want empty", stderr.String())
+		}
+	})
+}
+
 // createQueryTestEntryStruct creates a minimal valid entry struct for testing query command.
 func createQueryTestEntryStruct(anchor, what string, created time.Time) *ledger.Entry {
 	return createQueryTestEntryStructWithTags(anchor, what, created, nil)

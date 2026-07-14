@@ -480,3 +480,28 @@ func TestDoctorFixClaudeIntegration(t *testing.T) {
 		}
 	})
 }
+
+func TestDoctorNamesCorruptLedgerEntry(t *testing.T) {
+	repo := t.TempDir()
+	runGit(t, repo, "init")
+	runGit(t, repo, "config", "user.email", "test@example.com")
+	runGit(t, repo, "config", "user.name", "Test User")
+	timbersDir := filepath.Join(repo, ".timbers")
+	if err := os.MkdirAll(timbersDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	badPath := filepath.Join(timbersDir, "bad.json")
+	if err := os.WriteFile(badPath, []byte("not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	runInDir(t, repo, func() {
+		result := checkRecentEntries()
+		if result.Status != checkWarn {
+			t.Fatalf("status = %q, want %q", result.Status, checkWarn)
+		}
+		if !strings.Contains(result.Hint, badPath) {
+			t.Fatalf("hint = %q, want corrupt path %q", result.Hint, badPath)
+		}
+	})
+}

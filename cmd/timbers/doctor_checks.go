@@ -241,12 +241,20 @@ func checkRecentEntries() checkResult {
 		}
 	}
 
-	entries, err := storage.ListEntries()
+	entries, stats, err := storage.ListEntriesWithStats()
 	if err != nil {
 		return checkResult{
 			Name:    "Recent Entries",
 			Status:  checkWarn,
 			Message: "could not list entries: " + err.Error(),
+		}
+	}
+	if stats.ParseErrors > 0 {
+		return checkResult{
+			Name:    "Recent Entries",
+			Status:  checkWarn,
+			Message: strconv.Itoa(stats.ParseErrors) + " malformed ledger entry file(s)",
+			Hint:    "Repair or remove: " + strings.Join(stats.CorruptFiles, ", "),
 		}
 	}
 
