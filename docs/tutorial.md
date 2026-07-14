@@ -1,6 +1,7 @@
 # Timbers Tutorial
 
-A step-by-step guide to setting up Timbers for your project, catching up existing history, and using it effectively with AI agents and as a human developer.
+A step-by-step guide to setting up Timbers, capturing new work, optionally
+backfilling important history, and generating useful reports.
 
 ---
 
@@ -63,9 +64,11 @@ Timbers Ledger
 
 ---
 
-## Part 2: Catching Up Existing History
+## Part 2: Adopting an Existing Repository
 
-If your repository has existing commits without Timbers entries, you have several options for catching up.
+Tracking starts with the first `timbers log`. Pre-adoption history is not
+treated as documentation debt, so most projects should simply capture new work
+from that point forward.
 
 ### Option A: Document Recent Work Only
 
@@ -75,15 +78,7 @@ If you only care about documenting work going forward, simply start using `timbe
 
 For a more complete history, group related commits into logical entries. Use `--anchor` to specify which commit the entry attaches to, and `--range` to specify which commits it covers.
 
-**Step 1: See what's pending**
-
-```bash
-timbers pending
-```
-
-This shows all commits without entries.
-
-**Step 2: Identify logical groupings**
+**Step 1: Identify logical groupings**
 
 Look at your commit history and identify natural phases:
 
@@ -93,7 +88,7 @@ git log --oneline | head -30
 
 Group commits that represent coherent pieces of work—a feature, a refactor, a bug fix campaign.
 
-**Step 3: Create batch entries**
+**Step 2: Create batch entries**
 
 ```bash
 # Example: Document a feature that spans commits abc123 to def456
@@ -105,7 +100,7 @@ timbers log "Switched to cursor-based pagination" \
   --tag api --tag performance
 ```
 
-**Step 4: Repeat for each logical phase**
+**Step 3: Repeat for each logical phase**
 
 Work backwards from most recent to oldest, or focus on the most important phases.
 
@@ -117,7 +112,9 @@ If your commit messages already contain good information, try auto mode:
 timbers log --auto
 ```
 
-This attempts to parse what/why/how from your commit messages. Review with `--dry-run` first:
+This infers what/why/how from commit messages. Inferred rationale is less
+trustworthy than capture-time context, so review it with `--dry-run` and use it
+only when the commit message already records the reason:
 
 ```bash
 timbers log --auto --dry-run
@@ -125,7 +122,9 @@ timbers log --auto --dry-run
 
 ### Option D: Batch by Work Items
 
-If your commits include work-item trailers (like `Beads: bd-abc123` or `Fixes: #42`), batch mode groups them automatically:
+If your commits include `Work-item: <system>:<id>` trailers, batch mode groups
+them automatically. Commits without a trailer form an `untracked` group when
+trailers are present; otherwise Timbers groups by day.
 
 ```bash
 timbers log --batch
@@ -150,11 +149,12 @@ timbers log "Fixed race condition in cache invalidation" \
 ```
 
 **Required fields:**
-- The first argument is **what** you did
 - `--why` explains the verdict — why *this* approach over alternatives
 - `--how` describes the approach or implementation
 
 **Optional fields:**
+- The positional **what**. When omitted, Timbers snapshots the selected commit
+  subject(s). Supply it when those subjects are vague or mechanical.
 - `--notes` for deliberation context — the journey to the decision (alternatives explored, trade-offs weighed). Skip for routine work; use when you made a real choice.
 - `--tag` for categorization (repeatable)
 - `--work-item` for linking to issue trackers (e.g., `--work-item jira:PROJ-123`)
@@ -181,6 +181,12 @@ git push
 # Fetch entries from collaborators
 git pull
 ```
+
+The stored `what`, `why`, and `how` survive independently of their commit SHAs.
+The post-rewrite hook relinks known one-to-one local rewrites when possible. A
+squash or destructive rewrite may still leave an anchor stale; range queries
+can use entry-file history, and reports fall back to stored text when Git
+subject enrichment is unavailable.
 
 ---
 
@@ -266,8 +272,8 @@ timbers query --since 2026-01-01 --until 2026-01-15  # Date range
 ### Filter by Tags
 
 ```bash
-timbers query --tags security
-timbers query --tags "auth,security"  # Multiple tags (OR)
+timbers query --tag security
+timbers query --tag "auth,security"  # Multiple tags (OR)
 ```
 
 ### View a Single Entry
@@ -283,7 +289,7 @@ timbers show tb_2026-01-15T10:30:00Z_abc123
 timbers export --last 10 --json
 
 # Markdown for documentation
-timbers export --since 7d --format markdown
+timbers export --since 7d --format md
 
 # Pipe to files
 timbers export --last 20 --json > entries.json
@@ -293,7 +299,19 @@ timbers export --last 20 --json > entries.json
 
 ## Part 6: LLM-Powered Reports
 
-The `draft` command renders templates with your entries for piping to LLMs.
+Use `report` for a repeatable profile with a default scope and compact input.
+Use `draft` when you want to select the template and entry range explicitly.
+
+```bash
+# Preview the configured report prompt
+timbers report decision-digest
+
+# Generate it directly, or override the profile scope
+timbers report decision-digest --model opus
+timbers report decision-digest --since 30d --model opus
+```
+
+Both commands render a prompt for piping when `--model` is omitted.
 
 ### Available Templates
 
@@ -346,7 +364,7 @@ timbers draft standup --since 1d --model haiku
 **Shortcut with just:** If you're developing timbers itself, use the just recipes:
 
 ```bash
-just draft changelog --since 7d           # Uses haiku model by default
+just draft changelog --since 7d           # Uses opus through claude -p
 just draft-model sonnet devblog --last 20 # Specify a different model
 ```
 
@@ -394,6 +412,7 @@ Format as:
 Keep it concise (3-5 bullets per section).
 
 ## Entries
+{{entries_json}}
 EOF
 ```
 
@@ -432,7 +451,7 @@ Beyond agent workflows, Timbers is useful for human developers.
 timbers query --last 50
 
 # Find security-related decisions
-timbers query --tags security
+timbers query --tag security
 
 # Understand recent changes
 timbers query --since 30d
@@ -447,7 +466,7 @@ New team members can understand not just *what* the code does, but *why* it's sh
 timbers query --since 2026-01-10 --until 2026-01-15
 
 # Look for related tags
-timbers query --tags "auth,security"
+timbers query --tag "auth,security"
 ```
 
 ### Generating Documentation
@@ -456,9 +475,8 @@ timbers query --tags "auth,security"
 # Monthly changelog (built-in LLM)
 timbers draft changelog --since 30d --model local > CHANGELOG-january.md
 
-# Architecture decision records
-timbers query --tags architecture --json | \
-  jq '.[] | "## \(.summary.what)\n\n**Why:** \(.summary.why)\n\n**How:** \(.summary.how)\n"' -r
+# Retrospective decision digest (native project ADRs remain authoritative)
+timbers report decision-digest --model opus > decision-digest.md
 ```
 
 ### Code Review Context

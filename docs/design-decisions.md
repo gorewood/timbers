@@ -2,6 +2,10 @@
 
 Conscious architectural choices made during code review (2026-01-17). These patterns were flagged by reviewers but intentionally retained.
 
+> **Historical review record.** This document preserves decisions as they were
+> evaluated on 2026-01-17. Some implementation details were later replaced.
+> Current command help, tests, and `README.md` are authoritative.
+
 ## Accepted Patterns
 
 ### Global `jsonFlag` Variable
@@ -11,6 +15,9 @@ Conscious architectural choices made during code review (2026-01-17). These patt
 **Pattern**: A package-level `var jsonFlag bool` accessed by all command files.
 
 **Why retained**: This is the standard Cobra persistent flag pattern. While it creates implicit coupling between main.go and command files, refactoring (e.g., passing through context or command constructors) would add complexity for minimal benefit. The flag is read-only after initialization and the pattern is well-understood by Go CLI developers.
+
+**Current state**: Superseded. Commands now read the persistent flag through
+`isJSONMode(cmd)`, removing shared mutable JSON state.
 
 ### Repository Check Duplication
 
@@ -51,7 +58,7 @@ Conscious architectural choices made during code review (2026-01-17). These patt
 **Pattern**: Write operations return `{"status": "ok", ...}` wrapper, read operations return raw data.
 
 **Why retained**: This follows REST-like semantics:
-- **Write commands** (log, notes init/push/fetch, export to dir) return `{"status": "ok", ...}` to confirm the action completed.
+- **Write commands** (log, ack, amend, export to dir) return a status-bearing receipt to confirm the action completed.
 - **Read commands** (show, query, prime) return raw data without wrapper since the presence of data implies success.
 
 This pattern is agent-friendly: status-bearing responses confirm mutations occurred, while read responses can be processed directly without unwrapping. Standardizing all to wrappers would add boilerplate; standardizing all to raw would lose mutation confirmation.
@@ -62,7 +69,7 @@ This pattern is agent-friendly: status-bearing responses confirm mutations occur
 
 **Pattern**: Error message for duplicate entries no longer suggests `--replace` flag.
 
-**Why changed**: The spec mentioned a `--replace` flag but it was never implemented. Rather than add another flag, the simpler approach is to rely on `--dry-run` to preview what would happen before committing. Users who need to overwrite can delete the note manually with git.
+**Why changed**: The spec mentioned a `--replace` flag but it was never implemented. Rather than add another flag, the simpler approach is to rely on `--dry-run` to preview what would happen before committing. Current entries are ordinary JSON files; use `timbers amend` for supported updates.
 
 ### Separate Commits for Ledger Entries
 
@@ -86,7 +93,7 @@ This pattern is agent-friendly: status-bearing responses confirm mutations occur
 - Human filtering: `git log --invert-grep --grep="^timbers: document"`
 - Or add a git alias: `git config alias.lg 'log --oneline --invert-grep --grep="^timbers: document"'`
 
-**The value proposition**: Timbers captures *reasoning* — the why and how behind changes — which git commit messages rarely preserve. The separate-commit noise is the cost of reliable, self-healing documentation that survives rebases, squash merges, and multi-agent workflows without special configuration.
+**The value proposition**: Timbers captures *reasoning* — the why and how behind changes — which git commit messages rarely preserve. Entry files and their captured text travel through ordinary Git. Local one-to-one rewrites are relinked when possible, but squash merges can leave stored SHAs stale. Range discovery and report enrichment degrade gracefully; they do not make destructive rewrites lossless.
 
 ---
 

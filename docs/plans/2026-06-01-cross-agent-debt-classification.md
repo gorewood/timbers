@@ -6,6 +6,10 @@
 **Owner bead:** timbers-vlh
 **Related (shipped):** timbers-88k (v0.22.8 refuse-on-dirty), timbers-0or (v0.22.9 staged-changes hint)
 
+> **Historical implementation plan.** This records the 2026-06-01 design
+> context. `timbers catchup` has since been retired; references below describe
+> a deferred workflow from that review, not current capability or intent.
+
 ## Reframing
 
 The gate's purpose is **to capture live reasoning while it exists** — agent in-session deliberation, subagent debate, operator decisions made in the moment, anything that wouldn't otherwise land in a git commit message. Strict gating pays off when the signal is alive in the session; it generates pure friction once the signal is gone.

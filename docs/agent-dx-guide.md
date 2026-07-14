@@ -799,6 +799,10 @@ mytool release-notes --since 7d
 
 **Anti-pattern learned the hard way:** We built a standalone `changelog` command, then realized `draft changelog` was strictly better — same output quality, but composable with `--model`, `--append`, pipe-to-LLM workflows, and custom template overrides. The standalone command was dropped.
 
+An opinionated `report <profile>` layer is different: it still resolves an
+ordinary template, but supplies portable defaults such as scope and compact
+input projection. It does not add one command per document type.
+
 ---
 
 ## 9. Checklist
@@ -817,7 +821,7 @@ Use this checklist when designing agent-oriented CLIs:
 - [ ] `doctor` command for health checking (with `--fix` auto-remediation)
 - [ ] `hooks install/uninstall` for git integration (opt-in, not default)
 - [ ] `setup <editor>` for editor-specific hooks (project-level by default)
-- [ ] `init` that orchestrates full setup (creates storage ref immediately)
+- [ ] `init` that orchestrates full setup (creates storage immediately)
 - [ ] `uninstall` that reverses all setup
 
 ### Essential (Pipe Ergonomics)
@@ -842,7 +846,7 @@ Use this checklist when designing agent-oriented CLIs:
 ### Bonus
 - [ ] Stdin support for batch input
 - [ ] Exit code conventions documented
-- [ ] `hooks install --chain` to preserve existing hooks
+- [ ] Hook installation composes with existing delimited sections
 - [ ] `setup --check` and `setup --remove` flags
 - [ ] Multiple editor integrations (claude, cursor, gemini, etc.)
 - [ ] `doctor` checks config dir, env files, API keys, templates, version staleness
@@ -874,13 +878,20 @@ Use this checklist when designing agent-oriented CLIs:
 - `timbers prime --verbose` — Design decision history (why/how in recent entries)
 - `timbers pending` — Clear next action
 - `timbers log "what" --why "why" --how "how"` — Single command capture
+- `timbers log --why "why" --how "how"` — Snapshot commit subjects when explicit `what` is unnecessary
 - `timbers draft <template>` — Template-based document generation (changelog, decision-digest, devblog, pr-description, release-notes, sprint-report, standup)
+- `timbers report decision-digest` — Profile-driven report with default scope and compact input
 - `timbers draft --list` — Discover available templates
 - `timbers draft release-notes --last 10 --model opus` — Generate with built-in LLM
 - `timbers export --json | claude "..."` — Unix composability
 - `--batch` mode for efficiency
 
 **Storage:** Entries are JSON files in `.timbers/YYYY/MM/DD/` — regular tracked files synced via `git push/pull`, no special refs or fetch commands needed.
+
+**SHA degradation:** Stored `what`, `why`, `how`, and notes are capture-time
+text, not live Git lookups. Rebase hooks relink known one-to-one rewrites when
+possible. Squashes may leave stale SHAs; reports retain the entry and omit
+unavailable Git-subject enrichment.
 
 **Integration stack:**
 - `timbers doctor` — Health check across CORE, CONFIG, WORKFLOW, INTEGRATION

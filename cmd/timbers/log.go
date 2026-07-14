@@ -72,9 +72,11 @@ Examples:
   timbers log --auto --yes        # Auto mode without confirmation
   timbers log --batch             # Create entries for each work-item group or day
 
-Each entry is committed separately (not folded into the code commit). This is
-by design — it enables reliable pending detection and survives rebases. To
-filter entry commits from git log: git log --invert-grep --grep="^timbers: document"`
+Each entry is committed separately (not folded into the code commit). This
+enables reliable pending detection and keeps captured text independent of later
+SHA rewrites. Timbers relinks known one-to-one local rewrites when possible;
+squashes may leave anchors stale. To filter entry commits from git log:
+git log --invert-grep --grep="^timbers: document"`
 
 // logContext holds all data needed to create a log entry.
 type logContext struct {

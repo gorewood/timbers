@@ -18,7 +18,7 @@ timbers log "Switched to cursor-based pagination" \
   --notes "Offset was simpler but users reported duplicate items in feeds. Cursors are stable under concurrent writes."
 
 # Generate artifacts from your ledger
-timbers draft decision-digest --last 20 --model opus
+timbers report decision-digest --model opus
 ```
 
 **[Website](https://gorewood.github.io/timbers/)** · **[Tutorial](docs/tutorial.md)** · **[Examples](https://gorewood.github.io/timbers/examples/)** · **[Dev Blog](https://gorewood.github.io/timbers/posts/)**
@@ -39,6 +39,8 @@ go install github.com/gorewood/timbers/cmd/timbers@latest
 timbers init              # One-time setup
 timbers log "what" \      # Record work
   --why "why" --how "how"
+# Or omit "what" to snapshot the selected commit subject(s)
+timbers log --why "why" --how "how"
 timbers query --last 10   # Query your ledger
 ```
 
@@ -47,17 +49,35 @@ timbers query --last 10   # Query your ledger
 | Command | Purpose |
 |---------|---------|
 | `log` | Record work with what/why/how (optional `--notes` for deliberation) |
+| `ack` | Record why a commit intentionally needs no content entry |
+| `amend` | Correct an existing ledger entry |
 | `pending` | Show commits awaiting documentation |
-| `query` | Search entries by time, tags, or content |
+| `query` | Retrieve entries by time, tags, or Git range |
 | `show` | Display a single entry |
 | `export` | Export as JSON or Markdown |
 | `draft` | Generate documents from your ledger (changelogs, reports, blogs) |
+| `report` | Run a report profile with configured scope and compact input |
 | `prime` | Session context injection for agents |
 | `status` | Repository and ledger state |
+| `doctor` | Diagnose storage, configuration, hooks, and ledger integrity |
 
 All commands support `--json`. Write operations support `--dry-run`.
 
 ## Document Generation
+
+Use `report` for repeatable report profiles with a useful default scope. Use
+`draft` when you want to choose the template and entry range explicitly. Both
+print the resolved prompt without `--model`, so either can be piped to an LLM
+CLI; both can execute directly with `--model`.
+
+```bash
+# Profile supplies its default scope and compact decision-oriented input
+timbers report decision-digest
+timbers report decision-digest --model opus
+
+# An explicit scope replaces the profile default
+timbers report decision-digest --since 30d --model opus
+```
 
 The `draft` command renders templates with your ledger entries, producing changelogs, reports, decision digests, and more — either by piping to an LLM CLI or with built-in LLM execution via `--model`.
 
@@ -92,7 +112,7 @@ Timbers uses `~/.config/timbers/` as its global configuration directory (`%AppDa
 
 ### API Keys
 
-For LLM-powered commands (`draft --model`, `generate`), set API keys in `~/.config/timbers/env`:
+For LLM-powered commands (`report --model`, `draft --model`, `generate`), set API keys in `~/.config/timbers/env`:
 
 ```bash
 mkdir -p ~/.config/timbers
@@ -120,6 +140,7 @@ cat > ~/.config/timbers/templates/weekly-standup.md << 'EOF'
 Summarize this week's work for a standup meeting.
 Format as Completed / In Progress / Blockers (3-5 bullets each).
 ## Entries
+{{entries_json}}
 EOF
 
 # Per-repo (takes precedence over global)
@@ -155,6 +176,8 @@ For **non-Claude agents** (Gemini CLI, Cursor, Windsurf, Codex, Kilo Code, Conti
 At the start of every session, run `timbers prime` and follow the workflow it describes.
 After completing work, run `timbers pending` to check for undocumented commits,
 then `timbers log "what" --why "why" --how "how"` to document your work.
+The positional `what` is optional: when omitted, Timbers snapshots the selected
+commit subject(s). Supply it when those subjects do not clearly describe the work.
 Use `--notes` when you explored alternatives or made a real choice.
 ```
 
@@ -164,7 +187,14 @@ Native hooks and setup commands for additional agent environments are planned fo
 
 Entries are JSON files in `.timbers/`, committed to your repo alongside your code. Each `timbers log` creates its own git commit — you'll see `timbers: document ...` commits interleaved with your code commits. The optional pre-commit hook enforces documentation before each new commit, so with hooks enabled you'll see roughly one entry commit per code commit. If commits slip through without documentation (hook bypassed, batch workflow, or hooks not installed), `timbers log` gracefully falls back to batch mode — one entry covers all pending commits.
 
-This is intentional: separate commits enable reliable tracking of what's been documented, survive rebases and squash merges cleanly, and ensure entries travel with every clone without special configuration.
+This is intentional: separate commits enable reliable tracking of what has been
+documented and ensure entries travel with every clone without special
+configuration. The entry's `what`, `why`, and `how` are capture-time snapshots,
+so later SHA rewrites do not erase the explanation. Timbers relinks known
+one-to-one local rewrites when possible, and range queries can discover entry
+files across squash merges. A destructive or many-to-one rewrite can still
+leave stored SHAs stale; reports continue from stored text and omit unavailable
+Git enrichment rather than dropping the entry.
 
 The trade-off is a noisier `git log` (roughly 2x the commit count with hooks). Agents handle this automatically (timbers filters entry commits internally). For humans who want a clean view:
 
@@ -179,8 +209,8 @@ See [docs/design-decisions.md](docs/design-decisions.md) for the full rationale,
 - [Tutorial](docs/tutorial.md) — Setup, capture workflow, agent integration
 - [Publishing Artifacts](docs/publishing-artifacts.md) — CI/CD for changelogs, reports, blogs
 - [Agent Reference](docs/agent-reference.md) — Command reference for agent integration
-- [LLM Commands](docs/llm-commands.md) — Export, draft, and generate commands
-- [Spec](docs/spec.md) — Full specification
+- [LLM Commands](docs/llm-commands.md) — Export, draft, report, and generate commands
+- [Original Spec](docs/spec.md) — Historical v1 design and schema background
 - [Agent DX Guide](docs/agent-dx-guide.md) — CLI design patterns for agents
 
 ## Example Artifacts
@@ -205,6 +235,9 @@ just setup    # First-time setup
 just check    # Lint + test (required before commit)
 just fix      # Auto-fix lint issues
 just run      # Run the CLI
+just site-test   # Test Timbermill collection materialization
+just site-build  # Build the static demo into site/_site/
+just site-serve  # Preview the demo locally
 ```
 
 ## Acknowledgments

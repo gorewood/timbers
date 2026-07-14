@@ -1,5 +1,10 @@
 # Timbers Development Roadmap
 
+> **Historical roadmap.** This records the original implementation sequence,
+> including the abandoned Git-notes storage design. It is not a current feature
+> list. Timbers now stores JSON entry files under `.timbers/`; use the README,
+> current command help, and dated plans for present behavior and future work.
+
 Development plan following the philosophy: **grow complexity from a simple system that already works**.
 
 Each epic builds on proven foundations. No epic begins until prerequisites are working and tested.

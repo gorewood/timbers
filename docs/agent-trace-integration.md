@@ -5,6 +5,10 @@ Analysis of [Agent Trace](https://agent-trace.dev) and its relationship to Timbe
 **Date:** 2026-01-30
 **Status:** Research / Future Consideration
 
+> **Historical research record.** The comparison below reflects Timbers as of
+> 2026-01-30. Timbers now stores one JSON file per entry under
+> `.timbers/YYYY/MM/DD/`, committed and synchronized through ordinary Git.
+
 ---
 
 ## What is Agent Trace?
@@ -37,7 +41,7 @@ From the spec:
 | Core question | "Who wrote this line?" | "Why was this change made?" |
 | Granularity | Line-level | Commit-group (workset) |
 | Primary data | Attribution (human/ai/mixed) | Rationale (what/why/how) |
-| Storage | Flexible (files, notes, db) | Git notes |
+| Storage | Flexible (files, notes, db) | JSON files under `.timbers/` |
 | Links to | Conversation URLs, model IDs | Work items, tags |
 | Target users | Compliance, auditing, tooling | Understanding, onboarding |
 

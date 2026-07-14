@@ -1,5 +1,11 @@
 # Timbers Spec v1
 
+> **Historical initial specification.** This document preserves the original
+> v1 design and acceptance criteria; many “deferred” items later shipped and
+> some proposed flags never did. It is not a current command reference. Use
+> `timbers <command> --help`, the README, and schema validation/tests for
+> supported behavior. The entry schema sections remain useful background.
+
 **CLI:** `timbers`
 **Tagline:** A Git-native development ledger that captures *what/why/how* as structured records.
 
@@ -215,7 +221,9 @@ timbers log "Test" --why "Test" --how "Test" --dry-run --json
 ```
 
 **Arguments:**
-- `<what>` (positional) — What was done (required unless --auto or --batch)
+- `<what>` (positional) — What was done. Optional in manual mode: when omitted,
+  Timbers snapshots non-empty subjects from the selected commits. An explicit
+  value wins, and is required when no subject can be derived.
 
 **Flags:**
 - `--why <text>` — Why it was done — the verdict (required unless --minor, --auto, or --batch)
@@ -338,7 +346,7 @@ Pending commits: 5 (since tb_2026-01-15...)
 Quick commands:
   timbers pending          # See undocumented commits
   timbers log "..." ...    # Record work
-  timbers show --last      # View last entry
+  timbers show --latest    # View latest entry
 ```
 
 ### 4.5 `timbers status`
@@ -368,12 +376,12 @@ Display a single entry.
 
 ```bash
 timbers show tb_2026-01-15T15:04:05Z_8f2c1a
-timbers show --last
-timbers show --last --json
+timbers show --latest
+timbers show --latest --json
 ```
 
 **Flags:**
-- `--last` — Show most recent entry
+- `--latest` — Show most recent entry
 - `--json` — Output JSON
 
 ### 4.7 `timbers query`
@@ -603,7 +611,7 @@ git push             # Sync to remote
 ```bash
 # AC1: Basic log creates entry
 timbers log "Test entry" --why "Testing" --how "Via CLI"
-# Exit 0, entry visible in `timbers show --last`
+# Exit 0, entry visible in `timbers show --latest`
 
 # AC2: Pending shows undocumented commits
 git commit --allow-empty -m "Test commit"

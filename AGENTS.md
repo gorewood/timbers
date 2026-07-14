@@ -102,6 +102,9 @@ just build         # Build binary to bin/timbers
 just test          # Run tests only
 just lint          # Run linter only
 just build-local   # Build bin/timbers with git version info (for dev testing)
+just site-test     # Test Timbermill content materialization
+just site-build    # Build host-neutral output in site/_site/
+just site-serve    # Preview the Eleventy site
 ```
 
 - All common workflows belong as `just` recipes — agents will read them
@@ -232,6 +235,7 @@ cmd/timbers/
     show.go           # timbers show
     query.go          # timbers query
     export.go         # timbers export
+    report.go         # timbers report
     doctor.go         # timbers doctor
     onboard.go        # timbers onboard
 
@@ -274,7 +278,7 @@ if !term.IsTerminal(os.Stdout.Fd()) {
 }
 
 // --json flag takes precedence
-if jsonFlag {
+if isJSONMode(cmd) {
     json.NewEncoder(os.Stdout).Encode(result)
 } else {
     // human-readable with lipgloss styling
@@ -366,6 +370,8 @@ func TestLogPendingCycle(t *testing.T) {
 | `timbers show` | Display single entry |
 | `timbers query` | Search entries |
 | `timbers export` | Export for pipelines |
+| `timbers draft` | Render a template with an explicit entry selection |
+| `timbers report` | Run a report profile with a default scope |
 | `timbers doctor` | Health check and diagnostics |
 | `timbers onboard` | Generate CLAUDE.md snippet |
 
@@ -380,6 +386,7 @@ timbers prime        # Get context and workflow instructions
 ```bash
 timbers pending      # Check for undocumented commits
 timbers log "what" --why "why" --how "how"
+# "what" may be omitted when commit subjects already describe the work
 git push             # Entries are files, sync via regular push
 ```
 

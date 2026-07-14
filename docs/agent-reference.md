@@ -21,7 +21,7 @@ For dynamic session context, use `timbers prime`. For CLAUDE.md integration, use
 
 - Entries are stored as JSON files in `.timbers/YYYY/MM/DD/` directories and sync via regular `git push`
 - Each entry has a unique ID: tb_<timestamp>_<short-sha>
-- The ledger is append-only; entries document completed work
+- Entries document completed work; `timbers amend` records supported corrections
 - All commands support --json for structured output
 
 ## Workflow Patterns
@@ -59,7 +59,11 @@ Review recent entries.
 
 Record work as a ledger entry
 
-**Usage**: `timbers log <what> --why <why> --how <how> [flags]`
+**Usage**: `timbers log [<what>] --why <why> --how <how> [flags]`
+
+`what` is a capture-time snapshot. When omitted, Timbers derives it from the
+selected commit subject(s); provide it explicitly when those subjects are weak.
+Later SHA rewrites do not remove the stored text.
 
 **Flags**:
 - `--why`: Why — the verdict (required unless --minor/--auto)
@@ -81,6 +85,7 @@ timbers log "Switched to cursor pagination" --why "Offset skips rows on concurre
 timbers log "Fix" --why "Race condition in cache" --how "Added mutex" --tag bugfix
 timbers log "Added write-through caching" --why "Read-aside served stale data after writes" --how "Cache update in same transaction" \
   --notes "Write-behind was faster but risks data loss on crash. Consistency wins."
+timbers log --why "Avoid duplicate updates" --how "Reuse the existing write path"
 ```
 
 ### pending
@@ -96,6 +101,19 @@ Show undocumented commits
 ```bash
 timbers pending
 timbers pending --count
+```
+
+### ack
+
+Record why a commit intentionally does not need a content entry.
+
+**Usage**: `timbers ack <sha> --reason <text> [flags]`
+
+Use `ack` for mechanical or already-documented commits, not as a substitute for
+capturing available rationale. A common rewrite case is:
+
+```bash
+timbers ack <new-sha> --reason "rebased; content in <original-entry-id>"
 ```
 
 ### prime
@@ -137,7 +155,7 @@ Display a single entry
 **Examples**:
 ```bash
 timbers show <id>
-timbers show --last
+timbers show --latest
 ```
 
 ### query
@@ -150,12 +168,15 @@ Search and retrieve entries
 - `--last`: Show last N entries
 - `--since`: Entries since duration (24h, 7d) or date
 - `--until`: Entries until duration (24h, 7d) or date
+- `--range`: Entries whose commits or ledger files appear in a Git range
+- `--tag`: Match any supplied tag (repeatable or comma-separated)
 - `--oneline`: Compact output
 
 **Examples**:
 ```bash
 timbers query --last 5
 timbers query --last 10 --oneline
+timbers query --since 7d --tag security
 ```
 
 ### export
@@ -203,6 +224,33 @@ timbers draft changelog --since 7d | claude -p
 timbers draft standup --since 1d --model haiku
 timbers draft decision-digest --last 20
 ```
+
+### report
+
+Run a configured report profile. Profiles are ordinary templates with a
+`report` frontmatter block that supplies a default scope and compact input.
+
+**Usage**: `timbers report <profile> [flags]`
+
+Without `--model`, report prints the resolved prompt for piping. With a model,
+it emits sanitized report content. An explicit `--last`, `--since`, or
+`--range` replaces the profile default. An empty selection or configured quiet
+result succeeds without artifact content.
+
+```bash
+timbers report decision-digest
+timbers report decision-digest --model opus
+timbers report decision-digest --since 30d --model opus
+```
+
+The decision digest is retrospective and non-authoritative. Project-native
+ADRs and design documents remain the source of truth.
+
+### Ledger integrity
+
+`doctor` names malformed entry files. Human query output warns once while
+preserving its result shape; artifact generation fails rather than silently
+producing a report from an incomplete ledger.
 
 ### amend
 

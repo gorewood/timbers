@@ -1,6 +1,6 @@
 # LLM Commands
 
-Timbers provides three commands for LLM integration, forming a pipeline from raw data extraction to automated documentation.
+Timbers provides four commands for LLM integration, from raw data extraction to repeatable reports and ad-hoc completion.
 
 ---
 
@@ -10,6 +10,7 @@ Timbers provides three commands for LLM integration, forming a pipeline from raw
 |---------|---------|--------|
 | `export` | Raw data extraction | JSON/Markdown |
 | `draft` | Template rendering with entries | Text for piping OR LLM response (with --model) |
+| `report` | Profile-driven reporting with default scope and compact input | Text for piping OR LLM response (with --model) |
 | `generate` | Ad-hoc LLM completion primitive | LLM response text |
 
 ---
@@ -113,31 +114,80 @@ Create project-specific templates:
 ```bash
 mkdir -p .timbers/templates
 cat > .timbers/templates/my-template.md << 'EOF'
+---
+name: my-template
+description: Project summary
+version: 1
+vars:
+  audience: engineering
+---
 # My Custom Template
 
-Repository: {{.RepoName}}
-Branch: {{.Branch}}
+Repository: {{repo_name}}
+Branch: {{branch}}
+Audience: {{vars.audience}}
+Entries selected: {{entry_count}}
 
 ## Entries
 
-{{range .Entries}}
-### {{.Summary.What}}
+Use the JSON below to write a concise project summary. For each material item,
+explain what changed and why. Omit routine implementation detail.
 
-**Why:** {{.Summary.Why}}
-**How:** {{.Summary.How}}
-
-{{end}}
-
-{{if .AppendText}}
----
-Additional Instructions: {{.AppendText}}
-{{end}}
+{{entries_json}}
 EOF
 ```
 
+Timbers templates use literal token substitution, not Go-template evaluation.
+Supported built-ins are `{{repo_name}}`, `{{branch}}`, `{{entry_count}}`,
+`{{entries_json}}`, `{{entries_summary}}`, `{{date_range}}`,
+`{{total_entries}}`, `{{is_first_batch}}`, and `{{project_description}}`.
+Declared frontmatter variables use `{{vars.key}}`. The `--append` text is added
+as an Additional Instructions section after rendering.
+
 ---
 
-## 3. Generate — LLM Completion Primitive
+## 3. Report — Configured Report Profiles
+
+`report` runs an ordinary Timbers template that declares a `report` block in
+its YAML frontmatter. The profile supplies a default scope and compact input
+projection. Explicit `--last`, `--since`, or `--range` replaces that default.
+
+```yaml
+---
+name: decision-digest
+description: Retrospective digest of explicit decisions
+version: 2
+report:
+  scope:
+    last: 20
+  projection: decision
+  format: markdown
+  quiet_output: _No explicit design decisions in this range._
+---
+```
+
+```bash
+# Preview the exact prompt with the profile's default scope
+timbers report decision-digest
+
+# Generate directly
+timbers report decision-digest --model opus
+
+# Override the default scope
+timbers report decision-digest --since 30d --model opus
+```
+
+The built-in decision digest extracts only explicit choices and trade-offs. It
+is retrospective and non-authoritative: native project ADRs and design
+documents remain the source of truth. A report with no selected entries or no
+reportable decisions exits successfully without artifact content.
+
+Use `draft` when the caller should choose the scope every time or needs full
+entry JSON. Use `report` for a named, repeatable reporting workflow.
+
+---
+
+## 4. Generate — LLM Completion Primitive
 
 A composable primitive for piping any text through an LLM. Defaults to local LLM server.
 
@@ -215,7 +265,7 @@ timbers generate "Summarize" --input ./notes.txt
 
 ## Flag Consistency
 
-These flags work consistently across `draft` and `generate`:
+These flags work consistently across `report`, `draft`, and `generate`:
 
 | Flag | Short | Description |
 |------|-------|-------------|
@@ -291,6 +341,9 @@ timbers export --last 5 --json
 
 # Prompt rendering with metadata
 timbers draft changelog --since 7d --json
+
+# Report status and provenance
+timbers report decision-digest --json
 
 # Generate with response metadata
 timbers generate "Hello" --model haiku --json

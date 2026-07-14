@@ -4,7 +4,7 @@ Guide for integrating timbers into developer workflow tooling (repo-init, repo-h
 
 ## The Anchor Problem
 
-Every timbers entry has an **anchor commit** — the HEAD SHA when the entry was created. `timbers pending` uses this to find undocumented work:
+Every timbers entry has an **anchor commit** — the HEAD SHA when the entry was created. Pending detection uses the anchor, documented commit set, acknowledgments, and skip rules to find undocumented work.
 
 ```
 git log <latest_anchor>..HEAD
@@ -19,7 +19,13 @@ This breaks when the anchor SHA disappears from the current branch's history:
 | Rebase + merge | No | All SHAs rewritten during rebase |
 | Rebase + fast-forward | No | SHAs rewritten, no merge commit |
 
-**Merge commits are the only strategy that preserves anchor integrity.** Everything else causes a "stale anchor" state where `timbers pending` can't accurately determine what's documented.
+**Merge commits are the only strategy that preserves original anchor SHAs.** A
+stale anchor weakens exact Git lineage, but it does not remove the entry's
+captured `what`, `why`, `how`, or notes.
+
+The post-rewrite hook relinks known local one-to-one rewrites when possible.
+Many-to-one squash merges cannot be mapped exactly, so reports treat Git
+subject lookup as best-effort enrichment and continue from stored text.
 
 ### What happens on stale anchor (v0.16.0+)
 
@@ -111,6 +117,7 @@ Run `timbers doctor` as part of health checks. It already covers:
 - **Git hooks**: tier-aware detection, auto-fix with `--fix`
 - **Agent steering**: Claude Code hook presence and staleness
 - **Recent entries**: ledger activity check
+- **Ledger integrity**: names malformed entry files instead of silently omitting them
 
 For programmatic consumption: `timbers doctor --json` returns structured results with `pass`/`warn`/`fail` status per check.
 
