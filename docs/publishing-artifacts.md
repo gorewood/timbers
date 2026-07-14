@@ -10,6 +10,7 @@ This document outlines strategies for publishing artifacts generated from your d
 |----------|----------|----------|------------------|
 | CHANGELOG.md | Contributors, users | `changelog` | Per release |
 | Release Notes | End users | `release-notes` | Per release |
+| Decision Digest | Technical team | `decision-digest` | Weekly/milestone |
 | Standup | Internal stakeholders | `standup` | Daily/weekly |
 | Sprint Report | Team | `sprint-report` | Per sprint |
 | Dev Blog | External community | `devblog` | Monthly/milestone |
@@ -19,6 +20,10 @@ This document outlines strategies for publishing artifacts generated from your d
 ## Strategy 1: Repo Artifacts (Checked In)
 
 Best for: CHANGELOG.md, release notes that should be versioned with code.
+
+Decision digests are retrospective reports, not ADRs. If a project maintains
+native ADRs or design documents, publish those as the authoritative record and
+use `decision-digest` only to review explicit decisions captured in Timbers.
 
 ### Manual Generation
 

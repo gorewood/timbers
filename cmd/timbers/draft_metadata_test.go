@@ -18,8 +18,8 @@ func TestParseVars(t *testing.T) {
 		},
 		{
 			name:  "single pair",
-			input: []string{"starting_number=42"},
-			want:  map[string]string{"starting_number": "42"},
+			input: []string{"audience=leadership"},
+			want:  map[string]string{"audience": "leadership"},
 		},
 		{
 			name:  "multiple pairs",

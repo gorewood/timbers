@@ -303,7 +303,7 @@ timbers draft --list
 
 Built-in templates:
 - `changelog` — Conventional changelog format
-- `decision-log` — ADR-style architectural decisions extracted from the *why* and *notes* fields
+- `decision-digest` — Retrospective digest of explicit decisions from the *why* and *notes* fields
 - `devblog` — Developer blog post (Carmack .plan style)
 - `standup` — Daily standup from recent work
 - `pr-description` — Pull request description
@@ -366,22 +366,16 @@ Templates can accept caller-supplied variables via `--var key=value` (repeatable
 References appear as `{{vars.key}}` in template content, and templates may declare
 defaults in frontmatter so the token resolves even without a caller override.
 
-The built-in `decision-log` template uses this to keep ADR numbers stable across
-runs. A fresh run defaults to ADR-1; if you're appending to an existing log, pass
-the offset explicitly:
+Custom templates can use variables for project-specific instructions:
 
 ```bash
-# Compute the next ADR number from the existing file and append new decisions.
-next=$(grep -oE 'ADR-[0-9]+' docs/decisions.md | sed 's/ADR-//' | sort -n | tail -1)
-next=$((${next:-0} + 1))
-
-timbers draft decision-log --since 2026-03-01 \
-    --var starting_number=$next | claude -p --model opus >> docs/decisions.md
+timbers draft weekly-summary --since 7d \
+    --var audience=leadership | claude -p --model opus
 ```
 
-Timbers does not track an ADR counter — the file you write into is the source
-of truth. Pair `--var starting_number=...` with `--since` or `--range` so each
-run covers only new work, making the log append-only.
+The built-in `decision-digest` is deliberately unnumbered and non-authoritative.
+Keep project ADRs in the project's native documentation system; use the digest
+to review decisions recorded in Timbers without creating a competing ADR set.
 
 ### Custom Templates
 
@@ -418,10 +412,10 @@ Template resolution order:
 
 | Use Case | Recommended Model |
 |----------|-------------------|
-| Quality content (changelogs, blog posts, decision logs) | `opus` (best reasoning and writing quality) |
+| Quality content (changelogs, blog posts, decision digests) | `opus` (best reasoning and writing quality) |
 | Daily use | `local` (free, private, fast) |
 
-**Quality matters for published artifacts.** Decision logs, blog posts, and changelogs benefit from frontier-model reasoning — the difference between shallow summaries and genuine insight is significant. Use `opus` for anything you'd share externally.
+**Quality matters for published artifacts.** Decision digests, blog posts, and changelogs benefit from frontier-model reasoning — the difference between shallow summaries and genuine insight is significant. Use `opus` for anything you'd share externally.
 
 **Cost perspective:** Processing 100 entries with haiku costs ~$0.01-0.05. Local is free. When piping through `claude -p --model opus`, you use your subscription rather than API tokens.
 

@@ -93,6 +93,7 @@ Built-in templates (use `timbers draft --list` for current list):
 | Template | Purpose |
 |----------|---------|
 | `changelog` | Generate release changelogs |
+| `decision-digest` | Summarize explicit decisions without replacing project ADRs |
 | `devblog` | Developer blog post (Carmack .plan style) |
 | `standup` | Daily standup from recent work |
 | `pr-description` | Pull request descriptions |

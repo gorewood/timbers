@@ -18,7 +18,7 @@ timbers log "Switched to cursor-based pagination" \
   --notes "Offset was simpler but users reported duplicate items in feeds. Cursors are stable under concurrent writes."
 
 # Generate artifacts from your ledger
-timbers draft decision-log --last 20 --model opus
+timbers draft decision-digest --last 20 --model opus
 ```
 
 **[Website](https://gorewood.github.io/timbers/)** · **[Tutorial](docs/tutorial.md)** · **[Examples](https://gorewood.github.io/timbers/examples/)** · **[Dev Blog](https://gorewood.github.io/timbers/posts/)**
@@ -59,7 +59,7 @@ All commands support `--json`. Write operations support `--dry-run`.
 
 ## Document Generation
 
-The `draft` command renders templates with your ledger entries, producing changelogs, reports, decision logs, and more — either by piping to an LLM CLI or with built-in LLM execution via `--model`.
+The `draft` command renders templates with your ledger entries, producing changelogs, reports, decision digests, and more — either by piping to an LLM CLI or with built-in LLM execution via `--model`.
 
 ```bash
 # Pipe to any LLM CLI (uses your subscription, not API tokens)
@@ -74,9 +74,9 @@ timbers draft standup --since 1d --model opus
 timbers draft --list
 ```
 
-**Built-in templates:** `changelog`, `decision-log`, `devblog`, `pr-description`, `release-notes`, `sprint-report`, `standup`
+**Built-in templates:** `changelog`, `decision-digest`, `devblog`, `pr-description`, `release-notes`, `sprint-report`, `standup`
 
-The decision-log template is particularly valuable — it extracts the *why* behind each change into an architectural decision record, enriched by `--notes` when agents capture their deliberation process. No other tool produces this from structured commit data.
+The decision-digest template extracts explicit choices and trade-offs from `--why` and `--notes` into a retrospective report. It deliberately does not create or replace a project's authoritative ADRs.
 
 **Model guidance:** Use `opus` for best output quality. For local generation, pipe to your LLM CLI of choice (`claude -p`, `gemini`, `codex exec`) — this uses your subscription instead of API tokens. For CI/CD, use `--model opus` with an API key.
 
@@ -190,13 +190,13 @@ Timbers' own development ledger is used to generate these examples via `timbers 
 | Artifact | Description |
 |----------|-------------|
 | [Changelog](https://gorewood.github.io/timbers/examples/changelog/) | Keep a Changelog format, grouped by type |
-| [Decision Log](https://gorewood.github.io/timbers/examples/decision-log/) | ADR-style architectural decisions extracted from the *why* field |
+| Decision Digest | Retrospective summary of explicit decisions from the *why* and *notes* fields |
 | [Standup](https://gorewood.github.io/timbers/examples/standup/) | Daily standup from recent work |
 | [Release Notes](https://gorewood.github.io/timbers/examples/release-notes/) | User-facing release notes |
 | [Sprint Report](https://gorewood.github.io/timbers/examples/sprint-report/) | Categorized sprint summary with scope and highlights |
 | [Dev Blog](https://gorewood.github.io/timbers/posts/) | Weekly dev blog posts (Carmack .plan style) |
 
-> **A note on quality:** Most of these entries were historically backfilled using the now-retired `timbers catchup` command, which inferred what/why/how from commit messages and diffs. Projects that use `timbers log` from day one produce significantly richer output — especially in the decision-log, where the *why* field matters most.
+> **A note on quality:** Most of these entries were historically backfilled using the now-retired `timbers catchup` command, which inferred what/why/how from commit messages and diffs. Projects that use `timbers log` from day one produce significantly richer output — especially in the decision digest, where explicit rationale matters most.
 
 ## Development
 

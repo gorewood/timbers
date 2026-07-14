@@ -30,8 +30,8 @@ func TestSanitizeLLMOutput(t *testing.T) {
 		},
 		{
 			name: "strips certainly preamble",
-			in:   "Certainly! Here's the decision log:\n\n## ADR-1: Storage",
-			want: "## ADR-1: Storage",
+			in:   "Certainly! Here's the decision digest:\n\n# Decision Digest",
+			want: "# Decision Digest",
 		},
 		{
 			name: "strips let me know signoff",

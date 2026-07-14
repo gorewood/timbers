@@ -15,8 +15,8 @@ const defaultWorkflowContent = protocol.SessionProtocol + `
 # Writing Good Why Fields
 
 The --why flag captures the *verdict* — the design decision in one sentence.
-This matters because draft templates extract architectural decisions from why
-fields. Feature descriptions produce shallow ADRs; verdicts produce useful ones.
+This matters because decision digests extract explicit choices from why fields.
+Feature descriptions produce shallow reports; verdicts produce useful ones.
 
 BAD (feature description):
   --why "Users needed tag filtering for queries"
@@ -38,7 +38,7 @@ When the operator (human or agent driving the call) made a judgment that
 wasn't obvious — overriding a default, going against a teammate's first
 suggestion, picking the harder path for a reason — name it. The verdict
 isn't just "what was decided" but "what the deciding party chose to
-prioritize." That framing is what makes downstream artifacts (ADRs,
+prioritize." That framing is what makes downstream artifacts (decision digests,
 devblogs, PR descriptions) sound human instead of mechanical.
 
 Ask yourself: what's the one-sentence trade-off, and whose call was it?
@@ -92,7 +92,7 @@ catch that the first pass missed?
 <operator-voice>
 # Operator Voice and Collaboration
 
-Timbers entries become source material for changelogs, ADRs, devblogs, and
+Timbers entries become source material for changelogs, decision digests, devblogs, and
 PR descriptions. The drier the entry, the drier the downstream artifact.
 
 Two lightweight habits inject real signal:

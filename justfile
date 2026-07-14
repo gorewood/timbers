@@ -133,21 +133,6 @@ draft +args:
 draft-model model +args:
     @CLAUDECODE= go run ./cmd/timbers draft {{args}} | claude -p --model {{model}}
 
-# Append new ADRs to a decision log, continuing the existing numbering.
-# Usage: just decision-log docs/decisions.md --since 2026-03-01
-decision-log file +args:
-    #!/usr/bin/env bash
-    set -eo pipefail
-    unset CLAUDECODE
-    next=1
-    if [ -f "{{file}}" ]; then
-        max=$(grep -oE 'ADR-[0-9]+' "{{file}}" 2>/dev/null | sed 's/ADR-//' | sort -n | tail -1 || echo "")
-        if [ -n "$max" ]; then next=$((max + 1)); fi
-    fi
-    echo "Appending to {{file}} starting at ADR-$next..." >&2
-    go run ./cmd/timbers draft decision-log {{args}} --var starting_number="$next" \
-        | claude -p --model opus >> "{{file}}"
-
 # Regenerate all site example pages from current ledger
 examples:
     #!/usr/bin/env bash
@@ -155,7 +140,7 @@ examples:
     unset CLAUDECODE  # Allow claude -p inside Claude Code sessions
     DATE=$(date +%Y-%m-%d)
     # Dynamic examples: regenerated each release to stay fresh
-    TEMPLATES=("release-notes" "decision-log")
+    TEMPLATES=("release-notes" "decision-digest")
     RANGES=("--last 20" "--last 20")
     PIDS=()
     NAMES=()
@@ -254,7 +239,7 @@ examples-static:
         echo "Some examples failed. Re-run to retry only the failed ones."
         exit 1
     fi
-    echo "Done. Run 'just examples' for dynamic examples (release-notes, decision-log)."
+    echo "Done. Run 'just examples' for dynamic examples (release-notes, decision-digest)."
 
 # =============================================================================
 # RELEASE (goreleaser)

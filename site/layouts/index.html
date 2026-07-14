@@ -320,19 +320,20 @@
         </p>
 
         <div class="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            <!-- Decision Log -->
+            <!-- Decision Digest -->
             <div class="gs artifact-card rounded-xl border border-zinc-800/80 bg-zinc-900/30 overflow-hidden">
                 <div class="p-6 pb-4">
-                    <h3 class="text-base font-semibold text-white mb-1">Decision Log</h3>
-                    <p class="text-xs text-zinc-500 font-mono mb-4">timbers draft decision-log --last 20</p>
+                    <h3 class="text-base font-semibold text-white mb-1">Decision Digest</h3>
+                    <p class="text-xs text-zinc-500 font-mono mb-4">timbers draft decision-digest --last 20</p>
                 </div>
                 <div class="px-6 pb-6">
                     <div class="rounded-lg bg-zinc-950/60 border border-zinc-800/50 p-4 text-xs font-mono leading-relaxed text-zinc-500">
-                        <p class="text-amber-400/80">## ADR-003: Cursor-Based Pagination</p>
-                        <p class="mt-2"><span class="text-zinc-400">Status:</span> Accepted</p>
+                        <p class="text-amber-400/80">## Use cursor-based pagination</p>
+                        <p class="mt-2"><span class="text-zinc-400">Observed:</span> 2026-02-14</p>
+                        <p><span class="text-zinc-400">Sources:</span> tb_2026-02-14_abc123</p>
                         <p><span class="text-zinc-400">Context:</span> Duplicate items in paginated feeds</p>
                         <p><span class="text-zinc-400">Decision:</span> Cursor tokens over offset/limit</p>
-                        <p><span class="text-zinc-400">Consequences:</span> Stable pages under</p>
+                        <p><span class="text-zinc-400">Trade-offs:</span> Stable pages under</p>
                         <p class="text-zinc-600">&nbsp; concurrent writes...</p>
                     </div>
                 </div>
@@ -380,7 +381,7 @@
         <!-- Template list -->
         <p class="gs text-center text-sm text-zinc-500 mt-10">
             <span class="text-zinc-400">Built-in:</span>
-            changelog &middot; decision-log &middot; devblog &middot; pr-description &middot; release-notes &middot; sprint-report &middot; standup
+            changelog &middot; decision-digest &middot; devblog &middot; pr-description &middot; release-notes &middot; sprint-report &middot; standup
         </p>
     </div>
 </section>

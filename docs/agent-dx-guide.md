@@ -775,7 +775,7 @@ When your tool generates documents from structured data (changelogs, release not
 mytool draft changelog --last 10
 mytool draft release-notes --since 7d
 mytool draft devblog --since 7d --model opus
-mytool draft decision-log --last 20
+mytool draft decision-digest --last 20
 mytool draft --list
 
 # vs. Static commands (one command per type — doesn't scale):
@@ -874,7 +874,7 @@ Use this checklist when designing agent-oriented CLIs:
 - `timbers prime --verbose` — Design decision history (why/how in recent entries)
 - `timbers pending` — Clear next action
 - `timbers log "what" --why "why" --how "how"` — Single command capture
-- `timbers draft <template>` — Template-based document generation (changelog, decision-log, devblog, pr-description, release-notes, sprint-report, standup)
+- `timbers draft <template>` — Template-based document generation (changelog, decision-digest, devblog, pr-description, release-notes, sprint-report, standup)
 - `timbers draft --list` — Discover available templates
 - `timbers draft release-notes --last 10 --model opus` — Generate with built-in LLM
 - `timbers export --json | claude "..."` — Unix composability

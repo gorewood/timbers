@@ -180,14 +180,14 @@ func TestBuildDateRange(t *testing.T) {
 func TestRenderWithCallerVars(t *testing.T) {
 	tmpl := &Template{
 		Name:    "test",
-		Content: "Start: ADR-{{vars.starting_number}}. Count: {{entry_count}}. Missing: {{vars.nope}}.",
+		Content: "Audience: {{vars.audience}}. Count: {{entry_count}}. Missing: {{vars.nope}}.",
 	}
 
 	ctx := &RenderContext{
 		Entries: []*ledger.Entry{},
 		Vars: map[string]string{
-			"starting_number": "42",
-			"entry_count":     "999",
+			"audience":    "leadership",
+			"entry_count": "999",
 		},
 	}
 
@@ -196,7 +196,7 @@ func TestRenderWithCallerVars(t *testing.T) {
 		t.Fatalf("Render() error = %v", err)
 	}
 
-	if !strings.Contains(result, "Start: ADR-42") {
+	if !strings.Contains(result, "Audience: leadership") {
 		t.Errorf("caller var not substituted, got: %s", result)
 	}
 	if !strings.Contains(result, "Count: 0") {
@@ -211,10 +211,10 @@ func TestRenderTemplateVarDefaults(t *testing.T) {
 	tmpl := &Template{
 		Name: "test",
 		Vars: map[string]string{
-			"starting_number": "1",
-			"project":         "default-proj",
+			"audience": "engineering",
+			"project":  "default-proj",
 		},
-		Content: "ADR-{{vars.starting_number}} in {{vars.project}}",
+		Content: "{{vars.audience}} report for {{vars.project}}",
 	}
 
 	t.Run("uses defaults when caller omits", func(t *testing.T) {
@@ -222,19 +222,19 @@ func TestRenderTemplateVarDefaults(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Render() error = %v", err)
 		}
-		if !strings.Contains(result, "ADR-1 in default-proj") {
+		if !strings.Contains(result, "engineering report for default-proj") {
 			t.Errorf("template defaults not applied, got: %s", result)
 		}
 	})
 
 	t.Run("caller vars override template defaults", func(t *testing.T) {
 		result, err := Render(tmpl, &RenderContext{
-			Vars: map[string]string{"starting_number": "42"},
+			Vars: map[string]string{"audience": "leadership"},
 		})
 		if err != nil {
 			t.Fatalf("Render() error = %v", err)
 		}
-		if !strings.Contains(result, "ADR-42 in default-proj") {
+		if !strings.Contains(result, "leadership report for default-proj") {
 			t.Errorf("override/default mix failed, got: %s", result)
 		}
 	})

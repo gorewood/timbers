@@ -3,6 +3,7 @@ package draft
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -210,7 +211,10 @@ func TestListBuiltins(t *testing.T) {
 	}
 
 	// Check that expected templates are present
-	expectedNames := []string{"changelog", "standup", "sprint-report", "pr-description", "release-notes"}
+	expectedNames := []string{
+		"changelog", "decision-digest", "devblog", "standup",
+		"sprint-report", "pr-description", "release-notes",
+	}
 	found := make(map[string]bool)
 	for _, tmpl := range templates {
 		found[tmpl.Name] = true
@@ -223,5 +227,27 @@ func TestListBuiltins(t *testing.T) {
 		if !found[name] {
 			t.Errorf("listBuiltins() missing expected template %q", name)
 		}
+	}
+}
+
+func TestDecisionDigestIsNonAuthoritative(t *testing.T) {
+	tmpl, err := loadBuiltin("decision-digest")
+	if err != nil {
+		t.Fatalf("loadBuiltin(decision-digest) error = %v", err)
+	}
+
+	for _, required := range []string{
+		"Project ADRs and design documents remain authoritative",
+		"**Sources:** `entry-id`",
+		"Do not assign ADR numbers, lifecycle statuses, or supersession relationships",
+		"_No explicit design decisions in this range._",
+	} {
+		if !strings.Contains(tmpl.Content, required) {
+			t.Errorf("decision-digest missing required instruction %q", required)
+		}
+	}
+
+	if _, err := loadBuiltin("decision-log"); err == nil {
+		t.Error("loadBuiltin(decision-log) succeeded; obsolete authoritative template should be removed")
 	}
 }

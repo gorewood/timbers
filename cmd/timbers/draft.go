@@ -41,7 +41,7 @@ Examples:
   timbers draft release-notes --since 7d               # Render prompt for piping
   timbers draft changelog --last 10 --model opus       # Generate with built-in LLM
   timbers draft devblog --since 7d --model opus --with-frontmatter
-  timbers draft decision-log --last 20                 # ADR-style decision log
+  timbers draft decision-digest --last 20              # Retrospective decision report
   timbers draft --list                                 # List available templates
   timbers draft release-notes --last 5 --append "Focus on security changes"`,
 		Args: cobra.MaximumNArgs(1),
