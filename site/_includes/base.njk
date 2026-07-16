@@ -5,21 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="{{ description or summary or site.description }}">
     <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#111514">
     <title>{% if title and title != site.title %}{{ title }} | {% endif %}{{ site.title }}</title>
+    <link rel="icon" href="{{ '/assets/favicon.svg' | siteUrl }}" type="image/svg+xml">
+    <link rel="preload" href="{{ '/assets/fonts/geologica-latin.woff2' | siteUrl }}" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="{{ '/assets/site.css' | siteUrl }}">
   </head>
-  <body>
+  <body class="{{ body_class or '' }}">
+    {% include "icons.njk" %}
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
       <div class="shell header-inner">
-        <a class="brand" href="{{ '/' | siteUrl }}" aria-label="Timbers home">timbers</a>
+        <a class="brand" href="{{ '/' | siteUrl }}" aria-label="Timbers home">
+          <svg class="brand-mark" aria-hidden="true"><use href="#icon-mark"></use></svg>
+          <span>timbers</span>
+        </a>
         <nav class="desktop-nav" aria-label="Primary navigation">
           {% for collection in timbermill.collections %}<a href="{{ ('/' + collection.route + '/') | siteUrl }}">{{ collection.label }}</a>{% endfor %}
           <a href="https://github.com/gorewood/timbers/blob/main/docs/tutorial.md">Docs</a>
-          <a href="https://github.com/gorewood/timbers">GitHub</a>
+          <a class="external-link" href="https://github.com/gorewood/timbers">GitHub <svg class="icon" aria-hidden="true"><use href="#icon-arrow-up-right"></use></svg></a>
         </nav>
         <details class="mobile-nav">
-          <summary>Menu</summary>
+          <summary aria-label="Open navigation"><svg class="icon" aria-hidden="true"><use href="#icon-menu"></use></svg></summary>
           <nav aria-label="Mobile navigation">
             {% for collection in timbermill.collections %}<a href="{{ ('/' + collection.route + '/') | siteUrl }}">{{ collection.label }}</a>{% endfor %}
             <a href="https://github.com/gorewood/timbers/blob/main/docs/tutorial.md">Docs</a>
@@ -33,8 +40,16 @@
     </main>
     <footer class="site-footer">
       <div class="shell footer-inner">
-        <p><strong>Timbers</strong> records the reasoning Git cannot.</p>
-        <p><a href="https://github.com/gorewood/timbers">Open source under the MIT License</a></p>
+        <div class="footer-brand">
+          <svg class="brand-mark" aria-hidden="true"><use href="#icon-mark"></use></svg>
+          <p><strong>Timbers</strong><br>Records the reasoning Git cannot.</p>
+        </div>
+        <nav aria-label="Footer navigation">
+          <a href="https://github.com/gorewood/timbers/blob/main/docs/tutorial.md">Tutorial</a>
+          <a href="{{ ('/' + timbermill.collections[0].route + '/') | siteUrl }}">Real outputs</a>
+          <a href="https://github.com/gorewood/timbers">GitHub</a>
+        </nav>
+        <p class="footer-license">Open source under the MIT License.</p>
       </div>
     </footer>
   </body>

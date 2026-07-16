@@ -1,10 +1,13 @@
 ---
 layout: base.njk
+body_class: collection-page
 ---
-<header class="page-heading shell reading-shell">
-  <p class="eyebrow">{% if artifact_kind == "native" %}Native artifacts{% else %}Generated from the ledger{% endif %}</p>
-  <h1>{{ title }}</h1>
-  {% if description %}<p class="lede">{{ description }}</p>{% endif %}
+<header class="page-heading">
+  <div class="shell reading-shell">
+    <p class="section-label">{% if artifact_kind == "native" %}Native artifacts{% else %}Generated from the ledger{% endif %}</p>
+    <h1>{{ title }}</h1>
+    {% if description %}<p class="lede">{{ description }}</p>{% endif %}
+  </div>
 </header>
 
 <section class="collection shell reading-shell" aria-label="{{ title }}">
@@ -14,12 +17,13 @@ layout: base.njk
       {% for item in items %}
         <li>
           <a href="{{ item.url | siteUrl }}">
-            <span class="artifact-title">{{ item.data.title or item.fileSlug }}</span>
             <span class="artifact-meta">
               {% if item.data.artifact_kind == "native" %}Native{% else %}Generated{% endif %}
               {% if item.data.date %} · {{ item.data.date | displayDate }}{% endif %}
             </span>
+            <span class="artifact-title">{{ item.data.title or item.fileSlug }}</span>
             {% if item.data.summary %}<span class="artifact-summary">{{ item.data.summary }}</span>{% endif %}
+            <svg class="artifact-arrow icon" aria-hidden="true"><use href="#icon-arrow-right"></use></svg>
           </a>
         </li>
       {% endfor %}
