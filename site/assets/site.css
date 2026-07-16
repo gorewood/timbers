@@ -4,11 +4,14 @@
   --surface: #ffffff;
   --ink: #202225;
   --muted: #62666d;
-  --line: #d8dce2;
-  --line-strong: #b7bdc7;
+  --line: #e3e6ea;
+  --line-strong: #c8cdd4;
   --amber: #b45309;
   --amber-bright: #d97706;
-  --teal: #0f766e;
+  --teal: #146c67;
+  --teal-hover: #0d514d;
+  --link-decoration: #91bbb7;
+  --scroll-thumb: #aab1ba;
   --code: #17191c;
   --code-text: #e8eaed;
   --shell: 72rem;
@@ -21,6 +24,8 @@
 
 html {
   scroll-behavior: smooth;
+  scrollbar-color: var(--scroll-thumb) transparent;
+  scrollbar-width: thin;
 }
 
 body {
@@ -35,12 +40,14 @@ body {
 
 a {
   color: var(--teal);
+  text-decoration-color: var(--link-decoration);
   text-underline-offset: 0.18em;
-  text-decoration-thickness: 0.08em;
+  text-decoration-thickness: 0.06em;
 }
 
 a:hover {
-  color: #0b5f59;
+  color: var(--teal-hover);
+  text-decoration-color: currentColor;
 }
 
 :focus-visible {
@@ -92,7 +99,7 @@ pre,
   position: sticky;
   z-index: 20;
   top: 0;
-  border-bottom: 1px solid rgba(216, 220, 226, 0.9);
+  border-bottom: 1px solid var(--line);
   background: rgba(247, 248, 250, 0.95);
 }
 
@@ -267,7 +274,7 @@ h3 {
 }
 
 .command-line {
-  width: min(100%, 48rem);
+  width: min(100%, 52rem);
   margin-top: 2.75rem;
   display: flex;
   gap: 0.8rem;
@@ -496,14 +503,15 @@ h3 {
 .artifact-byline {
   margin: 1.5rem 0 0;
   display: flex;
+  align-items: baseline;
   flex-wrap: wrap;
   gap: 1rem 2rem;
 }
 
 .artifact-byline div {
-  display: grid;
-  grid-template-columns: auto auto;
-  gap: 0.45rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
 }
 
 .artifact-byline dt {
@@ -558,7 +566,9 @@ h3 {
 }
 
 .prose pre {
+  width: 100%;
   max-width: 100%;
+  margin-inline: 0;
   padding: 1.2rem;
   border-radius: 5px;
   background: var(--code);
@@ -569,6 +579,7 @@ h3 {
 .prose table {
   width: 100%;
   display: block;
+  margin-inline: 0;
   border-collapse: collapse;
   overflow-x: auto;
 }
@@ -679,8 +690,7 @@ h3 {
     gap: 0.35rem;
   }
 
-  .artifact-byline,
-  .artifact-byline div {
+  .artifact-byline {
     display: grid;
   }
 }
@@ -698,11 +708,14 @@ h3 {
     --surface: #202327;
     --ink: #f2f3f4;
     --muted: #b5bac2;
-    --line: #3a3e44;
-    --line-strong: #565c65;
+    --line: #30343a;
+    --line-strong: #454b54;
     --amber: #fbbf24;
     --amber-bright: #f59e0b;
-    --teal: #5eead4;
+    --teal: #80c9c0;
+    --teal-hover: #b1e1dc;
+    --link-decoration: #477f79;
+    --scroll-thumb: #59616c;
     --code: #0d0f11;
     --code-text: #eff1f3;
   }
