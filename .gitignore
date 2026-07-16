@@ -103,6 +103,7 @@ site/.hugo_build.lock
 !*/
 
 # Generated site directories stay ignored after the traversal allowlist above.
+.worktrees/
 site/node_modules/**
 site/.generated/**
 site/_site/**
