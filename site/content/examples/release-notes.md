@@ -1,6 +1,6 @@
 ---
 title: 'Release Notes'
-date: '2026-06-11'
+date: '2026-07-16'
 tags: ['example', 'release-notes']
 ---
 
@@ -8,28 +8,51 @@ Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
 
 ---
 
-**New Features**
-- The commit gate is now provenance-aware: it automatically skips commits authored by someone else or left over from an earlier session, so you're only asked to document work from your current session.
-- You can now set how long a session "counts" with a `session-window:` directive in `.timbersignore` (defaults to 24h).
-- `timbers pending --explain` now lists every commit and why it is or isn't pending.
-- A new `help timbersignore` topic documents the rule types and the canonical bot-exemption recipe.
+Looking at the entries, I need to filter for user-observable changes and write release notes.
 
-**Improvements**
-- When output is piped or redirected, timbers errors now print as a single readable line instead of a styled box that could be cropped down to a blank line.
-- Gate refusal messages now name the tool, cause, fix, and bypass on one line, and tell you when staged work remains in the index (`git diff --cached`).
-- `timbers show` and `timbers log --dry-run` now render entries in an aligned, word-wrapped panel that's easy to scan.
-- timbers now honors your `.mailmap`, so multi-email setups aren't misread as someone else's work.
-- A post-commit note now tells you when your own work was auto-skipped as stale.
-- `timbers doctor` now warns when `user.email` is unset, flags malformed `session-window:` values, and catches `[..]`-style globs in `author:`/`msg:` rules.
-- `timbers pending` now explains a count of 0 when the anchor is off the first-parent line.
-- `timbers log --anchor` now documents a single commit even when nothing is pending, and points you at `--range` when it can't.
-- `.timbersignore` exemption rules are now surfaced in `timbers pending` hints and onboarding output.
+Let me work through what's user-facing versus internal:
 
-**Bug Fixes**
-- `timbers log --dry-run` no longer drops the Notes field.
-- Diffstats now render consistently between `timbers show` and `timbers log --dry-run`.
-- `timbers status` now correctly counts commits skipped by a `msg:` rule.
+**User-facing:**
+- Contributor attribution on entries (`--who`, automatic capture) — new capability
+- `report` command with decision digest profiles — new command
+- Derive missing `what` from commit subjects — capability change
+- Corrupt entries surfaced on reads / fail-closed — bug fix + reliability
+- Retired `catchup` workflow — breaking removal
+- Replaced generated ADRs with decision digests — breaking/behavior change to `draft`
+- Cross-agent-debt gate + `--anchor` SHA resolution bug fixes — user-observable (hooks blocking session end, phantom entries)
+- doctor detection + `--fix` for outdated post-rewrite hooks — new capability
+- POSIX hook fix (dash) — bug fix users on Debian/Ubuntu/CI hit
+- Timbermill site replaces Hugo — this is the *demo site*, not the product; site polish entries are not the shipped CLI
 
-**Breaking Changes**
-- `timbers log` now refuses to run on a dirty working tree instead of warning and continuing. Commit your changes first, or use `timbers log --dry-run` to inspect an entry without writing.
-- In `timbers prime`, `pending.count` now counts only the in-session commits you should document — foreign-author and stale commits are excluded. If you script against this field, it no longer reflects the raw total.
+**Excluded:** site theme/polish (4sh entries), docs reconciliation, plan docs, worktree gitignore, release skip config.
+
+Here are the release notes.
+
+---
+
+## New Features
+
+- You can now capture **contributor attribution** on entries — Git authors and `Co-authored-by` trailers are recorded automatically, so person-level credit survives rebase, squash, shallow clone, or pruning. Use `--who` to set the full contributor set explicitly for pairing, bots, or corrections.
+- New `timbers report` command turns captured rationale into a decision digest without hand-rebuilding selection and prompt conventions.
+- `timbers log` now derives `what` from your commit subjects when you omit it, so you don't have to retype what the commit already says.
+- `timbers doctor` now detects outdated post-rewrite hooks and repairs them with `timbers doctor --fix`, so existing repos pick up hook improvements instead of silently running stale ones.
+
+## Improvements
+
+- Corrupt or malformed ledger files are now surfaced through `timbers doctor` and query output instead of silently vanishing; `draft` and `report` refuse to emit partial artifacts when the ledger can't be fully read.
+
+## Bug Fixes
+
+- The session-end hook no longer blocks on another agent's already-paid work in parallel-agent worktrees, and it now honors `TIMBERS_SKIP_CROSS_AGENT_DEBT` like the other hooks.
+- `timbers log --anchor HEAD` now resolves to a real commit SHA at write time instead of storing the literal `HEAD`, and errors on unresolvable refs rather than writing a phantom entry.
+- `timbers log` no longer fails with `failed to commit entry file` when sibling agent work is pending — logging your entry no longer trips the very debt gate it's clearing.
+- The post-rewrite hook now runs under `dash` (Debian/Ubuntu and CI `/bin/sh`); previously it errored and silently skipped relinking entries after a history rewrite.
+
+## Breaking Changes
+
+- **Removed the `timbers catchup` workflow.** Use the first-log baseline, `timbers log --batch`, and ignore rules to onboard existing history instead — these already cover legitimate adoption cases. Existing catchup-generated entries are preserved.
+- **The built-in ADR template now produces a non-authoritative decision digest**, not numbered ADRs — generated output no longer claims ADR numbers, status, or lifecycle. If you relied on the old numbered-ADR output, treat your native project ADRs as the authoritative source and publish them directly.
+
+---
+
+skipped: all site/Timbermill theme work (that's the demo site, not the CLI), docs-drift reconciliation, plan docs, and the agent-steering-prose entry (a7e399) — add back only if the demo site *is* the product you're shipping notes for.

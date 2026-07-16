@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2026-07-16
+
+### Added
+- Added contributor attribution: entries now capture a durable, capture-time `contributors` snapshot (mailmap-normalized Git authors and `Co-authored-by` trailers) that survives rebase, squash, and pruning, with a `--who` flag on `timbers log` to replace the automatic set and retroactive amend support.
+- Added the `timbers report` command with frontmatter-driven decision-digest profiles, compact projections, provenance metadata, best-effort Git enrichment, and fail-closed integrity checks.
+- Added a config-driven Timbermill (Eleventy) publishing harness that replaces the Hugo demo, preserving public routes and rendering responsive light/dark layouts for native project artifacts.
+
+### Changed
+- Changed `timbers log` to derive the `what` field from resolved commit subjects when omitted, snapshotting them at capture time; explicit summaries still win.
+- Changed `timbers doctor` to detect outdated post-rewrite hooks and regenerate them via `--fix`.
+- Changed the post-rewrite hook to warn loudly on stderr when it relinks ledger entries after a rebase, instead of remapping SHAs silently.
+- Changed the built-in `draft adr` template to emit a non-authoritative decision digest that cites source entries, dropping ADR numbering and lifecycle claims so it no longer competes with authoritative project ADRs.
+
+### Fixed
+- Fixed corrupt ledger files silently vanishing from reads: they now surface through `timbers doctor` and human `query` output, and `draft`/`report` fail closed before emitting partial artifacts.
+- Fixed the Claude Stop hook blocking session end while `timbers pending` reported clean; it now honors `TIMBERS_SKIP_CROSS_AGENT_DEBT`, and `--anchor HEAD` resolves to a real SHA instead of storing the literal `HEAD`.
+- Fixed the post-rewrite hook silently skipping entry relinking under `dash` (Debian/Ubuntu and CI `/bin/sh`) by replacing bash-only syntax with POSIX equivalents.
+
+### Removed
+- Removed the inferred `timbers catchup` workflow, which stored low-confidence LLM-generated rationale indistinguishably from authored reasoning. Use the first-log baseline, `timbers log --batch`, acknowledgements, and ignore rules for legitimate adoption instead; existing historical entries are preserved.
+
+
 ## [0.24.1] - 2026-06-11
 
 ### Fixed
@@ -677,3 +699,4 @@ Initial public release.
 [0.23.0]: https://github.com/gorewood/timbers/releases/tag/v0.23.0
 [0.24.0]: https://github.com/gorewood/timbers/releases/tag/v0.24.0
 [0.24.1]: https://github.com/gorewood/timbers/releases/tag/v0.24.1
+[0.25.0]: https://github.com/gorewood/timbers/releases/tag/v0.25.0
