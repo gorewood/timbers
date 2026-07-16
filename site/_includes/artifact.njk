@@ -1,10 +1,11 @@
 ---
 layout: base.njk
+body_class: artifact-page
 ---
 <article class="artifact shell reading-shell">
   <header class="artifact-heading">
-    <a class="back-link" href="{{ ('/' + collection_route + '/') | siteUrl }}">← {{ collection_label }}</a>
-    <p class="eyebrow">{% if artifact_kind == "native" %}Native artifact{% else %}Generated report{% endif %}</p>
+    <a class="back-link" href="{{ ('/' + collection_route + '/') | siteUrl }}"><svg class="icon" aria-hidden="true"><use href="#icon-arrow-left"></use></svg>{{ collection_label }}</a>
+    <p class="section-label">{% if artifact_kind == "native" %}Native artifact{% else %}Generated report{% endif %}</p>
     <h1>{{ title or page.fileSlug }}</h1>
     <dl class="artifact-byline">
       {% if date %}<div><dt>Published</dt><dd><time datetime="{{ date | isoDate }}">{{ date | displayDate }}</time></dd></div>{% endif %}

@@ -46,6 +46,8 @@ Desktop.ini
 
 # Documentation
 !README.md
+!PRODUCT.md
+!DESIGN.md
 !LICENSE
 !CLAUDE.md
 !CHANGELOG.md
