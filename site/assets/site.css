@@ -3,6 +3,9 @@
   --paper: #f7f8fa;
   --surface: #ffffff;
   --ink: #202225;
+  --ink-body: #34373c;
+  --ink-secondary: #4f535a;
+  --ink-meta: #6b7078;
   --muted: #62666d;
   --line: #e3e6ea;
   --line-strong: #c8cdd4;
@@ -14,6 +17,9 @@
   --scroll-thumb: #aab1ba;
   --code: #17191c;
   --code-text: #e8eaed;
+  --code-muted: #9ca3af;
+  --inline-code: #eef0f3;
+  --header-background: rgba(247, 248, 250, 0.95);
   --shell: 72rem;
   --reading: 48rem;
 }
@@ -43,6 +49,7 @@ a {
   text-decoration-color: var(--link-decoration);
   text-underline-offset: 0.18em;
   text-decoration-thickness: 0.06em;
+  transition: color 160ms ease-out, border-color 160ms ease-out, background-color 160ms ease-out;
 }
 
 a:hover {
@@ -51,7 +58,7 @@ a:hover {
 }
 
 :focus-visible {
-  outline: 3px solid var(--amber-bright);
+  outline: 3px solid var(--amber);
   outline-offset: 3px;
 }
 
@@ -65,8 +72,7 @@ pre,
 .brand,
 .eyebrow,
 .artifact-meta,
-.artifact-byline dt,
-.workflow-steps > li > span {
+.artifact-byline dt {
   font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
 }
 
@@ -100,7 +106,7 @@ pre,
   z-index: 20;
   top: 0;
   border-bottom: 1px solid var(--line);
-  background: rgba(247, 248, 250, 0.95);
+  background: var(--header-background);
 }
 
 .header-inner {
@@ -126,7 +132,7 @@ pre,
 
 .desktop-nav a,
 .mobile-nav a {
-  color: #43474e;
+  color: var(--ink-secondary);
   font-size: 0.9rem;
   font-weight: 650;
   text-decoration: none;
@@ -143,6 +149,11 @@ pre,
 }
 
 .mobile-nav summary {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   font-weight: 700;
   list-style: none;
@@ -167,6 +178,9 @@ pre,
 }
 
 .mobile-nav nav a {
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
   padding: 0.6rem 0.7rem;
 }
 
@@ -200,7 +214,7 @@ h3 {
 
 h1 {
   margin-bottom: 1rem;
-  font-size: 6.5rem;
+  font-size: 6rem;
   font-weight: 850;
 }
 
@@ -216,7 +230,7 @@ h3 {
 
 .hero-statement {
   margin: 0 0 1.25rem;
-  color: #454950;
+  color: var(--ink-secondary);
   font-size: 2.5rem;
   line-height: 1.2;
 }
@@ -228,7 +242,7 @@ h3 {
 .lede {
   max-width: 46rem;
   margin: 0;
-  color: #4f535a;
+  color: var(--ink-secondary);
   font-size: 1.15rem;
 }
 
@@ -280,7 +294,6 @@ h3 {
   align-items: flex-start;
   gap: 0.8rem;
   padding: 0.9rem 1.1rem;
-  border-left: 4px solid var(--amber-bright);
   background: var(--code);
   color: var(--code-text);
   font-size: 0.88rem;
@@ -288,7 +301,7 @@ h3 {
 }
 
 .command-line > span {
-  color: #9ca3af;
+  color: var(--amber-bright);
 }
 
 .command-line code {
@@ -362,14 +375,6 @@ h3 {
   border-left: 1px solid var(--line);
 }
 
-.workflow-steps > li > span {
-  display: block;
-  margin-bottom: 1.5rem;
-  color: var(--amber);
-  font-size: 0.8rem;
-  font-weight: 800;
-}
-
 .workflow-steps p,
 .output-list p,
 .closing > p:not(.eyebrow) {
@@ -426,7 +431,7 @@ h3 {
 
 .artifact-meta {
   display: block;
-  color: #6b7078;
+  color: var(--ink-meta);
   font-size: 0.76rem;
 }
 
@@ -554,21 +559,21 @@ h3 {
 
 .prose p,
 .prose li {
-  color: #34373c;
+  color: var(--ink-body);
 }
 
 .prose blockquote {
   margin: 2rem 0;
   padding: 0.2rem 0 0.2rem 1.25rem;
-  border-left: 4px solid var(--amber-bright);
-  color: #4f535a;
+  border-left: 2px solid var(--line-strong);
+  color: var(--ink-secondary);
 }
 
 .prose :not(pre) > code {
   padding: 0.1em 0.3em;
   border: 1px solid var(--line);
   border-radius: 3px;
-  background: #eef0f3;
+  background: var(--inline-code);
   font-size: 0.9em;
 }
 
@@ -697,6 +702,10 @@ h3 {
   html {
     scroll-behavior: auto;
   }
+
+  a {
+    transition: none;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -705,6 +714,9 @@ h3 {
     --paper: #17191c;
     --surface: #202327;
     --ink: #f2f3f4;
+    --ink-body: #d1d5db;
+    --ink-secondary: #c3c8cf;
+    --ink-meta: #b5bac2;
     --muted: #b5bac2;
     --line: #30343a;
     --line-strong: #454b54;
@@ -716,19 +728,9 @@ h3 {
     --scroll-thumb: #59616c;
     --code: #0d0f11;
     --code-text: #eff1f3;
-  }
-
-  .site-header {
-    background: rgba(23, 25, 28, 0.96);
-  }
-
-  .desktop-nav a,
-  .mobile-nav a,
-  .hero-statement,
-  .lede,
-  .prose p,
-  .prose li {
-    color: #d1d5db;
+    --code-muted: #9ca3af;
+    --inline-code: #292d32;
+    --header-background: rgba(23, 25, 28, 0.96);
   }
 
   .button.primary {
@@ -741,7 +743,4 @@ h3 {
     color: #17191c;
   }
 
-  .prose :not(pre) > code {
-    background: #292d32;
-  }
 }
