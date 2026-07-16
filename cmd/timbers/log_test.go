@@ -509,6 +509,19 @@ func TestParseWorkItem(t *testing.T) {
 	}
 }
 
+func TestLogHelpSteersExplicitContributorCorrection(t *testing.T) {
+	for _, want := range []string{
+		"Contributor attribution is automatic",
+		`--who "Name <email>"`,
+		"replaces the automatic set",
+		"intended for repository publication",
+	} {
+		if !strings.Contains(logCmdLongHelp, want) {
+			t.Errorf("log help missing contributor steering %q", want)
+		}
+	}
+}
+
 func TestValidateRangeFormat(t *testing.T) {
 	tests := []struct {
 		input   string

@@ -123,13 +123,29 @@ Skip this when the work was genuinely solo and uneventful. Don't fabricate
 collaboration that didn't happen — that's worse than dry.
 </operator-voice>
 
+<contributor-attribution>
+# Contributor Attribution
+
+Contributor attribution is automatic: timbers snapshots mailmap-normalized Git
+authors and valid Co-authored-by trailers when an entry is logged. Usually omit
+--who.
+
+Use repeatable ` + "`--who \"Name <email>\"`" + ` values for pairing, shared work,
+bots, or correcting incomplete Git attribution. If any --who value is present,
+it replaces the automatic set, so list every intended contributor.
+
+Only provide identities intended for repository publication. Never guess a
+contributor or expose a private identity to fill the field.
+</contributor-attribution>
+
 <content-safety>
 # Content Safety
 
 Entries are committed to git and may be visible in public repositories.
 Never include in timbers entries:
 - API keys, tokens, passwords, or secrets
-- Personal names, emails, or identifying information
+- Private personal names, emails, or identifying information. Explicit
+  contributor identities are allowed only when intended for repository publication.
 - Internal URLs, IP addresses, or infrastructure details
 - Customer data or business-sensitive information
 

@@ -151,8 +151,12 @@ func TestPrimeCommand(t *testing.T) {
 			files: func(t *testing.T) *ledger.FileStorage {
 				return writeEntries(t, makePrimeTestEntry("abc123def456", now, "Latest work"))
 			},
-			lastN:          3,
-			wantContains:   []string{"Pending: 0 (clear)", "Latest work", "Rules:", "commit → timbers log → push"},
+			lastN: 3,
+			wantContains: []string{
+				"Pending: 0 (clear)", "Latest work", "Rules:", "commit → timbers log → push",
+				"Contributor attribution is automatic", `--who "Name <email>"`,
+				"intended for repository publication",
+			},
 			wantNotContain: []string{"Session Protocol"},
 		},
 		{
@@ -437,6 +441,9 @@ func TestPrimeExportFlag(t *testing.T) {
 		"timbers pending",
 		"timbers log",
 		"git push",
+		"Contributor Attribution",
+		"replaces the automatic set",
+		"intended for repository publication",
 	}
 
 	for _, want := range expectedParts {

@@ -23,6 +23,9 @@ func TestOnboardCommand(t *testing.T) {
 				"timbers pending",
 				"timbers log",
 				"git push",
+				"Contributor attribution is automatic",
+				`--who "Name <email>"`,
+				"intended for repository publication",
 			},
 		},
 		{

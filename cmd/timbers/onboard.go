@@ -20,6 +20,10 @@ Install: ` + "`curl -fsSL https://raw.githubusercontent.com/gorewood/timbers/mai
 - ` + "`timbers prime`" + ` - Get workflow context at session start
 - ` + "`timbers pending`" + ` - Check for undocumented commits before session end
 - ` + "`timbers log \"what\" --why \"why\" --how \"how\"`" + ` - Document committed work
+- Contributor attribution is automatic; usually omit ` + "`--who`" + `.
+- For pairing, shared work, bots, or correction, repeat ` + "`--who \"Name <email>\"`" + `.
+  Any use replaces the automatic set, so list every intended contributor.
+- Only provide contributor identities intended for repository publication.
 - ` + "`timbers help timbersignore`" + ` - Exempt bot/housekeeping commits from pending (e.g. ` + "`author:dependabot*`" + `)
 - Entries are files in .timbers/ — sync via ` + "`git push`"
 

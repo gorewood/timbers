@@ -69,6 +69,7 @@ Examples:
   timbers log "New feature" --why "User request" --how "New component" --tag feature
   timbers log "Bug fix" --why "Issue #123" --how "Patched" --work-item jira:PROJ-456
   timbers log "New API" --why "Agents need access" --how "MCP server" --notes "Debated HTTP vs exec wrapping"
+  timbers log "Paired work" --why "..." --how "..." --who "Name <email>"
   timbers log --auto              # Extract what/why/how from commit messages
   timbers log --auto --yes        # Auto mode without confirmation
   timbers log --batch             # Create entries for each work-item group or day
@@ -77,7 +78,12 @@ Each entry is committed separately (not folded into the code commit). This
 enables reliable pending detection and keeps captured text independent of later
 SHA rewrites. Timbers relinks known one-to-one local rewrites when possible;
 squashes may leave anchors stale. To filter entry commits from git log:
-git log --invert-grep --grep="^timbers: document"`
+git log --invert-grep --grep="^timbers: document"
+
+Contributor attribution is automatic from mailmap-normalized Git authors and
+Co-authored-by trailers. Usually omit --who. Repeat --who "Name <email>" for
+pairing, shared work, bots, or correction; any use replaces the automatic set,
+so provide every intended contributor. Only provide identities intended for repository publication.`
 
 // logContext holds all data needed to create a log entry.
 type logContext struct {

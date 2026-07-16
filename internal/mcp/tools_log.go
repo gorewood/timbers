@@ -21,7 +21,7 @@ type LogInput struct {
 	Notes    string   `json:"notes,omitempty"     jsonschema:"deliberation notes capturing the journey to a decision"`
 	Tags     []string `json:"tags,omitempty"      jsonschema:"tags for categorization"`
 	WorkItem string   `json:"work_item,omitempty" jsonschema:"work item reference in system:id format"`
-	Who      []string `json:"who,omitempty"       jsonschema:"contributors as Name <email>; when set replaces Git-derived contributors"`
+	Who      []string `json:"who,omitempty"       jsonschema:"public Name <email>; omit to derive from Git; values replace automatic set"`
 }
 
 // LogOutput is the output for the log tool.
