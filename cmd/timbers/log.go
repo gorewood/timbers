@@ -26,6 +26,7 @@ type logFlags struct {
 	notes     string
 	tags      []string
 	workItems []string
+	who       []string
 	rangeStr  string
 	anchor    string
 	minor     bool
@@ -80,12 +81,13 @@ git log --invert-grep --grep="^timbers: document"`
 
 // logContext holds all data needed to create a log entry.
 type logContext struct {
-	what      string
-	flags     logFlags
-	commits   []git.Commit
-	anchor    string
-	diffstat  git.Diffstat
-	workItems []ledger.WorkItem
+	what         string
+	flags        logFlags
+	commits      []git.Commit
+	anchor       string
+	diffstat     git.Diffstat
+	workItems    []ledger.WorkItem
+	contributors []ledger.Contributor
 }
 
 // runLog executes the log command.
@@ -217,15 +219,8 @@ func prepareLogContext(
 		printer.Error(err)
 		return nil, err
 	}
-	if staleAnchor {
-		printer.Warn("stale anchor (likely squash merge); " +
-			"self-heals with this entry")
-	}
-
-	if len(commits) == 0 {
-		err := output.NewUserError("no pending commits to document. To log a specific commit or range " +
-			"anyway, pass --anchor <sha> or --range <from>..<to>. Run 'timbers pending' to check status")
-		printer.Error(err)
+	contributors, err := resolveLogContributors(commits, flags.who, staleAnchor, printer)
+	if err != nil {
 		return nil, err
 	}
 
@@ -244,12 +239,13 @@ func prepareLogContext(
 	}
 
 	return &logContext{
-		what:      what,
-		flags:     updatedFlags,
-		commits:   commits,
-		anchor:    anchor,
-		diffstat:  diffstat,
-		workItems: parsedWorkItems,
+		what:         what,
+		flags:        updatedFlags,
+		commits:      commits,
+		anchor:       anchor,
+		diffstat:     diffstat,
+		workItems:    parsedWorkItems,
+		contributors: contributors,
 	}, nil
 }
 
@@ -326,8 +322,9 @@ func buildEntry(ctx *logContext) *ledger.Entry {
 			Why:  why,
 			How:  how,
 		},
-		Notes:     ctx.flags.notes,
-		Tags:      ctx.flags.tags,
-		WorkItems: ctx.workItems,
+		Notes:        ctx.flags.notes,
+		Tags:         ctx.flags.tags,
+		WorkItems:    ctx.workItems,
+		Contributors: ctx.contributors,
 	}
 }

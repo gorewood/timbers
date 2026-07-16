@@ -26,16 +26,24 @@ const shortSHALength = 6
 
 // Entry represents a development ledger entry.
 type Entry struct {
-	Schema    string     `json:"schema"`
-	Kind      string     `json:"kind"`
-	ID        string     `json:"id"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-	Workset   Workset    `json:"workset"`
-	Summary   Summary    `json:"summary"`
-	Notes     string     `json:"notes,omitempty"`
-	Tags      []string   `json:"tags,omitempty"`
-	WorkItems []WorkItem `json:"work_items,omitempty"`
+	Schema       string        `json:"schema"`
+	Kind         string        `json:"kind"`
+	ID           string        `json:"id"`
+	CreatedAt    time.Time     `json:"created_at"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+	Workset      Workset       `json:"workset"`
+	Summary      Summary       `json:"summary"`
+	Notes        string        `json:"notes,omitempty"`
+	Tags         []string      `json:"tags,omitempty"`
+	WorkItems    []WorkItem    `json:"work_items,omitempty"`
+	Contributors []Contributor `json:"contributors,omitempty"`
+}
+
+// Contributor is an identity credited with work described by an entry.
+type Contributor struct {
+	Name    string   `json:"name"`
+	Email   string   `json:"email"`
+	Sources []string `json:"sources"`
 }
 
 // Workset represents the set of commits documented by an entry.

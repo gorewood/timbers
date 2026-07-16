@@ -96,5 +96,9 @@ func entryToMap(entry *ledger.Entry) map[string]any {
 		result["work_items"] = items
 	}
 
+	if len(entry.Contributors) > 0 {
+		result["contributors"] = entry.Contributors
+	}
+
 	return result
 }

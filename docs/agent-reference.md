@@ -71,6 +71,7 @@ Later SHA rewrites do not remove the stored text.
 - `--notes`: Deliberation context — the journey (optional, use selectively)
 - `--tag`: Add tag (repeatable)
 - `--work-item`: Link work item (system:id)
+- `--who`: Replace contributors with `Name <email>` identities (repeatable)
 - `--range`: Commit range (A..B)
 - `--minor`: Use defaults for trivial changes
 - `--auto`: Extract what/why/how from commits
@@ -264,6 +265,7 @@ Update an existing ledger entry
 - `--how <text>`: Update the how field
 - `--notes <text>`: Update the notes field
 - `--tag <name>`: Add tag (repeatable)
+- `--who "Name <email>"`: Replace contributors (repeatable; no Git lookup)
 - `--dry-run`: Preview without writing
 - `--json`: Structured JSON output
 
@@ -275,6 +277,10 @@ timbers amend tb_2026-01-15T10:30:00Z_abc123 --why "Updated reasoning"
 ## Contract
 
 **Schema**: `timbers.devlog/v1`
+
+**Contributor attribution**: `entry.contributors` is an optional persisted
+capture-time snapshot. Never infer attribution from workset SHAs or prose when
+it is absent. See [Contributor attribution](contributor-attribution.md).
 
 **JSON Support**: All commands support --json for structured output
 

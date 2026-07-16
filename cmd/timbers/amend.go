@@ -19,11 +19,13 @@ func newAmendCmd() *cobra.Command {
 
 // amendFlags holds all flag values for the amend command.
 type amendFlags struct {
-	what   string
-	why    string
-	how    string
-	tags   []string
-	dryRun bool
+	what         string
+	why          string
+	how          string
+	tags         []string
+	who          []string
+	contributors []ledger.Contributor
+	dryRun       bool
 }
 
 // newAmendCmdInternal creates the amend command with optional storage injection.
@@ -55,6 +57,7 @@ Examples:
 	cmd.Flags().StringVar(&flags.why, "why", "", "Update the 'why' summary field")
 	cmd.Flags().StringVar(&flags.how, "how", "", "Update the 'how' summary field")
 	cmd.Flags().StringSliceVar(&flags.tags, "tag", nil, "Replace tags (repeatable)")
+	cmd.Flags().StringArrayVar(&flags.who, "who", nil, "Replace contributors with Name <email> (repeatable)")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Preview changes without writing")
 
 	return cmd
@@ -78,6 +81,14 @@ func runAmend(cmd *cobra.Command, storage *ledger.Storage, entryID string, flags
 		printer.Error(err)
 		return err
 	}
+	if len(flags.who) > 0 {
+		flags.contributors, err = ledger.ResolveContributors(nil, flags.who)
+		if err != nil {
+			err = output.NewUserError(err.Error())
+			printer.Error(err)
+			return err
+		}
+	}
 
 	amended := amendEntry(entry, flags)
 
@@ -95,8 +106,8 @@ func runAmend(cmd *cobra.Command, storage *ledger.Storage, entryID string, flags
 
 // validateAmendFlags checks that at least one field is being updated.
 func validateAmendFlags(flags amendFlags, printer *output.Printer) error {
-	if flags.what == "" && flags.why == "" && flags.how == "" && len(flags.tags) == 0 {
-		err := output.NewUserError("at least one field must be specified for amendment (--what, --why, --how, or --tag)")
+	if flags.what == "" && flags.why == "" && flags.how == "" && len(flags.tags) == 0 && len(flags.who) == 0 {
+		err := output.NewUserError("at least one field must be specified for amendment (--what, --why, --how, --tag, or --who)")
 		printer.Error(err)
 		return err
 	}
@@ -140,6 +151,9 @@ func amendEntry(entry *ledger.Entry, flags amendFlags) *ledger.Entry {
 	// Replace tags if specified (empty slice means clear tags)
 	if flags.tags != nil {
 		amended.Tags = flags.tags
+	}
+	if flags.who != nil {
+		amended.Contributors = flags.contributors
 	}
 
 	// Update timestamp
@@ -189,6 +203,12 @@ func outputAmendDryRun(printer *output.Printer, original, amended *ledger.Entry,
 		printer.Println("  Before: " + formatTags(original.Tags))
 		printer.Println("  After:  " + formatTags(amended.Tags))
 	}
+	if flags.who != nil {
+		printer.Println()
+		printer.Section("Contributors")
+		printer.Println("  Before: " + formatContributors(original.Contributors))
+		printer.Println("  After:  " + formatContributors(amended.Contributors))
+	}
 
 	return nil
 }
@@ -224,6 +244,12 @@ func buildChangesMap(original, amended *ledger.Entry, flags amendFlags) map[stri
 			"after":  amended.Tags,
 		}
 	}
+	if flags.who != nil {
+		changes["contributors"] = map[string][]ledger.Contributor{
+			"before": original.Contributors,
+			"after":  amended.Contributors,
+		}
+	}
 
 	return changes
 }
@@ -234,6 +260,17 @@ func formatTags(tags []string) string {
 		return "(none)"
 	}
 	return strings.Join(tags, ", ")
+}
+
+func formatContributors(contributors []ledger.Contributor) string {
+	if len(contributors) == 0 {
+		return "(none)"
+	}
+	values := make([]string, len(contributors))
+	for idx, contributor := range contributors {
+		values[idx] = contributor.Name + " <" + contributor.Email + ">"
+	}
+	return strings.Join(values, ", ")
 }
 
 // outputAmendSuccess outputs the success message after amending.

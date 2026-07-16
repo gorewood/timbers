@@ -56,6 +56,10 @@ lint:
 test:
     go test -race ./...
 
+# Run full CLI workflows in temporary Git repositories
+test-integration:
+    go test -race -tags=integration ./internal/integration/...
+
 # Run tests with coverage
 test-cover:
     go test -race -coverprofile=coverage.out ./...

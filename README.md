@@ -187,6 +187,11 @@ Native hooks and setup commands for additional agent environments are planned fo
 
 Entries are JSON files in `.timbers/`, committed to your repo alongside your code. Each `timbers log` creates its own git commit — you'll see `timbers: document ...` commits interleaved with your code commits. The optional pre-commit hook enforces documentation before each new commit, so with hooks enabled you'll see roughly one entry commit per code commit. If commits slip through without documentation (hook bypassed, batch workflow, or hooks not installed), `timbers log` gracefully falls back to batch mode — one entry covers all pending commits.
 
+Timbers snapshots contributor identities at log time so attribution survives
+rebases, squashes, and pruned clones. See
+[Contributor Attribution](docs/contributor-attribution.md) for `--who`,
+provenance, compatibility, and the downstream contract.
+
 This is intentional: separate commits enable reliable tracking of what has been
 documented and ensure entries travel with every clone without special
 configuration. The entry's `what`, `why`, and `how` are capture-time snapshots,
@@ -207,6 +212,7 @@ See [docs/design-decisions.md](docs/design-decisions.md) for the full rationale,
 ## Documentation
 
 - [Tutorial](docs/tutorial.md) — Setup, capture workflow, agent integration
+- [Contributor Attribution](docs/contributor-attribution.md) — Persisted identities and downstream contract
 - [Publishing Artifacts](docs/publishing-artifacts.md) — CI/CD for changelogs, reports, blogs
 - [Agent Reference](docs/agent-reference.md) — Command reference for agent integration
 - [LLM Commands](docs/llm-commands.md) — Export, draft, report, and generate commands

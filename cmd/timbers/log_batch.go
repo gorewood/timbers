@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
@@ -207,7 +206,11 @@ func processBatchGroup(
 	flags logFlags,
 	printer *output.Printer,
 ) (*ledger.Entry, error) {
-	entry := buildBatchEntry(storage, group, flags.tags)
+	entry, err := buildBatchEntry(storage, group, flags.tags, flags.who)
+	if err != nil {
+		printer.Error(err)
+		return nil, err
+	}
 
 	if flags.dryRun {
 		return entry, nil
@@ -219,85 +222,6 @@ func processBatchGroup(
 	}
 
 	return entry, nil
-}
-
-// buildBatchEntry constructs a ledger entry from a commit group.
-func buildBatchEntry(storage *ledger.Storage, group commitGroup, tags []string) *ledger.Entry {
-	what, why, how := extractAutoContent(group.commits)
-	workItems := extractWorkItemsFromKey(group.key)
-	anchor := pickBatchAnchor(group.commits)
-	diffstat := getBatchDiffstat(storage, group.commits, anchor)
-
-	now := time.Now().UTC()
-	commitSHAs := extractCommitSHAs(group.commits)
-	rangeStr := buildCommitRange(group.commits)
-
-	return &ledger.Entry{
-		Schema:    ledger.SchemaVersion,
-		Kind:      ledger.KindEntry,
-		ID:        ledger.GenerateID(anchor, now),
-		CreatedAt: now,
-		UpdatedAt: now,
-		Workset: ledger.Workset{
-			AnchorCommit: anchor,
-			Commits:      commitSHAs,
-			Range:        rangeStr,
-			Diffstat: &ledger.Diffstat{
-				Files:      diffstat.Files,
-				Insertions: diffstat.Insertions,
-				Deletions:  diffstat.Deletions,
-			},
-		},
-		Summary: ledger.Summary{
-			What: what,
-			Why:  why,
-			How:  how,
-		},
-		Tags:      tags,
-		WorkItems: workItems,
-	}
-}
-
-// extractWorkItemsFromKey extracts work items from a group key if applicable.
-func extractWorkItemsFromKey(key string) []ledger.WorkItem {
-	if !isWorkItemKey(key) {
-		return nil
-	}
-	system, id, err := parseWorkItem(key)
-	if err != nil {
-		return nil
-	}
-	return []ledger.WorkItem{{System: system, ID: id}}
-}
-
-// getBatchDiffstat retrieves diffstat for a batch group.
-func getBatchDiffstat(storage *ledger.Storage, commits []git.Commit, anchor string) git.Diffstat {
-	if len(commits) == 0 {
-		return git.Diffstat{}
-	}
-	fromRef := commits[len(commits)-1].SHA + "^"
-	diffstat, err := storage.GetDiffstat(fromRef, anchor)
-	if err != nil {
-		return git.Diffstat{}
-	}
-	return diffstat
-}
-
-// extractCommitSHAs extracts SHA strings from commits.
-func extractCommitSHAs(commits []git.Commit) []string {
-	shas := make([]string, len(commits))
-	for i, commit := range commits {
-		shas[i] = commit.SHA
-	}
-	return shas
-}
-
-// buildCommitRange builds a commit range string.
-func buildCommitRange(commits []git.Commit) string {
-	if len(commits) <= 1 {
-		return ""
-	}
-	return commits[len(commits)-1].Short + ".." + commits[0].Short
 }
 
 // isWorkItemKey checks if a group key represents a work-item (vs a date or "untracked").

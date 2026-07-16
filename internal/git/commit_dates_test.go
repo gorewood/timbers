@@ -35,10 +35,10 @@ func TestCommit_MailmapResolvesAuthorEmail(t *testing.T) {
 	}
 	run("init")
 	run("config", "user.email", "alt@example.com")
-	run("config", "user.name", "Author Name")
+	run("config", "user.name", "Alias Name")
 
 	// Write a .mailmap that coalesces alt → canonical.
-	mailmap := "Author Name <canonical@example.com> <alt@example.com>\n"
+	mailmap := "Canonical Author <canonical@example.com> Alias Name <alt@example.com>\n"
 	if err := os.WriteFile(filepath.Join(dir, ".mailmap"), []byte(mailmap), 0o600); err != nil {
 		t.Fatalf("write .mailmap: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestCommit_MailmapResolvesAuthorEmail(t *testing.T) {
 		t.Fatalf("write work.txt: %v", err)
 	}
 	run("add", "work.txt")
-	run("commit", "-m", "feat: work commit by alt identity")
+	run("commit", "-m", "feat: work commit by alt identity", "-m", "Co-authored-by: Alias Name <alt@example.com>")
 
 	commits, err := Log("HEAD~1", "HEAD")
 	if err != nil {
@@ -60,6 +60,15 @@ func TestCommit_MailmapResolvesAuthorEmail(t *testing.T) {
 	}
 	if got, want := commits[0].AuthorEmail, "canonical@example.com"; got != want {
 		t.Errorf("AuthorEmail = %q, want %q (mailmap-resolved); raw alt@example.com indicates timbers is using %%ae instead of %%aE", got, want)
+	}
+	if got, want := commits[0].Author, "Canonical Author"; got != want {
+		t.Errorf("Author = %q, want %q (mailmap-resolved)", got, want)
+	}
+	if len(commits[0].CoAuthors) != 1 {
+		t.Fatalf("CoAuthors = %#v, want one identity", commits[0].CoAuthors)
+	}
+	if got, want := commits[0].CoAuthors[0], (Identity{Name: "Canonical Author", Email: "canonical@example.com"}); got != want {
+		t.Errorf("CoAuthors[0] = %#v, want %#v", got, want)
 	}
 }
 

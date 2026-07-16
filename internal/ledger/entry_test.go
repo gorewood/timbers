@@ -265,6 +265,23 @@ func TestEntry_Validate(t *testing.T) {
 	}
 }
 
+func TestFromJSONAcceptsOlderEntryWithoutContributors(t *testing.T) {
+	data := []byte(`{
+		"schema":"timbers.devlog/v1","kind":"entry","id":"tb_old",
+		"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z",
+		"workset":{"anchor_commit":"abc123","commits":["abc123"]},
+		"summary":{"what":"old","why":"old","how":"old"}
+	}`)
+
+	entry, err := FromJSON(data)
+	if err != nil {
+		t.Fatalf("FromJSON: %v", err)
+	}
+	if len(entry.Contributors) != 0 {
+		t.Fatalf("Contributors = %#v, want absent/empty", entry.Contributors)
+	}
+}
+
 func TestEntry_ToJSON(t *testing.T) {
 	entry := &Entry{
 		Schema:    SchemaVersion,

@@ -21,6 +21,7 @@ type LogInput struct {
 	Notes    string   `json:"notes,omitempty"     jsonschema:"deliberation notes capturing the journey to a decision"`
 	Tags     []string `json:"tags,omitempty"      jsonschema:"tags for categorization"`
 	WorkItem string   `json:"work_item,omitempty" jsonschema:"work item reference in system:id format"`
+	Who      []string `json:"who,omitempty"       jsonschema:"contributors as Name <email>; when set replaces Git-derived contributors"`
 }
 
 // LogOutput is the output for the log tool.
@@ -95,13 +96,9 @@ func buildLogEntry(
 	diffstat, _ := storage.GetDiffstat(fromRef, anchor)
 	now := time.Now().UTC()
 
-	var workItems []ledger.WorkItem
-	if input.WorkItem != "" {
-		parsed, err := parseWorkItem(input.WorkItem)
-		if err != nil {
-			return nil, err
-		}
-		workItems = []ledger.WorkItem{parsed}
+	workItems, contributors, err := resolveLogMetadata(commits, input)
+	if err != nil {
+		return nil, err
 	}
 
 	return &ledger.Entry{
@@ -125,10 +122,26 @@ func buildLogEntry(
 			Why:  input.Why,
 			How:  input.How,
 		},
-		Notes:     input.Notes,
-		Tags:      input.Tags,
-		WorkItems: workItems,
+		Notes:        input.Notes,
+		Tags:         input.Tags,
+		WorkItems:    workItems,
+		Contributors: contributors,
 	}, nil
+}
+
+func resolveLogMetadata(
+	commits []git.Commit, input LogInput,
+) ([]ledger.WorkItem, []ledger.Contributor, error) {
+	var workItems []ledger.WorkItem
+	if input.WorkItem != "" {
+		parsed, err := parseWorkItem(input.WorkItem)
+		if err != nil {
+			return nil, nil, err
+		}
+		workItems = []ledger.WorkItem{parsed}
+	}
+	contributors, err := ledger.ResolveContributors(commits, input.Who)
+	return workItems, contributors, err
 }
 
 func commitSubjects(commits []git.Commit) string {

@@ -6,7 +6,28 @@ import (
 
 	"github.com/gorewood/timbers/internal/git"
 	"github.com/gorewood/timbers/internal/ledger"
+	"github.com/gorewood/timbers/internal/output"
 )
+
+func resolveLogContributors(
+	commits []git.Commit, who []string, staleAnchor bool, printer *output.Printer,
+) ([]ledger.Contributor, error) {
+	if staleAnchor {
+		printer.Warn("stale anchor (likely squash merge); self-heals with this entry")
+	}
+	if len(commits) == 0 {
+		err := output.NewUserError("no pending commits to document. To log a specific commit or range " +
+			"anyway, pass --anchor <sha> or --range <from>..<to>. Run 'timbers pending' to check status")
+		printer.Error(err)
+		return nil, err
+	}
+	contributors, err := ledger.ResolveContributors(commits, who)
+	if err != nil {
+		err = output.NewUserError(err.Error())
+		printer.Error(err)
+	}
+	return contributors, err
+}
 
 // getLogCommits retrieves the commits to include in the entry.
 // Returns staleAnchor=true when the latest entry's anchor is missing from history.

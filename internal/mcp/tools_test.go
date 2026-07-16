@@ -277,7 +277,7 @@ func TestHandleLog_Success(t *testing.T) {
 	gitOps := &mockGitOps{
 		headSHA: "abc123",
 		reachableFrom: []git.Commit{
-			{SHA: "abc123", Short: "abc123", Subject: "test commit"},
+			{SHA: "abc123", Short: "abc123", Subject: "test commit", Author: "Git Author", AuthorEmail: "git@example.com"},
 		},
 		diffstat: git.Diffstat{Files: 2, Insertions: 10, Deletions: 3},
 	}
@@ -302,6 +302,26 @@ func TestHandleLog_Success(t *testing.T) {
 	}
 	if out.Entry.Workset.AnchorCommit != "abc123" {
 		t.Errorf("AnchorCommit = %q, want %q", out.Entry.Workset.AnchorCommit, "abc123")
+	}
+	if got := out.Entry.Contributors; len(got) != 1 || got[0].Email != "git@example.com" {
+		t.Errorf("Contributors = %#v, want Git author", got)
+	}
+}
+
+func TestHandleLog_WhoReplacesAutomaticContributors(t *testing.T) {
+	gitOps := &mockGitOps{headSHA: "abc123", reachableFrom: []git.Commit{{
+		SHA: "abc123", Short: "abc123", Subject: "test", Author: "Git Author", AuthorEmail: "git@example.com",
+	}}}
+	storage := makeTestStorage(t, gitOps, nil)
+	_, out, err := handleLog(storage)(context.Background(), &mcp.CallToolRequest{}, LogInput{
+		What: "paired", Why: "reason", How: "method", Who: []string{"Pair <pair@example.com>"},
+	})
+	if err != nil {
+		t.Fatalf("handleLog: %v", err)
+	}
+	if got := out.Entry.Contributors; len(got) != 1 || got[0].Email != "pair@example.com" ||
+		got[0].Sources[0] != ledger.ContributorSourceExplicit {
+		t.Fatalf("Contributors = %#v, want explicit replacement", got)
 	}
 }
 

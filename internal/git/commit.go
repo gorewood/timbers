@@ -14,15 +14,16 @@ import (
 
 // Commit represents a git commit with its metadata.
 type Commit struct {
-	SHA         string    // Full 40-character SHA
-	Short       string    // Abbreviated SHA (typically 7 chars)
-	Subject     string    // First line of commit message
-	Body        string    // Rest of commit message (may be empty)
-	Author      string    // Author name
-	AuthorEmail string    // Author email, mailmap-resolved (.mailmap coalesces alternate emails for the same person)
-	Date        time.Time // AuthorDate — when the commit was originally authored; preserved across rebase/amend
-	CommitDate  time.Time // CommitDate — when the commit was recorded on the current DAG; advances on rebase/amend
-	ParentCount int       // Number of parents (0=root, 1=normal, 2+=merge)
+	SHA         string     // Full 40-character SHA
+	Short       string     // Abbreviated SHA (typically 7 chars)
+	Subject     string     // First line of commit message
+	Body        string     // Rest of commit message (may be empty)
+	Author      string     // Author name
+	AuthorEmail string     // Author email, mailmap-resolved (.mailmap coalesces alternate emails for the same person)
+	CoAuthors   []Identity // Co-authored-by trailer identities, mailmap-resolved
+	Date        time.Time  // AuthorDate — when the commit was originally authored; preserved across rebase/amend
+	CommitDate  time.Time  // CommitDate — when the commit was recorded on the current DAG; advances on rebase/amend
+	ParentCount int        // Number of parents (0=root, 1=normal, 2+=merge)
 }
 
 // IsMerge reports whether the commit is a merge commit (2+ parents).
@@ -76,7 +77,9 @@ func logRange(fromRef, toRef string, firstParent bool) ([]Commit, error) {
 		return nil, output.NewSystemErrorWithCause("failed to get git log for range "+rangeSpec, err)
 	}
 
-	return parseCommits(out)
+	commits := parseCommits(out)
+	normalizeCoAuthors(commits)
+	return commits, nil
 }
 
 // commitFormat returns the git log --pretty=format string used by Log,
@@ -98,11 +101,12 @@ func commitFormat() string {
 		"%h",  // Short SHA
 		"%s",  // Subject
 		"%b",  // Body
-		"%an", // Author name
+		"%aN", // Author name, mailmap-resolved
 		"%aE", // Author email, mailmap-resolved
 		"%at", // AuthorDate (Unix timestamp) — preserved across rebase/amend
 		"%ct", // CommitDate (Unix timestamp) — advances on rebase/amend
 		"%P",  // Parent SHAs (space-separated; empty for root commit)
+		"%(trailers:key=Co-authored-by,valueonly,separator=%x1e)",
 	}, fieldSeparator) + commitSeparator
 }
 
@@ -114,13 +118,15 @@ func CommitsReachableFrom(sha string) ([]Commit, error) {
 		return nil, output.NewSystemErrorWithCause("failed to get commits from "+sha, err)
 	}
 
-	return parseCommits(out)
+	commits := parseCommits(out)
+	normalizeCoAuthors(commits)
+	return commits, nil
 }
 
 // parseCommits parses the custom formatted git log output into Commit structs.
-func parseCommits(out string) ([]Commit, error) {
+func parseCommits(out string) []Commit {
 	if out == "" {
-		return nil, nil
+		return nil
 	}
 
 	// Split by commit boundary
@@ -139,7 +145,7 @@ func parseCommits(out string) ([]Commit, error) {
 		}
 	}
 
-	return commits, nil
+	return commits
 }
 
 // parseCommitFields parses a single commit string into a Commit struct.
@@ -156,9 +162,10 @@ func parseCommits(out string) ([]Commit, error) {
 //	6: %at  AuthorDate (Unix)
 //	7: %ct  CommitDate (Unix)
 //	8: %P   parent SHAs
+//	9: Co-authored-by trailer values, record-separator delimited
 func parseCommitFields(commitStr string) (Commit, bool) {
 	fields := strings.Split(commitStr, fieldSeparator)
-	if len(fields) < 9 {
+	if len(fields) < 10 {
 		return Commit{}, false
 	}
 
@@ -185,6 +192,7 @@ func parseCommitFields(commitStr string) (Commit, bool) {
 		Body:        strings.TrimSpace(fields[3]),
 		Author:      strings.TrimSpace(fields[4]),
 		AuthorEmail: strings.TrimSpace(fields[5]),
+		CoAuthors:   parseCoAuthors(fields[9]),
 		Date:        time.Unix(authorTS, 0),
 		CommitDate:  time.Unix(commitTS, 0),
 		ParentCount: parentCount,

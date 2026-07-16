@@ -10,6 +10,7 @@ type logFlagVars struct {
 	notes     *string
 	tags      *[]string
 	workItems *[]string
+	who       *[]string
 	rangeStr  *string
 	anchor    *string
 	minor     *bool
@@ -28,6 +29,7 @@ func (vars *logFlagVars) toLogFlags() logFlags {
 		notes:     *vars.notes,
 		tags:      *vars.tags,
 		workItems: *vars.workItems,
+		who:       *vars.who,
 		rangeStr:  *vars.rangeStr,
 		anchor:    *vars.anchor,
 		minor:     *vars.minor,
@@ -47,6 +49,7 @@ func newLogFlagVars() *logFlagVars {
 		notes:     new(string),
 		tags:      new([]string),
 		workItems: new([]string),
+		who:       new([]string),
 		rangeStr:  new(string),
 		anchor:    new(string),
 		minor:     new(bool),
@@ -64,6 +67,7 @@ func registerLogFlags(cmd *cobra.Command, flagVars *logFlagVars) {
 	cmd.Flags().StringVar(flagVars.how, "how", "", "How this change was implemented (required unless --minor or --auto)")
 	cmd.Flags().StringArrayVar(flagVars.tags, "tag", nil, "Tags for categorization (repeatable)")
 	cmd.Flags().StringArrayVar(flagVars.workItems, "work-item", nil, "Work item reference as system:id (repeatable)")
+	cmd.Flags().StringArrayVar(flagVars.who, "who", nil, "Replace contributors with Name <email> (repeatable)")
 	cmd.Flags().StringVar(flagVars.rangeStr, "range", "", "Explicit commit range (e.g., abc123..def456)")
 	cmd.Flags().StringVar(flagVars.anchor, "anchor", "", "Override anchor commit (default: HEAD)")
 	cmd.Flags().BoolVar(flagVars.minor, "minor", false, "Trivial change - makes why/how optional")

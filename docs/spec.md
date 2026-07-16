@@ -167,6 +167,10 @@ Example: `tb_2026-01-15T15:04:05Z_8f2c1a`
 
   "work_items": [
     {"system": "beads", "id": "bd-a1b2c3"}
+  ],
+
+  "contributors": [
+    {"name": "Ada Lovelace", "email": "ada@example.com", "sources": ["git-author"]}
   ]
 }
 ```
@@ -181,6 +185,8 @@ Example: `tb_2026-01-15T15:04:05Z_8f2c1a`
 - `notes` — deliberation context (the journey to the decision)
 - `workset.range`, `workset.diffstat`
 - `tags[]`, `work_items[]`
+- `contributors[]` — capture-time identity snapshots with `git-author`,
+  `co-authored-by`, or `explicit` provenance. Absence means unknown.
 
 ---
 
@@ -213,6 +219,10 @@ timbers log --auto
 # Batch mode for multiple entries
 timbers log --batch
 
+# Explicit attribution replaces Git-derived contributors
+timbers log "Paired work" --why "..." --how "..." \
+  --who "Ada Lovelace <ada@example.com>" --who "Grace Hopper <grace@example.com>"
+
 # Custom range/anchor
 timbers log "Sprint work" --why "..." --how "..." --range abc123..def456
 
@@ -233,6 +243,7 @@ timbers log "Test" --why "Test" --how "Test" --dry-run --json
 - `--anchor <sha>` — Override anchor commit (default: HEAD)
 - `--tag <tag>` — Add tag (repeatable)
 - `--work-item <system:id>` — Link work item (repeatable)
+- `--who "Name <email>"` — Replace automatically derived contributors (repeatable)
 - `--minor` — Use defaults for trivial changes
 - `--auto` — Extract what/why/how from commit messages (non-interactive)
 - `--batch` — Process multiple commit groups interactively

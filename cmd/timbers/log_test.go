@@ -1237,3 +1237,36 @@ func TestLogAnchorBypassesZeroPending(t *testing.T) {
 		t.Errorf("expected 2 entry files, got %d", n)
 	}
 }
+
+func TestLogWhoReplacesAutomaticContributors(t *testing.T) {
+	mock := newMockGitOpsForLog()
+	mock.head = "abc123def456789"
+	mock.reachableResult = []git.Commit{{
+		SHA: "abc123def456789", Short: "abc123d", Subject: "work",
+		Author: "Git Author", AuthorEmail: "git@example.com",
+	}}
+	storage, _ := newLogTestStorage(t, mock)
+	cmd := newLogCmdWithStorage(storage)
+	cmd.PersistentFlags().Bool("json", false, "")
+	_ = cmd.PersistentFlags().Set("json", "true")
+	cmd.SetArgs([]string{
+		"Paired work", "--why", "reason", "--how", "method", "--dry-run",
+		"--who", "Pair Two <pair2@example.com>", "--who", "Pair One <pair1@example.com>",
+	})
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	var result struct {
+		Entry ledger.Entry `json:"entry"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
+		t.Fatalf("decode output: %v\n%s", err, output.String())
+	}
+	if got := result.Entry.Contributors; len(got) != 2 || got[0].Email != "pair1@example.com" ||
+		got[0].Sources[0] != ledger.ContributorSourceExplicit {
+		t.Fatalf("Contributors = %#v, want sorted explicit replacement", got)
+	}
+}

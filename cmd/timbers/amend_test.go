@@ -593,3 +593,27 @@ func TestAmendCommandJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestAmendWhoRepairsEntryWithoutCommitObjects(t *testing.T) {
+	now := time.Date(2026, 1, 15, 15, 4, 5, 0, time.UTC)
+	entry := &ledger.Entry{
+		Schema: ledger.SchemaVersion, Kind: ledger.KindEntry,
+		ID: ledger.GenerateID("missing123", now), CreatedAt: now, UpdatedAt: now,
+		Workset: ledger.Workset{AnchorCommit: "missing123", Commits: []string{"missing123"}},
+		Summary: ledger.Summary{What: "retroactive", Why: "reason", How: "method"},
+	}
+	storage, dir := setupAmendTestStorage(t, newMockGitOpsForAmend(), entry)
+	cmd := newAmendCmdInternal(storage)
+	cmd.SetArgs([]string{entry.ID, "--who", "Retro Author <retro@example.com>"})
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	amended := readEntryFromDir(t, dir, entry.ID)
+	if got := amended.Contributors; len(got) != 1 || got[0].Email != "retro@example.com" ||
+		got[0].Sources[0] != ledger.ContributorSourceExplicit {
+		t.Fatalf("Contributors = %#v, want retroactive explicit identity", got)
+	}
+}

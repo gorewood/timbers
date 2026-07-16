@@ -158,7 +158,16 @@ timbers log "Fixed race condition in cache invalidation" \
 - `--notes` for deliberation context — the journey to the decision (alternatives explored, trade-offs weighed). Skip for routine work; use when you made a real choice.
 - `--tag` for categorization (repeatable)
 - `--work-item` for linking to issue trackers (e.g., `--work-item jira:PROJ-123`)
+- `--who "Name <email>"` to replace Git-derived attribution (repeatable). Use
+  this for pairing, shared work, bots, or correcting an older entry.
 - `--minor` for trivial changes (skips why/how requirement)
+
+By default, Timbers snapshots mailmap-normalized commit authors and valid
+`Co-authored-by` trailers into the entry. Contributor identities survive later
+rebases and squashes because consumers read the entry, not Git history. When
+`--who` is present its values replace, rather than add to, automatic results.
+Use `timbers amend <entry-id> --who ...` to repair attribution after the
+original commit objects are unavailable.
 
 ### Checking for Undocumented Work
 
