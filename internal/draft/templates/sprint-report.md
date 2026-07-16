@@ -1,7 +1,13 @@
 ---
 name: sprint-report
 description: Sprint summary with categories, carry-overs, and signals
-version: 5
+version: 6
+report:
+  scope:
+    since: 14d
+  projection: narrative
+  format: markdown
+  quiet_output: _No reportable cycle activity in this range._
 ---
 Generate a sprint report from these development log entries.
 
@@ -35,8 +41,9 @@ Skip Highlights if nothing meets the bar. Padding with the most-recent-feature i
 - One sentence, framed as a discussion prompt: "Worth discussing: whether the new auth pattern should be the default for other modules" — not a summary
 
 **Operator-voice texture** (light touch):
-- If entries make it clear that AI agents drove substantial portions of the work, a single context line in the Summary is appropriate ("Heavy agent involvement on the X subsystem; operator review caught Y") — but only when entries say so. Don't fabricate partnership.
-- This is calibration for the reader, not credit allocation.
+- Contributor snapshots identify participants, not roles, effort, or whether someone is human or automated. Never infer those attributes from contributor sources.
+- If captured attribution and entry content support it, an optional **Contributors** section may describe which themes each person worked across. Use one short qualitative line per contributor.
+- Do not count entries, rank people, compare output, assign percentages, or infer ownership. Omit the section when attribution is absent or ambiguous.
 
 **Style**:
 - Factual, scannable
@@ -55,6 +62,7 @@ Skip Highlights if nothing meets the bar. Padding with the most-recent-feature i
 - Skip optional sections when nothing meets their bar
 - Group entries by type or outcome (features, fixes, refactors, infra) when tags are absent. A pure chronological list is a dressed-up activity log and the audience explicitly does not want one — fall back to chronology only when entries are so few or so disparate that no grouping is meaningful.
 - A short, honest report beats a padded "complete" one
+- If the entries contain no reportable cycle signal, output exactly `_No reportable cycle activity in this range._` and stop.
 
 **Output discipline**:
 - Output the sprint report ONLY. No preamble, commentary, acknowledgment, or meta-discussion.

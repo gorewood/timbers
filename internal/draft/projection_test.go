@@ -21,6 +21,9 @@ func TestProjectEntries(t *testing.T) {
 		Notes:     "Trade-off",
 		Tags:      []string{"design"},
 		WorkItems: []ledger.WorkItem{{System: "beads", ID: "timbers-1"}},
+		Contributors: []ledger.Contributor{{
+			Name: "Ada Lovelace", Email: "ada@example.com", Sources: []string{"explicit"},
+		}},
 	}
 	subjects := map[string]string{"abc": "Stored subject", "def": "Useful current subject"}
 
@@ -37,6 +40,9 @@ func TestProjectEntries(t *testing.T) {
 	if !strings.Contains(text, "Useful current subject") || strings.Count(text, "Stored subject") != 1 {
 		t.Errorf("decision projection subjects = %s", text)
 	}
+	if !strings.Contains(text, `"contributors"`) || !strings.Contains(text, `"name": "Ada Lovelace"`) {
+		t.Errorf("decision projection omitted contributors: %s", text)
+	}
 
 	narrative, err := ProjectEntries([]*ledger.Entry{entry}, ProjectionNarrative, subjects)
 	if err != nil {
@@ -44,6 +50,9 @@ func TestProjectEntries(t *testing.T) {
 	}
 	if !strings.Contains(string(narrative), `"how": "Approach"`) {
 		t.Errorf("narrative projection omitted how: %s", narrative)
+	}
+	if !strings.Contains(string(narrative), `"contributors"`) {
+		t.Errorf("narrative projection omitted contributors: %s", narrative)
 	}
 }
 

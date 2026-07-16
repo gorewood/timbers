@@ -217,7 +217,7 @@ Render templates with ledger entries for LLM consumption or direct execution
 - `-m, --model <name>`: Execute with built-in LLM
 - `--json`: Structured JSON output
 
-**Templates**: `changelog`, `decision-digest`, `devblog`, `pr-description`, `release-notes`, `sprint-report`, `standup`
+**Templates**: `changelog`, `decision-digest`, `devblog`, `pr-description`, `project-update`, `release-notes`, `sprint-report`, `standup`
 
 **Examples**:
 ```bash
@@ -242,10 +242,16 @@ result succeeds without artifact content.
 timbers report decision-digest
 timbers report decision-digest --model opus
 timbers report decision-digest --since 30d --model opus
+timbers report project-update --model opus
 ```
 
 The decision digest is retrospective and non-authoritative. Project-native
 ADRs and design documents remain the source of truth.
+
+Built-in recurring profiles default to 1 day for `standup`, 7 days for
+`project-update`, 14 days for `sprint-report`, and the last 20 entries for
+`decision-digest` and `devblog`. Persisted contributors may appear in their
+compact inputs as optional descriptive context; absence is not inferred.
 
 ### Ledger integrity
 

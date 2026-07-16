@@ -1,7 +1,13 @@
 ---
 name: devblog
 description: Narrative developer blog post reflecting on recent work
-version: 7
+version: 8
+report:
+  scope:
+    last: 20
+  projection: narrative
+  format: markdown
+  quiet_output: _No narrative update supported by these entries._
 ---
 Write a developer blog post from these development log entries. The post should read as an engaging technical essay — the story of what happened and what it meant, not a log of what changed.
 
@@ -64,6 +70,11 @@ Do NOT use `#`, `##`, or `###` headers in the output. The post flows as continuo
 - Drop the timestamps. "At 2pm I..." is a log entry. A dev blog exists outside the timeline of the session.
 - Not every entry needs to make it into the post. Edit aggressively — the goal is the essential arc, not completeness.
 
+**Contributor attribution**:
+- Contributor snapshots identify participants, not roles, effort, or whether someone is human or automated.
+- Name a contributor only when the entries show that their involvement changes the story: a correction, collaboration, review, or explicit division of work.
+- Do not infer feelings, dialogue, ownership, or credit shares from a name or source value alone.
+
 **Notes field**: Some entries include a `notes` field with deliberation context — alternatives explored, surprises, reasoning chains, moments where a reviewer or AI agent surfaced something the operator missed. When present, mine these aggressively. The notes often contain the best narrative material: the journey to a decision, the dead ends that taught something, the "wait, that actually worked?" moments, the partnership texture.
 
 **Operator intent**: When entries surface a *why-this-work* (not just a why-this-decision) — a frustration that prompted the work, a stakeholder ask, a bet the operator is making — lead with that intent. Readers care about what the human was trying to accomplish at least as much as the technical narrative.
@@ -98,6 +109,7 @@ Do NOT use `#`, `##`, or `###` headers in the output. The post flows as continuo
 - Do not reference technologies, patterns, or concepts not mentioned in the entries.
 - **Do not fabricate emotion or affect.** The Audience and Voice sections invite emotional texture ("how the operator felt", "if something was surprising or frustrating, say so") — but only when the entries actually surface that affect, in the why, notes, or tags. Routine, mechanical work gets a clear-eyed, neutral post; manufacturing frustration or delight where none exists is a softer fabrication and reads false. A neutral post that lands the substance beats one that performs feeling.
 - If the entries are thin, write a shorter post. A tight 200-word post beats a padded 600-word one.
+- If the entries do not support a coherent narrative, output exactly `_No narrative update supported by these entries._` and stop.
 
 **Output discipline**:
 - Output the blog post ONLY. No preamble, commentary, acknowledgment, or meta-discussion.

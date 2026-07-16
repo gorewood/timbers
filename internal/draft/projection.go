@@ -10,15 +10,16 @@ import (
 )
 
 type projectedEntry struct {
-	ID          string            `json:"id"`
-	CreatedAt   time.Time         `json:"created_at"`
-	What        string            `json:"what"`
-	Why         string            `json:"why"`
-	How         string            `json:"how,omitempty"`
-	Notes       string            `json:"notes,omitempty"`
-	Tags        []string          `json:"tags,omitempty"`
-	WorkItems   []ledger.WorkItem `json:"work_items,omitempty"`
-	GitSubjects []string          `json:"git_subjects,omitempty"`
+	ID           string               `json:"id"`
+	CreatedAt    time.Time            `json:"created_at"`
+	What         string               `json:"what"`
+	Why          string               `json:"why"`
+	How          string               `json:"how,omitempty"`
+	Notes        string               `json:"notes,omitempty"`
+	Tags         []string             `json:"tags,omitempty"`
+	WorkItems    []ledger.WorkItem    `json:"work_items,omitempty"`
+	Contributors []ledger.Contributor `json:"contributors,omitempty"`
+	GitSubjects  []string             `json:"git_subjects,omitempty"`
 }
 
 // ProjectEntries returns the compact JSON input selected by a report profile.
@@ -34,6 +35,7 @@ func ProjectEntries(
 			ID: entry.ID, CreatedAt: entry.CreatedAt,
 			What: entry.Summary.What, Why: entry.Summary.Why,
 			Notes: entry.Notes, Tags: entry.Tags, WorkItems: entry.WorkItems,
+			Contributors: entry.Contributors,
 		}
 		if projection == ProjectionNarrative {
 			item.How = entry.Summary.How

@@ -1,32 +1,12 @@
 ---
 title: 'Release Notes'
 date: '2026-07-16'
+summary: 'User-facing changes from contributor attribution, report profiles, and workflow hardening.'
 tags: ['example', 'release-notes']
+authors: ['Bob Bergman']
 ---
 
-Generated with `timbers draft release-notes --last 20 | claude -p --model opus`
-
----
-
-Looking at the entries, I need to filter for user-observable changes and write release notes.
-
-Let me work through what's user-facing versus internal:
-
-**User-facing:**
-- Contributor attribution on entries (`--who`, automatic capture) — new capability
-- `report` command with decision digest profiles — new command
-- Derive missing `what` from commit subjects — capability change
-- Corrupt entries surfaced on reads / fail-closed — bug fix + reliability
-- Retired `catchup` workflow — breaking removal
-- Replaced generated ADRs with decision digests — breaking/behavior change to `draft`
-- Cross-agent-debt gate + `--anchor` SHA resolution bug fixes — user-observable (hooks blocking session end, phantom entries)
-- doctor detection + `--fix` for outdated post-rewrite hooks — new capability
-- POSIX hook fix (dash) — bug fix users on Debian/Ubuntu/CI hit
-- Timbermill site replaces Hugo — this is the *demo site*, not the product; site polish entries are not the shipped CLI
-
-**Excluded:** site theme/polish (4sh entries), docs reconciliation, plan docs, worktree gitignore, release skip config.
-
-Here are the release notes.
+Generated with `timbers draft release-notes --last 20 | claude -p --model opus`.
 
 ---
 
@@ -52,7 +32,3 @@ Here are the release notes.
 
 - **Removed the `timbers catchup` workflow.** Use the first-log baseline, `timbers log --batch`, and ignore rules to onboard existing history instead — these already cover legitimate adoption cases. Existing catchup-generated entries are preserved.
 - **The built-in ADR template now produces a non-authoritative decision digest**, not numbered ADRs — generated output no longer claims ADR numbers, status, or lifecycle. If you relied on the old numbered-ADR output, treat your native project ADRs as the authoritative source and publish them directly.
-
----
-
-skipped: all site/Timbermill theme work (that's the demo site, not the CLI), docs-drift reconciliation, plan docs, and the agent-steering-prose entry (a7e399) — add back only if the demo site *is* the product you're shipping notes for.

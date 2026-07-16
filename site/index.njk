@@ -98,9 +98,10 @@ permalink: /index.html
         </header>
         <div class="output-list">
           {% for item in configuredItems | take(3) %}
+            {% set itemAuthors = item.data.authors or item.data.contributors %}
             <article>
               <a class="output-link" href="{{ item.url | siteUrl }}">
-                <p class="artifact-meta">{% if configured.kind == 'native' %}Native artifact{% else %}Generated report{% endif %}{% if item.data.date %} · {{ item.data.date | displayDate }}{% endif %}</p>
+                <p class="artifact-meta">{% if configured.kind == 'native' %}Native artifact{% else %}Generated report{% endif %}{% if item.data.date %} · {{ item.data.date | displayDate }}{% endif %}{% if itemAuthors %} · {% for person in itemAuthors %}{{ person.name or person }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</p>
                 <h3>{{ item.data.title or item.fileSlug }}</h3>
                 {% if item.data.summary %}<p>{{ item.data.summary }}</p>{% endif %}
                 <svg class="icon" aria-hidden="true"><use href="#icon-arrow-right"></use></svg>

@@ -12,6 +12,7 @@ This document outlines strategies for publishing artifacts generated from your d
 | Release Notes | End users | `release-notes` | Per release |
 | Decision Digest | Technical team | `decision-digest` | Weekly/milestone |
 | Standup | Internal stakeholders | `standup` | Daily/weekly |
+| Project Update | Users, operators, stakeholders | `project-update` | Weekly |
 | Sprint Report | Team | `sprint-report` | Per sprint |
 | Dev Blog | External community | `devblog` | Monthly/milestone |
 
@@ -30,6 +31,7 @@ scope and compact input while keeping stdout as the publishing boundary:
 
 ```bash
 timbers report decision-digest --model opus > decision-digest.md
+timbers report project-update --model opus > project-update.md
 ```
 
 Use `draft` when the caller intentionally owns the template and scope, such as
@@ -211,6 +213,7 @@ timbers draft sprint-report --since 14d | claude --model haiku --print > /shared
 
 # Or use the profile's default scope
 timbers report decision-digest --model opus > /shared/reports/decision-digest.md
+timbers report project-update --model opus > /shared/reports/project-update.md
 ```
 
 ### Cron Job

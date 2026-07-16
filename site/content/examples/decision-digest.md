@@ -1,95 +1,14 @@
 ---
 title: 'Decision Digest'
 date: '2026-07-16'
+summary: 'Source-cited choices and trade-offs captured retrospectively without claiming ADR authority.'
 tags: ['example', 'decision-digest']
+authors: ['Bob Bergman']
 ---
 
-Generated with `timbers draft decision-digest --last 20 | claude -p --model opus`
+Generated with `timbers report decision-digest --last 20 | claude -p --model opus`.
 
 ---
-
-The user wants me to extract design decisions and format a digest. Let me work through the entries.
-
-Let me identify entries with genuine choices between alternatives:
-
-1. **tb_...a7e399** — Steer agents toward contributor attribution. Notes: kept progressive, explicit steering only for specific cases. Related to attribution contract. Some rationale but more of a refinement of dca822.
-
-2. **tb_...dca822** — Persist contributor attribution. Why: workset SHAs disappear after rebase/squash → need capture-time snapshot rather than later Git/LLM join. Notes: explicit --who replaces complete set to avoid ambiguous merge semantics. **Genuine decision** with alternatives (capture-time snapshot vs later join; full-replace vs merge).
-
-3. **9320fc, 1695a4, 616b50** — site styling. No real alternatives. Skip.
-
-4. **fd16c4** — ignore worktrees. Routine. Skip.
-
-5. **bbe3b3** — docs refresh. Skip.
-
-6. **292a0d** — Replace Hugo with Timbermill/Eleventy. Why: Hugo tightly coupled to one renderer, no reusable path. **Decision**: config-driven Eleventy over Hugo. Has rationale/alternative.
-
-7. **9ccccf** — docs reconcile. Skip.
-
-8. **545516** — feat(report) decision digest profiles. Feature, but see plan dd9638.
-
-9. **d5b0e0** — inventory doc drift. Skip.
-
-10. **aa972e** — plan Eleventy migration. Why: needed proven in-repo shape before independently versioned companion repo. This is a decision: in-repo before separate repo. Contributes to 292a0d migration. Could fold.
-
-11. **dd9638** — define report profiles. Why: repeatable reports need small profile contract without creating a second workflow engine or hiding prompt behavior. Notes: kept draft as lower-level primitive, stored text as durable source when Git enrichment unavailable. **Decision**: profiles as thin contract over draft, not new engine.
-
-12. **e3210f** — surface corrupt entries. Why: malformed files must never disappear silently. Decision: fail closed. Some choice (fail-closed vs partial). Borderline — it's a "must never" invariant. There's a genuine design stance: retain corrupt paths, fail closed before partial artifacts. I'd consider it.
-
-13. **4f92ec** — Replace ADRs with decision digests. Why: heuristic numbered ADRs compete with authoritative ADRs, ambiguity re status/numbering/ownership. Notes: native ADRs remain authoritative; future publishing ingest directly rather than heuristic reconciliation. **Strong decision**.
-
-14. **9eff03** — derive missing what from commits. Why: repeating commit subjects adds friction while reports need durable text surviving rewrites. Notes: report-time Git lookup optional enrichment; stored what is fallback; patch IDs deferred because they don't solve many-to-one squash merges. **Decision** with explicit alternatives + deferral rationale.
-
-15. **16496f** — Retire inferred catchup workflow. Why: LLM-generated historical rationale was low-confidence data stored indistinguishably from authored reasoning; existing features cover legitimate cases. Notes: preserves historical entries. **Decision**: remove catchup.
-
-16. **09f482** — Unify cross-agent-debt gate + resolve --anchor. Why: detailed root cause. Notes: Rejected report's ask to make hook and pending share one computation — gate (first-parent) and display (full-DAG) deliberately different. Also considered splitting into three commits, dropped .timbers-absent guard. **Decision**: keep gate and display computations separate. Genuine choice between alternatives explicitly. Also --anchor resolution. This has real deliberation. Include.
-
-17. **abf4b1** — doctor detection for outdated hooks. Notes: Direct content comparison over stamped version number — keeps single source of truth. Scoped to post-rewrite only. **Decision**: content comparison vs version stamp. Genuine alternative considered.
-
-18. **cafcf0** — POSIX hook for dash. Bug fix, but notes discuss considered alternatives (always run test under dash — left it). This is a routine bug fix. The decision content is thin re design. Skip — it's a bugfix; the "considered making the test always run under dash" is minor. Skip.
-
-Now let me consolidate. Related clusters:
-
-- **Contributor attribution**: dca822 (main) + a7e399 (steering refinement). Consolidate into one, final shape a7e399 date 2026-07-16. Both materially contribute.
-
-- **Report/digest**: dd9638 (plan) + 545516 (impl) — report profiles as thin contract. Consolidate.
-
-- **ADR → digest**: 4f92ec standalone. Related to report profiles but distinct decision (non-authoritative digest vs numbered ADRs). Keep separate.
-
-- **Eleventy migration**: aa972e (plan: in-repo before companion repo) + 292a0d (impl: Eleventy over Hugo). Consolidate. Final date 2026-07-14.
-
-- **Derive what from commits**: 9eff03 standalone.
-
-- **Retire catchup**: 16496f standalone.
-
-- **Corrupt entries fail-closed**: e3210f. Include — genuine invariant/stance.
-
-- **Cross-agent-debt gate separation**: 09f482. Include.
-
-- **Doctor content comparison vs version stamp**: abf4b1. Include.
-
-Let me reconsider which are truly "design decisions with a real alternative + reason" vs feature descriptions.
-
-e3210f: "malformed ledger files must never disappear silently" — the alternative is silent skip vs surface+fail-closed. That's a genuine stance. Include but concise.
-
-Let me write. Ordering: reverse chronological is natural. I'll order by Observed date descending.
-
-Dates:
-- Contributor attribution: 2026-07-16 (a7e399/dca822)
-- Eleventy migration: 2026-07-14
-- Report digest profiles: 2026-07-14
-- ADR → digest: 2026-07-14
-- Derive what from commits: 2026-07-14
-- Corrupt entries: 2026-07-14
-- Retire catchup: 2026-07-14
-- Cross-agent gate: 2026-07-10
-- Doctor content comparison: 2026-06-26
-
-Let me write the digest.
-
-For sources I cite the timbers entry IDs (full IDs as given in input).
-
-Let me draft each carefully, only including trade-offs explicitly stated.# Decision Digest
 
 _Retrospective summary from development-ledger entries. Project ADRs and design documents remain authoritative._
 

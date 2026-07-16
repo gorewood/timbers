@@ -98,6 +98,7 @@ Built-in templates (use `timbers draft --list` for current list):
 | `devblog` | Developer blog post (Carmack .plan style) |
 | `standup` | Daily standup from recent work |
 | `pr-description` | Pull request descriptions |
+| `project-update` | Recurring progress and implications for users and stakeholders |
 | `release-notes` | User-facing release notes |
 | `sprint-report` | Sprint/iteration summaries |
 
@@ -181,6 +182,20 @@ The built-in decision digest extracts only explicit choices and trade-offs. It
 is retrospective and non-authoritative: native project ADRs and design
 documents remain the source of truth. A report with no selected entries or no
 reportable decisions exits successfully without artifact content.
+
+Built-in profiles provide these defaults:
+
+| Profile | Default scope | Focus |
+|---------|---------------|-------|
+| `standup` | Last 1 day | Immediate progress, blockers, and next steps |
+| `project-update` | Last 7 days | User and stakeholder impact |
+| `sprint-report` | Last 14 days | Iteration outcomes and follow-up |
+| `decision-digest` | Last 20 entries | Explicit decisions and trade-offs |
+| `devblog` | Last 20 entries | Development narrative |
+
+Compact report projections include persisted contributor snapshots when they
+exist. Templates may use names as descriptive context, but must not infer
+missing identities, roles, ownership, or productivity from them.
 
 Use `draft` when the caller should choose the scope every time or needs full
 entry JSON. Use `report` for a named, repeatable reporting workflow.

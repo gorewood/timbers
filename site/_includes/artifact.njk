@@ -4,11 +4,13 @@ body_class: artifact-page
 ---
 <article class="artifact shell reading-shell">
   <header class="artifact-heading">
+    {% set credited = authors or contributors %}
     <a class="back-link" href="{{ ('/' + collection_route + '/') | siteUrl }}"><svg class="icon" aria-hidden="true"><use href="#icon-arrow-left"></use></svg>{{ collection_label }}</a>
     <p class="section-label">{% if artifact_kind == "native" %}Native artifact{% else %}Generated report{% endif %}</p>
     <h1>{{ title or page.fileSlug }}</h1>
     <dl class="artifact-byline">
       {% if date %}<div><dt>Published</dt><dd><time datetime="{{ date | isoDate }}">{{ date | displayDate }}</time></dd></div>{% endif %}
+      {% if credited %}<div><dt>By</dt><dd>{% for person in credited %}{{ person.name or person }}{% if not loop.last %}, {% endif %}{% endfor %}</dd></div>{% endif %}
       {% if status %}<div><dt>Status</dt><dd>{{ status }}</dd></div>{% endif %}
       {% if source %}<div><dt>Source</dt><dd>{{ source }}</dd></div>{% endif %}
     </dl>
