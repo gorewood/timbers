@@ -179,6 +179,7 @@ examples:
         (
             TITLE=$(echo "$tmpl" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
             CONTENT=$(go run ./cmd/timbers "$mode" "$tmpl" $RANGE | claude -p --model opus)
+            CONTENT=$(printf '%s\n' "$CONTENT" | sed '1{/^# /d;}')
             AUTHORS=$(go run ./cmd/timbers query $RANGE --json | jq -c '[.[].contributors[]?.name] | unique')
             {
                 printf '%s\n' '---'
@@ -237,6 +238,7 @@ examples-static:
         (
             TITLE=$(echo "$tmpl" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
             CONTENT=$(go run ./cmd/timbers "$mode" "$tmpl" $RANGE | claude -p --model opus)
+            CONTENT=$(printf '%s\n' "$CONTENT" | sed '1{/^# /d;}')
             AUTHORS=$(go run ./cmd/timbers query $RANGE --json | jq -c '[.[].contributors[]?.name] | unique')
             {
                 printf '%s\n' '---'

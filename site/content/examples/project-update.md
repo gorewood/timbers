@@ -9,8 +9,6 @@ Generated with `timbers report project-update --since 7d | claude -p --model opu
 
 ---
 
-# Project Update
-
 This period reworks how Timbers records and reports who did the work, and replaces the Hugo demo site with the new Timbermill publishing harness. The most useful change: entries now capture durable contributor attribution at commit time, so credit survives rebases, squashes, and pruning.
 
 ## New

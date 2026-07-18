@@ -9,8 +9,6 @@ Generated with `timbers report decision-digest --last 20 | claude -p --model opu
 
 ---
 
-# Decision Digest
-
 _Retrospective summary from development-ledger entries. Project ADRs and design documents remain authoritative._
 
 ## Replace Hugo with an in-repo Timbermill/Eleventy publishing harness
