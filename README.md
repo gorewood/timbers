@@ -19,6 +19,7 @@ timbers log "Switched to cursor-based pagination" \
 
 # Generate artifacts from your ledger
 timbers report decision-digest --model opus
+timbers report project-update --model opus
 ```
 
 **[Website](https://gorewood.github.io/timbers/)** · **[Tutorial](docs/tutorial.md)** · **[Examples](https://gorewood.github.io/timbers/examples/)** · **[Dev Blog](https://gorewood.github.io/timbers/posts/)**
@@ -75,6 +76,9 @@ CLI; both can execute directly with `--model`.
 timbers report decision-digest
 timbers report decision-digest --model opus
 
+# Recurring user and stakeholder update (defaults to the last 7 days)
+timbers report project-update --model opus
+
 # An explicit scope replaces the profile default
 timbers report decision-digest --since 30d --model opus
 ```
@@ -94,7 +98,7 @@ timbers draft standup --since 1d --model opus
 timbers draft --list
 ```
 
-**Built-in templates:** `changelog`, `decision-digest`, `devblog`, `pr-description`, `release-notes`, `sprint-report`, `standup`
+**Built-in templates:** `changelog`, `decision-digest`, `devblog`, `pr-description`, `project-update`, `release-notes`, `sprint-report`, `standup`
 
 The decision-digest template extracts explicit choices and trade-offs from `--why` and `--notes` into a retrospective report. It deliberately does not create or replace a project's authoritative ADRs.
 
@@ -221,12 +225,13 @@ See [docs/design-decisions.md](docs/design-decisions.md) for the full rationale,
 
 ## Example Artifacts
 
-Timbers' own development ledger is used to generate these examples via `timbers draft`. Each link is a live artifact produced from real data:
+Timbers' own development ledger is used to generate these examples via `timbers draft` and `timbers report`. Each link is a live artifact produced from real data:
 
 | Artifact | Description |
 |----------|-------------|
 | [Changelog](https://gorewood.github.io/timbers/examples/changelog/) | Keep a Changelog format, grouped by type |
 | Decision Digest | Retrospective summary of explicit decisions from the *why* and *notes* fields |
+| [Project Update](https://gorewood.github.io/timbers/examples/project-update/) | Weekly progress and implications for users and stakeholders |
 | [Standup](https://gorewood.github.io/timbers/examples/standup/) | Daily standup from recent work |
 | [Release Notes](https://gorewood.github.io/timbers/examples/release-notes/) | User-facing release notes |
 | [Sprint Report](https://gorewood.github.io/timbers/examples/sprint-report/) | Categorized sprint summary with scope and highlights |

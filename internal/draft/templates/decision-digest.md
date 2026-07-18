@@ -1,7 +1,7 @@
 ---
 name: decision-digest
 description: Retrospective digest of explicit design decisions
-version: 2
+version: 3
 report:
   scope:
     last: 20
@@ -15,7 +15,7 @@ This digest is a report, not an authoritative architecture decision record. Proj
 
 **What to extract**: Only entries whose `why` or `notes` field records a genuine choice between alternatives and the reason for that choice. Skip feature descriptions, implementation summaries, routine fixes, and thin rationale.
 
-**Notes field**: Use `notes` as the primary source for alternatives and trade-offs when present. The `why` field usually contains the verdict; `notes` may contain the deliberation.
+**Evidence use**: Treat `why` and `notes` as evidence, not prose to reproduce. State the final choice directly in your own concise words. Use `notes` for alternatives and trade-offs only when they materially explain the choice.
 
 **Consolidation**: If several entries describe the same decision evolving, produce one digest item for the final shape. Cite every entry that materially contributed to it.
 
@@ -35,7 +35,7 @@ _Retrospective summary from development-ledger entries. Project ADRs and design 
 
 **Decision:** What was chosen and why.
 
-**Trade-offs:** Only benefits, costs, constraints, or open questions stated in the entries. Omit this section when none were recorded.
+**Trade-offs:** Only benefits, costs, or constraints stated in the entries. Do not use this field for related implementation details, general consequences, or future plans. Omit it when no trade-off was recorded.
 ```
 
 **Source citations**:
@@ -58,6 +58,7 @@ _Retrospective summary from development-ledger entries. Project ADRs and design 
 - If no entries contain an explicit design decision, output exactly `_No explicit design decisions in this range._` and stop.
 
 **Output discipline**:
+- Perform selection, filtering, and consolidation silently. Never output candidate lists, skipped entries, drafting notes, or statements about what you are about to write.
 - Output the decision digest only. No preamble, acknowledgment, or sign-off.
 - When decisions exist, the first line must be `# Decision Digest`.
 

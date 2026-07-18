@@ -1,7 +1,13 @@
 ---
 name: standup
 description: Daily standup from recent work
-version: 6
+version: 9
+report:
+  scope:
+    since: 1d
+  projection: narrative
+  format: markdown
+  quiet_output: _No reportable activity in this range._
 ---
 Generate a standup update from these development log entries.
 
@@ -36,7 +42,9 @@ Generate a standup update from these development log entries.
 - Only emit when entries actually indicate the operator was looking for input. Don't fabricate asks.
 
 **Collaboration texture** (light, optional):
-- It's fine to surface "the agent handled X while I focused on Y" when entries explicitly capture that division — it helps standup attendees calibrate. Skip when entries don't mention it.
+- Contributor snapshots identify who participated, not their role, effort, or whether they are human or automated. Use a captured name only when it clarifies shared work.
+- It's fine to surface a division of work when entry notes explicitly capture it. Skip when the entries do not.
+- Never infer workload, productivity, ownership, or credit shares from entry counts.
 
 **Numbers and metrics**:
 - DO NOT cite raw diff stats or file counts
@@ -48,8 +56,10 @@ Generate a standup update from these development log entries.
 - Don't add context, metrics, or implications not present
 - Don't fabricate asks for help — only emit when entries clearly indicate the operator wants input
 - Fewer bullets is fine if entries are sparse
+- If the entries contain no reportable team signal, output exactly `_No reportable activity in this range._` and stop.
 
 **Output discipline**:
+- Perform selection, filtering, and consolidation silently. Never output candidate lists, skipped entries, drafting notes, or statements about what you are about to write.
 - Output the standup ONLY. No preamble, commentary, acknowledgment, or meta-discussion.
 - Do not begin with "Here is..." or "I'll generate..." or any thinking-out-loud.
 - Do not end with "Let me know..." or any sign-off.
@@ -57,4 +67,4 @@ Generate a standup update from these development log entries.
 
 ## Entries ({{entry_count}})
 
-{{entries_summary}}
+{{entries_json}}

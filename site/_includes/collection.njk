@@ -15,11 +15,13 @@ body_class: collection-page
   {% if items.length %}
     <ol class="artifact-list">
       {% for item in items %}
+        {% set itemAuthors = item.data.authors or item.data.contributors %}
         <li>
           <a href="{{ item.url | siteUrl }}">
             <span class="artifact-meta">
               {% if item.data.artifact_kind == "native" %}Native{% else %}Generated{% endif %}
               {% if item.data.date %} · {{ item.data.date | displayDate }}{% endif %}
+              {% if itemAuthors %} · {% for person in itemAuthors %}{{ person.name or person }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
             </span>
             <span class="artifact-title">{{ item.data.title or item.fileSlug }}</span>
             {% if item.data.summary %}<span class="artifact-summary">{{ item.data.summary }}</span>{% endif %}

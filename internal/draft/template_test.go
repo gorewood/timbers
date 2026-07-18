@@ -261,6 +261,7 @@ func TestDecisionDigestIsNonAuthoritative(t *testing.T) {
 		"Project ADRs and design documents remain authoritative",
 		"**Sources:** `entry-id`",
 		"Do not assign ADR numbers, lifecycle statuses, or supersession relationships",
+		"Treat `why` and `notes` as evidence, not prose to reproduce",
 		"_No explicit design decisions in this range._",
 	} {
 		if !strings.Contains(tmpl.Content, required) {
@@ -273,5 +274,34 @@ func TestDecisionDigestIsNonAuthoritative(t *testing.T) {
 	}
 	if tmpl.Report == nil || tmpl.Report.Scope.Last != "20" || tmpl.Report.Projection != ProjectionDecision {
 		t.Errorf("decision-digest report profile = %#v", tmpl.Report)
+	}
+}
+
+func TestBuiltinsKeepSelectionProcessOutOfArtifacts(t *testing.T) {
+	const required = "Perform selection, filtering, and consolidation silently."
+
+	for _, info := range listBuiltins() {
+		t.Run(info.Name, func(t *testing.T) {
+			tmpl, err := loadBuiltin(info.Name)
+			if err != nil {
+				t.Fatalf("loadBuiltin(%q) error = %v", info.Name, err)
+			}
+			if !strings.Contains(tmpl.Content, required) {
+				t.Errorf("built-in template %q does not require silent selection", info.Name)
+			}
+		})
+	}
+}
+
+func TestStandupUsesContributorBearingProjection(t *testing.T) {
+	tmpl, err := loadBuiltin("standup")
+	if err != nil {
+		t.Fatalf("loadBuiltin(standup) error = %v", err)
+	}
+	if !strings.Contains(tmpl.Content, "{{entries_json}}") {
+		t.Error("standup must render the contributor-bearing report projection")
+	}
+	if strings.Contains(tmpl.Content, "{{entries_summary}}") {
+		t.Error("standup must not use entries_summary, which omits contributors")
 	}
 }

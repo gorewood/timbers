@@ -48,7 +48,7 @@ permalink: /index.html
         <svg class="stage-icon" aria-hidden="true"><use href="#icon-capture"></use></svg>
         <span class="stage-number">02</span>
         <h3>Capture</h3>
-        <p>Record what, why, how, and the trade-offs that mattered.</p>
+        <p>Record what, why, how, who contributed, and the trade-offs that mattered.</p>
       </li>
       <li>
         <svg class="stage-icon" aria-hidden="true"><use href="#icon-file-output"></use></svg>
@@ -65,7 +65,7 @@ permalink: /index.html
     <div>
       <p class="section-label">Graded reasoning</p>
       <h2>Capture the synthesis, not the session.</h2>
-      <p>Agent transcripts are exhaustive and temporary. A Timbers entry keeps the compact explanation that future maintainers actually need.</p>
+      <p>Agent transcripts are exhaustive and temporary. A Timbers entry keeps the compact explanation and contributor snapshot future maintainers need. Git attribution is automatic; <code>--who</code> records shared work or corrections.</p>
     </div>
     <pre class="entry-sample" aria-label="Example Timbers ledger entry"><code><span>what</span>  Switched to cursor pagination
 
@@ -74,6 +74,8 @@ permalink: /index.html
 
 <span>how</span>   Opaque cursors encode created_at
       and id for a stable ordering.
+
+<span>who</span>   Maya Chen · Alex Rivera
 
 <span>notes</span> Offset was simpler, but stability
       matters more for active feeds.</code></pre>
@@ -98,9 +100,10 @@ permalink: /index.html
         </header>
         <div class="output-list">
           {% for item in configuredItems | take(3) %}
+            {% set itemAuthors = item.data.authors or item.data.contributors %}
             <article>
               <a class="output-link" href="{{ item.url | siteUrl }}">
-                <p class="artifact-meta">{% if configured.kind == 'native' %}Native artifact{% else %}Generated report{% endif %}{% if item.data.date %} · {{ item.data.date | displayDate }}{% endif %}</p>
+                <p class="artifact-meta">{% if configured.kind == 'native' %}Native artifact{% else %}Generated report{% endif %}{% if item.data.date %} · {{ item.data.date | displayDate }}{% endif %}{% if itemAuthors %} · {% for person in itemAuthors %}{{ person.name or person }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</p>
                 <h3>{{ item.data.title or item.fileSlug }}</h3>
                 {% if item.data.summary %}<p>{{ item.data.summary }}</p>{% endif %}
                 <svg class="icon" aria-hidden="true"><use href="#icon-arrow-right"></use></svg>

@@ -161,12 +161,14 @@ examples:
     unset CLAUDECODE  # Allow claude -p inside Claude Code sessions
     DATE=$(date +%Y-%m-%d)
     # Dynamic examples: regenerated each release to stay fresh
-    TEMPLATES=("release-notes" "decision-digest")
-    RANGES=("--last 20" "--last 20")
+    TEMPLATES=("release-notes" "decision-digest" "project-update")
+    MODES=("draft" "report" "report")
+    RANGES=("--last 20" "--last 20" "--since 7d")
     PIDS=()
     NAMES=()
     for i in "${!TEMPLATES[@]}"; do
         tmpl="${TEMPLATES[$i]}"
+        mode="${MODES[$i]}"
         RANGE="${RANGES[$i]}"
         FILE="site/content/examples/${tmpl}.md"
         if [ -f "$FILE" ] && ! git diff --quiet -- "$FILE" 2>/dev/null; then
@@ -176,15 +178,17 @@ examples:
         echo "Generating $tmpl ($RANGE)..."
         (
             TITLE=$(echo "$tmpl" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
-            CONTENT=$(go run ./cmd/timbers draft "$tmpl" $RANGE | claude -p --model opus)
+            CONTENT=$(go run ./cmd/timbers "$mode" "$tmpl" $RANGE | claude -p --model opus)
+            AUTHORS=$(go run ./cmd/timbers query $RANGE --json | jq -c '[.[].contributors[]?.name] | unique')
             {
                 printf '%s\n' '---'
                 echo "title: '${TITLE}'"
                 echo "date: '${DATE}'"
                 echo "tags: ['example', '$tmpl']"
+                if [ "$AUTHORS" != "[]" ]; then echo "authors: $AUTHORS"; fi
                 printf '%s\n' '---'
                 echo ""
-                echo "Generated with \`timbers draft $tmpl $RANGE | claude -p --model opus\`"
+                echo "Generated with \`timbers $mode $tmpl $RANGE | claude -p --model opus\`"
                 echo ""
                 echo "---"
                 echo ""
@@ -216,11 +220,13 @@ examples-static:
     DATE=$(date +%Y-%m-%d)
     # Static examples use a fixed date range with dense, high-quality entries (Feb 10-14 2026)
     TEMPLATES=("standup" "pr-description" "sprint-report")
+    MODES=("report" "draft" "report")
     RANGES=("--since 2026-02-13 --until 2026-02-13" "--since 2026-02-10 --until 2026-02-11" "--since 2026-02-10 --until 2026-02-14")
     PIDS=()
     NAMES=()
     for i in "${!TEMPLATES[@]}"; do
         tmpl="${TEMPLATES[$i]}"
+        mode="${MODES[$i]}"
         RANGE="${RANGES[$i]}"
         FILE="site/content/examples/${tmpl}.md"
         if [ -f "$FILE" ] && ! git diff --quiet -- "$FILE" 2>/dev/null; then
@@ -230,15 +236,17 @@ examples-static:
         echo "Generating $tmpl ($RANGE)..."
         (
             TITLE=$(echo "$tmpl" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
-            CONTENT=$(go run ./cmd/timbers draft "$tmpl" $RANGE | claude -p --model opus)
+            CONTENT=$(go run ./cmd/timbers "$mode" "$tmpl" $RANGE | claude -p --model opus)
+            AUTHORS=$(go run ./cmd/timbers query $RANGE --json | jq -c '[.[].contributors[]?.name] | unique')
             {
                 printf '%s\n' '---'
                 echo "title: '${TITLE}'"
                 echo "date: '${DATE}'"
                 echo "tags: ['example', '$tmpl']"
+                if [ "$AUTHORS" != "[]" ]; then echo "authors: $AUTHORS"; fi
                 printf '%s\n' '---'
                 echo ""
-                echo "Generated with \`timbers draft $tmpl $RANGE | claude -p --model opus\`"
+                echo "Generated with \`timbers $mode $tmpl $RANGE | claude -p --model opus\`"
                 echo ""
                 echo "---"
                 echo ""
@@ -260,7 +268,7 @@ examples-static:
         echo "Some examples failed. Re-run to retry only the failed ones."
         exit 1
     fi
-    echo "Done. Run 'just examples' for dynamic examples (release-notes, decision-digest)."
+    echo "Done. Run 'just examples' for dynamic examples (release-notes, decision-digest, project-update)."
 
 # =============================================================================
 # RELEASE (goreleaser)

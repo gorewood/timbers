@@ -1,7 +1,7 @@
 ---
 name: changelog
 description: Conventional changelog grouped by type
-version: 7
+version: 8
 ---
 Generate a changelog from these development log entries following the [Keep a Changelog](https://keepachangelog.com/) format.
 
@@ -88,6 +88,7 @@ If applying these exclusions leaves a section empty, omit the section. If applyi
 - Versioned-release mode (caller appends version info, e.g. "This is release v0.3.0"): emit ONLY the version section starting at `## [0.3.0] - YYYY-MM-DD`. The caller is appending to an existing CHANGELOG.md that already has the top-level header.
 
 **Output discipline**:
+- Perform selection, filtering, and consolidation silently. Never output candidate lists, skipped entries, drafting notes, or statements about what you are about to write.
 - Output the document ONLY. No preamble, commentary, acknowledgment, or meta-discussion.
 - Do not begin with "Here is..." or "I'll generate..." or any thinking-out-loud.
 - Do not end with "Let me know..." or any sign-off.
