@@ -1,7 +1,7 @@
 ---
 name: standup
 description: Daily standup from recent work
-version: 8
+version: 9
 report:
   scope:
     since: 1d
@@ -67,4 +67,4 @@ Generate a standup update from these development log entries.
 
 ## Entries ({{entry_count}})
 
-{{entries_summary}}
+{{entries_json}}

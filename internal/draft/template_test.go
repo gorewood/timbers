@@ -292,3 +292,16 @@ func TestBuiltinsKeepSelectionProcessOutOfArtifacts(t *testing.T) {
 		})
 	}
 }
+
+func TestStandupUsesContributorBearingProjection(t *testing.T) {
+	tmpl, err := loadBuiltin("standup")
+	if err != nil {
+		t.Fatalf("loadBuiltin(standup) error = %v", err)
+	}
+	if !strings.Contains(tmpl.Content, "{{entries_json}}") {
+		t.Error("standup must render the contributor-bearing report projection")
+	}
+	if strings.Contains(tmpl.Content, "{{entries_summary}}") {
+		t.Error("standup must not use entries_summary, which omits contributors")
+	}
+}
