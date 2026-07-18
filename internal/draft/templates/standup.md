@@ -1,7 +1,7 @@
 ---
 name: standup
 description: Daily standup from recent work
-version: 7
+version: 8
 report:
   scope:
     since: 1d
@@ -59,6 +59,7 @@ Generate a standup update from these development log entries.
 - If the entries contain no reportable team signal, output exactly `_No reportable activity in this range._` and stop.
 
 **Output discipline**:
+- Perform selection, filtering, and consolidation silently. Never output candidate lists, skipped entries, drafting notes, or statements about what you are about to write.
 - Output the standup ONLY. No preamble, commentary, acknowledgment, or meta-discussion.
 - Do not begin with "Here is..." or "I'll generate..." or any thinking-out-loud.
 - Do not end with "Let me know..." or any sign-off.

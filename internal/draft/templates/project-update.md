@@ -1,7 +1,7 @@
 ---
 name: project-update
 description: Recurring user-facing update from recent project work
-version: 1
+version: 2
 report:
   scope:
     since: 7d
@@ -75,6 +75,7 @@ claims. A publishing layer may render a byline separately.
   `_No user-facing changes in this range._` and stop.
 
 **Output discipline**:
+- Perform selection, filtering, and consolidation silently. Never output candidate lists, skipped entries, drafting notes, or statements about what you are about to write.
 - Output the project update only. No preamble, acknowledgment, or sign-off.
 - The first line must be `# Project Update` or the exact quiet line.
 

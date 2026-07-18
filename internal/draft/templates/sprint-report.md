@@ -1,7 +1,7 @@
 ---
 name: sprint-report
 description: Sprint summary with categories, carry-overs, and signals
-version: 6
+version: 7
 report:
   scope:
     since: 14d
@@ -65,6 +65,7 @@ Skip Highlights if nothing meets the bar. Padding with the most-recent-feature i
 - If the entries contain no reportable cycle signal, output exactly `_No reportable cycle activity in this range._` and stop.
 
 **Output discipline**:
+- Perform selection, filtering, and consolidation silently. Never output candidate lists, skipped entries, drafting notes, or statements about what you are about to write.
 - Output the sprint report ONLY. No preamble, commentary, acknowledgment, or meta-discussion.
 - Do not begin with "Here is..." or "I'll generate..." or any thinking-out-loud.
 - Do not end with "Let me know..." or any sign-off.

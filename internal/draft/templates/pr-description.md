@@ -1,7 +1,7 @@
 ---
 name: pr-description
 description: PR body focused on intent, decisions, and risk areas
-version: 6
+version: 7
 ---
 Generate a pull request description from these development log entries.
 
@@ -96,6 +96,7 @@ should verify: [list of behaviors]" — don't invent that tests were run.]
 - Don't pad small PRs with empty sections.
 
 **Output discipline**:
+- Perform selection, filtering, and consolidation silently. Never output candidate lists, skipped entries, drafting notes, or statements about what you are about to write.
 - Output the PR description ONLY. No preamble, commentary, acknowledgment, or meta-discussion.
 - Do not begin with "Here is..." or "I'll generate..." or any thinking-out-loud.
 - Do not end with "Let me know..." or any sign-off.

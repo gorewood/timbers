@@ -19,9 +19,9 @@ _Retrospective summary from development-ledger entries. Project ADRs and design 
 
 **Context:** Downstream person-level credit needs a source of contributor identity. Workset SHAs can disappear after rebase, squash, shallow cloning, or pruning, which would break a later Git or LLM join.
 
-**Decision:** Capture an optional v1 `contributors` snapshot on the entry at write time (mailmap-normalized Git authors plus `Co-authored-by` trailers) rather than reconstructing identity afterward. Explicit `--who` replaces the entire automatic set. Agent-facing guidance keeps this progressive: automatic attribution is the default, and `--who` is reserved for intentional full-set replacement (pairing, shared work, bots, correction).
+**Decision:** Capture an optional `contributors` snapshot at write time rather than reconstructing identity later. Automatic attribution uses mailmap-normalized Git authors and `Co-authored-by` trailers; `--who` intentionally replaces that set for shared work, bots, or corrections.
 
-**Trade-offs:** Explicit `--who` replaces the complete automatic set to avoid ambiguous merge semantics. Valid bot identities remain identities; downstream person-only views must match a known-human roster rather than guessing. Any `--who` value warns that it replaces the full automatic set.
+**Trade-offs:** Full replacement avoids ambiguous merge semantics. Bot identities remain valid contributors, so person-only views need an explicit human roster rather than heuristics.
 
 ## Replace Hugo with a config-driven in-repo Eleventy harness
 
@@ -39,9 +39,7 @@ _Retrospective summary from development-ledger entries. Project ADRs and design 
 
 **Context:** Users need a low-friction path from captured rationale to a repeatable report without manually rebuilding selection and prompt conventions.
 
-**Decision:** Add a small YAML-frontmatter profile contract (scope, projection, format, quiet output) rather than building a second workflow engine or hiding prompt behavior. `draft` remains the lower-level primitive.
-
-**Trade-offs:** Stored text is the durable source when Git enrichment is unavailable.
+**Decision:** Add a small YAML-frontmatter profile contract (scope, projection, format, quiet output) rather than building a second workflow engine or hiding prompt behavior. `draft` remains the lower-level primitive, and stored text remains the durable source when Git enrichment is unavailable.
 
 ## Replace generated numbered ADRs with non-authoritative decision digests
 
@@ -52,7 +50,7 @@ _Retrospective summary from development-ledger entries. Project ADRs and design 
 
 **Decision:** Replace the built-in with a non-authoritative digest that cites source entries and drops numbering and lifecycle claims.
 
-**Trade-offs:** Native ADRs and design documents remain authoritative. Future publishing should ingest those Markdown artifacts directly alongside Timbers-generated reports rather than attempting heuristic reconciliation.
+**Trade-offs:** Native ADRs and design documents remain authoritative; the digest cannot assign their status, numbering, or lifecycle.
 
 ## Snapshot commit subjects when `what` is omitted; defer patch IDs
 
@@ -92,7 +90,7 @@ _Retrospective summary from development-ledger entries. Project ADRs and design 
 
 **Context:** A bug report asked for the Stop hook's block and `timbers pending`'s output to share one computation. The gate uses first-parent history; the display uses the full DAG.
 
-**Decision:** Rejected collapsing them into one computation — the divergence is deliberate so agent A isn't blocked by agent B's already-merged debt. Instead, the Stop hook was made to honor the same `TIMBERS_SKIP_CROSS_AGENT_DEBT` opt-out as the sibling hooks, `--anchor` is resolved to a concrete SHA before storage, and the entry commit self-exempts via the env var (not `--no-verify`, so foreign hooks still run).
+**Decision:** Keep the computations separate. The first-parent gate prevents one agent's merged debt from blocking another agent, while the full-DAG pending view preserves repository-wide visibility. Align the hooks on the `TIMBERS_SKIP_CROSS_AGENT_DEBT` opt-out without collapsing those scopes.
 
 **Trade-offs:** Collapsing gate and display into one computation would regress the isolation that keeps parallel-agent worktrees from blocking each other.
 
