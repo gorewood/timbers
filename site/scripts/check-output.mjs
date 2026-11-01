@@ -1,4 +1,4 @@
-import { existsSync, globSync, readFileSync } from "node:fs";
+import { existsSync, globSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,6 +27,15 @@ for (const file of htmlFiles) {
   const html = readFileSync(path.join(outputRoot, file), "utf8");
   const headingCount = [...html.matchAll(/<h1(?:\s|>)/g)].length;
   if (headingCount !== 1) broken.push(`${file}: expected one h1, found ${headingCount}`);
+  const siteBase = `${config.site.url}${prefix}`;
+  const expectedOgUrl = `${siteBase}${file.split(path.sep).join("/").replace(/index\.html$/, "")}`;
+  const ogUrl = html.match(/<meta property="og:url" content="([^"]+)"/)?.[1];
+  if (ogUrl !== expectedOgUrl) broken.push(`${file}: og:url is ${ogUrl}, expected ${expectedOgUrl}`);
+  const ogImage = html.match(/<meta property="og:image" content="([^"]+)"/)?.[1] ?? "";
+  const ogImageFile = path.join(outputRoot, ogImage.slice(siteBase.length));
+  if (!ogImage.startsWith(siteBase) || !existsSync(ogImageFile) || !statSync(ogImageFile).isFile()) {
+    broken.push(`${file}: og:image ${ogImage || "is missing"} does not resolve in the output`);
+  }
   const backLink = html.match(/class="back-link" href="([^"]+)"/);
   if (backLink) {
     const outputPath = file.split(path.sep).join("/");
