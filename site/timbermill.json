@@ -2,7 +2,8 @@
   "site": {
     "title": "Timbers",
     "description": "Git knows what changed. Timbers captures why.",
-    "path_prefix": "/timbers/"
+    "path_prefix": "/timbers/",
+    "url": "https://gorewood.github.io"
   },
   "collections": [
     {

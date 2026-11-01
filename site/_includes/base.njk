@@ -3,10 +3,22 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="{{ description or summary or site.description }}">
+    {% set page_title = (title + " | " + site.title) if (title and title != site.title) else site.title %}
+    {% set page_description = description or summary or site.description %}
+    <meta name="description" content="{{ page_description }}">
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#111514">
-    <title>{% if title and title != site.title %}{{ title }} | {% endif %}{{ site.title }}</title>
+    <title>{{ page_title }}</title>
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="{{ site.title }}">
+    <meta property="og:title" content="{{ page_title }}">
+    <meta property="og:description" content="{{ page_description }}">
+    <meta property="og:url" content="{{ site.url }}{{ page.url | siteUrl }}">
+    <meta property="og:image" content="{{ site.url }}{{ '/assets/images/timbers-share.jpg' | siteUrl }}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Freshly milled pale timber moving through a modern graphite and teal grading line">
+    <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="{{ '/assets/favicon.svg' | siteUrl }}" type="image/svg+xml">
     <link rel="preload" href="{{ '/assets/fonts/geologica-latin.woff2' | siteUrl }}" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="{{ '/assets/site.css' | siteUrl }}">
